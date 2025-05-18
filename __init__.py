@@ -1,28 +1,20 @@
+"""The Llama Query integration."""
 import logging
 import json
 import aiohttp
-import yaml
-import homeassistant
 import voluptuous as vol
-from homeassistant.core import HomeAssistant, ServiceCall, Event
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
 from homeassistant.components import websocket_api
 from homeassistant.components.frontend import async_register_built_in_panel
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
+from .const import DOMAIN, CONF_API_KEY
 
 _LOGGER = logging.getLogger(__name__)
 
-DOMAIN = "llama_query"
 LLAMA_API_URL = "https://api.llama.com/v1/chat/completions"
-
-# Load secret from secrets.yaml
-def load_secret(secret_name):
-    secrets_file = '/config/secrets.yaml'
-    with open(secrets_file, 'r') as f:
-        secrets = yaml.safe_load(f)
-    return secrets.get(secret_name)
-
-LLAMA_API_KEY = load_secret('llama_api_key_only')
 
 # Define service schema to accept a custom prompt
 SERVICE_SCHEMA = vol.Schema({
@@ -39,8 +31,11 @@ async def websocket_handle_llama(hass, connection, msg):
     response = await handle_llama_query(ServiceCall(DOMAIN, "query", {"prompt": msg.get("prompt")}))
     connection.send_message(websocket_api.result_message(msg["id"], response))
 
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Llama Query from a config entry."""
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = entry.data
 
-async def async_setup(hass: HomeAssistant, config: dict):
     # Register the panel
     async_register_built_in_panel(
         hass,
@@ -58,10 +53,12 @@ async def async_setup(hass: HomeAssistant, config: dict):
         }
     )
 
-
-
     async def handle_llama_query(call: ServiceCall):
+        """Handle the llama_query service."""
         _LOGGER.info("Running LLaMA query service")
+
+        # Get API key from config entry
+        api_key = hass.data[DOMAIN][list(hass.data[DOMAIN].keys())[0]][CONF_API_KEY]
 
         # Retrieve current time and Home Assistant version
         now = dt_util.now().isoformat()       
@@ -76,7 +73,7 @@ async def async_setup(hass: HomeAssistant, config: dict):
                 "state": state.state,
                 "last_changed": state.last_changed.isoformat() if state.last_changed else None,
                 "friendly_name": state.attributes.get("friendly_name"),
-                "unit": state.attributes.get("unit_of_measurement"),
+                "unit": state.attributes.get("unit_measurement"),
                 "device_class": state.attributes.get("device_class"),
                 "attributes": {k: (v.isoformat() if hasattr(v, 'isoformat') else v) for k, v in state.attributes.items()}
             }
@@ -87,7 +84,7 @@ async def async_setup(hass: HomeAssistant, config: dict):
             domain = state.entity_id.split('.')[0]
             domain_map.setdefault(domain, []).append(shape_state(state))
 
-        # Build calendar event summary, converting dates
+        # Build calendar event summary
         calendar_events = []
         for cal in domain_map.get('calendar', []):
             attrs = cal.get('attributes', {})
@@ -113,7 +110,7 @@ async def async_setup(hass: HomeAssistant, config: dict):
 
         # Prepare payload for LLaMA
         context_json = json.dumps(context, indent=2, default=str)
-        _LOGGER.debug(f"Context llama: {context_json}")
+        _LOGGER.debug(f"Context: {context_json}")
         payload = {
             "model": "Llama-4-Maverick-17B-128E-Instruct-FP8",
             "messages": [
@@ -124,7 +121,7 @@ async def async_setup(hass: HomeAssistant, config: dict):
         }
 
         headers = {
-            "Authorization": f"Bearer {LLAMA_API_KEY}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
 
@@ -172,7 +169,6 @@ async def async_setup(hass: HomeAssistant, config: dict):
                 error_msg = str(e)
                 _LOGGER.exception(f"Exception while querying LLaMA: {error_msg}")
                 response_data["error"] = error_msg
-                # Fire error event
                 hass.bus.async_fire(f"{DOMAIN}_response", response_data)
 
         return response_data
@@ -188,4 +184,16 @@ async def async_setup(hass: HomeAssistant, config: dict):
     # Register WebSocket command
     websocket_api.async_register_command(hass, websocket_handle_llama)
 
+    return True
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Set up the Llama Query component."""
+    return True
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry."""
+    # Remove the panel
+    if DOMAIN in hass.data:
+        hass.data.pop(DOMAIN)
+    
     return True
