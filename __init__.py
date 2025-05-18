@@ -40,14 +40,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async_register_built_in_panel(
         hass,
         component_name="custom",
-        sidebar_title="llama_chat",
+        sidebar_title="Llama Chat",
         sidebar_icon="mdi:robot",
-        frontend_url_path="Llama-Chat",
+        frontend_url_path="llama-chat",
         require_admin=False,
         config={
             "_panel_custom": {
                 "name": "llama-chat-panel",
-                "module_url": "/local/custom_components/llama_query/frontend/llama-chat-panel.js",
+                "module_url": "/local/llama_query/llama-chat-panel.js",
                 "embed_iframe": False,
             }
         }
