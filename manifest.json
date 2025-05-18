@@ -1,0 +1,9 @@
+{
+    "domain": "llama_query",
+    "name": "LLaMA Query",
+    "version": "1.0.0",
+    "requirements": [],
+    "codeowners": [],
+    "iot_class": "local_polling"
+  }
+  

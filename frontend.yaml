@@ -1,0 +1,8 @@
+panel_custom:
+  - name: llama-chat
+    sidebar_title: Llama Chat
+    sidebar_icon: mdi:robot
+    url_path: llama-chat
+    module_url: /local/llama-chat/llama-chat-panel.js
+    trust_external: true
+    require_admin: false 

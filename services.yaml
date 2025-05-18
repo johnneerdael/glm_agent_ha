@@ -1,0 +1,7 @@
+query:
+  name: “Query LLaMA with Home Assistant context”
+  description: “Run a custom LLaMA prompt against your HA state dump.”
+  fields:
+    prompt:
+      description: “The question or instruction to send to the LLaMA model.”
+      example: “Which rooms have lights on?”
