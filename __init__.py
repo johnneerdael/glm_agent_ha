@@ -37,6 +37,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = entry.data
 
     # Register the panel
+    hass.http.register_static_path(
+        "/frontend_es5/llama-chat",
+        hass.config.path("custom_components/llama_query/frontend"),
+        cache_headers=False,
+    )
+
     async_register_built_in_panel(
         hass,
         component_name="custom",
