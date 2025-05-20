@@ -4,16 +4,17 @@ import {
   css,
 } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 
-console.log("Llama Chat Panel loading..."); // Debug log
+console.log("Llama Chat v3 Panel loading..."); // Debug log
 
 class LlamaChatPanel extends LitElement {
   static get properties() {
     return {
-      hass: { type: Object },
-      narrow: { type: Boolean },
-      panel: { type: Object },
-      _messages: { type: Array },
-      _isLoading: { type: Boolean },
+      hass: { type: Object, reflect: false, attribute: false },
+      narrow: { type: Boolean, reflect: false, attribute: false },
+      panel: { type: Object, reflect: false, attribute: false },
+      _messages: { type: Array, reflect: false, attribute: false },
+      _isLoading: { type: Boolean, reflect: false, attribute: false },
+      _error: { type: String, reflect: false, attribute: false }
     };
   }
 
@@ -113,8 +114,13 @@ class LlamaChatPanel extends LitElement {
           transform: scale(1.0);
         }
       }
-      ha-card {
-        margin: 16px;
+      .error {
+        color: var(--error-color);
+        padding: 12px;
+        margin: 8px 0;
+        border-radius: 8px;
+        background: var(--error-background-color);
+        border: 1px solid var(--error-color);
       }
     `;
   }
@@ -123,27 +129,30 @@ class LlamaChatPanel extends LitElement {
     super();
     this._messages = [];
     this._isLoading = false;
-    console.log("LlamaChatPanel constructor called"); // Debug log
+    this._error = null;
+    console.debug("LlamaChatPanel constructor called");
   }
 
   render() {
-    console.log("LlamaChatPanel render called", this.hass); // Debug log
-
-    if (!this.hass) {
-      return html`<ha-card><div class="card-content">Loading Home Assistant...</div></ha-card>`;
-    }
+    console.debug("Rendering with state:", {
+      messages: this._messages,
+      isLoading: this._isLoading,
+      error: this._error
+    });
 
     return html`
-      <ha-card>
-        <div class="card-content">
+      <div class="header">
+        <ha-icon icon="mdi:robot"></ha-icon>
+        Llama Chat
+      </div>
+      <div class="content">
+        <div class="chat-container">
           <div class="messages" id="messages">
-            ${this._messages.map(
-              (msg) => html`
-                <div class="message ${msg.type}-message">
-                  ${msg.text}
-                </div>
-              `
-            )}
+            ${this._messages.map(msg => html`
+              <div class="message ${msg.type}-message">
+                ${msg.text}
+              </div>
+            `)}
             ${this._isLoading ? html`
               <div class="loading">
                 <span>Llama is thinking</span>
@@ -154,32 +163,28 @@ class LlamaChatPanel extends LitElement {
                 </div>
               </div>
             ` : ''}
+            ${this._error ? html`
+              <div class="error">${this._error}</div>
+            ` : ''}
           </div>
           <div class="input-container">
             <textarea
               id="prompt"
-              @keydown="${this._handleKeyDown}"
-              placeholder="Type your message here..."
-              ?disabled="${this._isLoading}"
+              placeholder="Ask me anything about your Home Assistant..."
+              ?disabled=${this._isLoading}
+              @keydown=${this._handleKeyDown}
             ></textarea>
             <ha-button
-              @click="${this._sendMessage}"
-              .disabled="${this._isLoading}"
-            >
-              Send
-            </ha-button>
+              @click=${this._sendMessage}
+              .disabled=${this._isLoading}
+            >Send</ha-button>
           </div>
         </div>
-      </ha-card>
+      </div>
     `;
   }
 
-  firstUpdated() {
-    console.log("LlamaChatPanel firstUpdated called"); // Debug log
-  }
-
   updated(changedProps) {
-    console.log("LlamaChatPanel updated called", changedProps); // Debug log
     if (changedProps.has('_messages') || changedProps.has('_isLoading')) {
       this._scrollToBottom();
     }
@@ -200,36 +205,33 @@ class LlamaChatPanel extends LitElement {
   }
 
   async _sendMessage() {
-    console.log("_sendMessage called"); // Debug log
     const promptEl = this.shadowRoot.querySelector('#prompt');
     const prompt = promptEl.value.trim();
     if (!prompt || this._isLoading) return;
+
+    console.debug("Sending message:", prompt);
 
     // Add user message
     this._messages = [...this._messages, { type: 'user', text: prompt }];
     promptEl.value = '';
     this._isLoading = true;
-    this.requestUpdate();
+    this._error = null;
 
     try {
-      console.log("Calling llama_query service"); // Debug log
+      console.debug("Calling llama_query service");
       await this.hass.callService('llama_query', 'query', {
         prompt: prompt
       });
     } catch (error) {
-      console.error("Error calling service:", error); // Debug log
+      console.error("Error calling service:", error);
+      this._error = error.message || 'An error occurred while processing your request';
       this._isLoading = false;
-      this._messages = [
-        ...this._messages,
-        { type: 'assistant', text: `Error: ${error.message}` }
-      ];
-      this.requestUpdate();
     }
   }
 
   connectedCallback() {
     super.connectedCallback();
-    console.log("LlamaChatPanel connected"); // Debug log
+    console.debug("LlamaChatPanel connected");
     if (this.hass) {
       this.hass.connection.subscribeEvents(
         (event) => this._handleLlamaResponse(event),
@@ -239,7 +241,7 @@ class LlamaChatPanel extends LitElement {
   }
 
   _handleLlamaResponse(event) {
-    console.log("Received llama response:", event); // Debug log
+    console.debug("Received llama response:", event);
     this._isLoading = false;
     if (event.data.success) {
       this._messages = [
@@ -247,14 +249,15 @@ class LlamaChatPanel extends LitElement {
         { type: 'assistant', text: event.data.answer }
       ];
     } else {
+      this._error = event.data.error || 'An error occurred';
       this._messages = [
         ...this._messages,
-        { type: 'assistant', text: `Error: ${event.data.error}` }
+        { type: 'assistant', text: `Error: ${this._error}` }
       ];
     }
-    this.requestUpdate();
   }
 }
 
 customElements.define("llama-chat-panel", LlamaChatPanel);
-console.log("Llama Chat Panel registered"); // Debug log 
+
+console.log("Llama Chat Panel registered");
