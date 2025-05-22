@@ -10,7 +10,7 @@ from homeassistant.components import websocket_api
 from homeassistant.components.frontend import async_register_built_in_panel
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from .const import DOMAIN, CONF_API_KEY
+from .const import DOMAIN, CONF_API_KEY, CONF_WEATHER_ENTITY
 from .agent import LlamaAgent
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,8 +37,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = entry.data
 
-    # Initialize the agent
-    agent = LlamaAgent(hass, entry.data[CONF_API_KEY])
+    # Initialize the agent with weather entity
+    agent = LlamaAgent(
+        hass, 
+        entry.data[CONF_API_KEY],
+        entry.data.get(CONF_WEATHER_ENTITY)
+    )
     hass.data[DOMAIN]["agent"] = agent
 
     # Register static path for frontend
@@ -48,22 +52,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         cache_headers=False,
     )
 
+    # Try to unregister existing panel first
+    try:
+        from homeassistant.components.frontend import async_remove_panel
+        await async_remove_panel(hass, "llama-chat")
+    except Exception as e:
+        _LOGGER.debug("No existing panel to remove: %s", str(e))
+
     # Register the panel
-    async_register_built_in_panel(
-        hass,
-        component_name="custom",
-        sidebar_title="Llama Chat",
-        sidebar_icon="mdi:robot",
-        frontend_url_path="llama-chat",
-        require_admin=False,
-        config={
-            "_panel_custom": {
-                "name": "llama-chat-panel",
-                "module_url": "/frontend_es5/llama-chat/llama-chat-panel.js",
-                "embed_iframe": False,
+    try:
+        async_register_built_in_panel(
+            hass,
+            component_name="custom",
+            sidebar_title="Llama Chat",
+            sidebar_icon="mdi:robot",
+            frontend_url_path="llama-chat",
+            require_admin=False,
+            config={
+                "_panel_custom": {
+                    "name": "llama-chat-panel",
+                    "module_url": "/frontend_es5/llama-chat/llama-chat-panel.js",
+                    "embed_iframe": False,
+                }
             }
-        }
-    )
+        )
+    except ValueError as e:
+        _LOGGER.warning("Panel registration error: %s", str(e))
+        # If panel already exists, we can continue
+        pass
 
     async def handle_llama_query(call: ServiceCall):
         """Handle the llama_query service."""
@@ -121,7 +137,11 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    if DOMAIN in hass.data:
-        hass.data.pop(DOMAIN)
-    
+    try:
+        from homeassistant.components.frontend import async_remove_panel
+        await async_remove_panel(hass, "llama-chat")
+    except Exception as e:
+        _LOGGER.debug("Error removing panel: %s", str(e))
+
+    hass.data[DOMAIN].pop(entry.entry_id)
     return True

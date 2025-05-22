@@ -3,14 +3,16 @@
         "step": {
             "user": {
                 "title": "Set up Llama Query",
-                "description": "Please enter your Llama API key",
+                "description": "Please enter your Llama API key and optionally select a weather entity",
                 "data": {
-                    "api_key": "API Key"
+                    "api_key": "API Key",
+                    "weather_entity": "Weather Entity (Optional)"
                 }
             }
         },
         "error": {
             "invalid_api_key": "Invalid API key",
+            "invalid_weather_entity": "Invalid weather entity selected",
             "unknown": "Unexpected error occurred"
         },
         "abort": {

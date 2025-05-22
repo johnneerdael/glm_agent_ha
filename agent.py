@@ -5,20 +5,22 @@ import aiohttp
 from typing import Dict, Any, List, Optional
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
-from .const import DOMAIN
+from .const import DOMAIN, CONF_WEATHER_ENTITY
 
 _LOGGER = logging.getLogger(__name__)
 
 class LlamaAgent:
     """Agent for handling Llama queries with dynamic data requests."""
 
-    def __init__(self, hass: HomeAssistant, api_key: str):
+    def __init__(self, hass: HomeAssistant, api_key: str, weather_entity: str = None):
         """Initialize the agent."""
         self.hass = hass
         self.api_key = api_key
+        self.weather_entity = weather_entity
         self.LLAMA_API_URL = "https://api.llama.com/v1/chat/completions"
         self.conversation_history = []
-        _LOGGER.debug("LlamaAgent initialized with API URL: %s", self.LLAMA_API_URL)
+        _LOGGER.debug("LlamaAgent initialized with API URL: %s and weather entity: %s", 
+                     self.LLAMA_API_URL, self.weather_entity)
 
     async def get_entity_state(self, entity_id: str) -> Dict[str, Any]:
         """Get the state of a specific entity."""
@@ -77,21 +79,159 @@ class LlamaAgent:
             _LOGGER.exception("Error getting automations: %s", str(e))
             return [{"error": f"Error getting automations: {str(e)}"}]
 
-    async def get_weather_data(self) -> Dict[str, Any]:
-        """Get current weather data."""
+    async def get_entity_registry(self) -> List[Dict]:
+        """Get entity registry entries"""
+        _LOGGER.debug("Requesting all entity registry entries")
         try:
-            _LOGGER.debug("Requesting weather data")
-            weather_entity = self.hass.states.get("weather.home")
-            if not weather_entity:
-                _LOGGER.warning("Weather entity not found")
-                return {"error": "Weather entity not found"}
-            return await self.get_entity_state("weather.home")
+            registry = self.hass.data.get("entity_registry")
+            if not registry:
+                return []
+            return [
+                {
+                    "entity_id": entry.entity_id,
+                    "device_id": entry.device_id,
+                    "platform": entry.platform,
+                    "disabled": entry.disabled,
+                    "area_id": entry.area_id
+                } 
+                for entry in registry.entities.values()
+            ]
         except Exception as e:
-            _LOGGER.exception("Error getting weather data: %s", str(e))
-            return {"error": f"Error getting weather data: {str(e)}"}
+            _LOGGER.exception("Error getting registry entries: %s", str(e))
+            return [{"error": f"Error getting registry entries: {str(e)}"}]
+
+    async def get_history(self, entity_id: str, hours: int = 24) -> List[Dict]:
+        """Get historical state changes for an entity"""
+        _LOGGER.debug("Requesting historical state changes for an entity")
+        try:
+            now = dt_util.utcnow()
+            start = now - timedelta(hours=hours)
+            return await self.hass.async_add_executor_job(
+                lambda: self.hass.data["history"].get_state_changes_during_period(
+                    start, now, entity_id=entity_id
+                )
+            )
+        except Exception as e:
+            _LOGGER.exception("Error getting history: %s", str(e))
+            return [{"error": f"Error getting history: {str(e)}"}]
+    
+    async def get_logbook_entries(self, hours: int = 24) -> List[Dict]:
+        """Get recent logbook entries"""
+        _LOGGER.debug("Requesting recent logbook entries")
+        try:
+            now = dt_util.utcnow()
+            start = now - timedelta(hours=hours)
+            return await self.hass.async_add_executor_job(
+                lambda: self.hass.data["logbook"].get_entries(start, now)
+            )
+        except Exception as e:
+            _LOGGER.exception("Error getting logbook entries: %s", str(e))
+            return [{"error": f"Error getting logbook entries: {str(e)}"}]
+
+    async def get_area_registry(self) -> Dict[str, Dict]:
+        """Get area registry information"""
+        _LOGGER.debug("Get area registry information")
+        try:
+            registry = self.hass.data.get("area_registry")
+            if not registry:
+                return {}
+            return {
+                area.id: {
+                    "name": area.name,
+                    "devices": [d.id for d in registry.devices.get(area.id, [])],
+                    "entities": [e.entity_id for e in registry.entities.get(area.id, [])]
+                }
+                for area in registry.areas.values()
+            }
+        except Exception as e:
+            _LOGGER.exception("Error getting area registry: %s", str(e))
+            return [{"error": f"Error getting area registry: {str(e)}"}]
+        
+    async def get_person_data(self) -> List[Dict]:
+        """Get person tracking information"""
+        _LOGGER.debug("Requesting person tracking information")
+        try:
+            return [
+                {
+                "entity_id": state.entity_id,
+                "name": state.name,
+                "state": state.state,
+                "latitude": state.attributes.get("latitude"),
+                "longitude": state.attributes.get("longitude")
+            }
+            for state in self.hass.states.async_all("person")
+        ]
+        except Exception as e:
+            _LOGGER.exception("Error getting person tracking information: %s", str(e))
+            return [{"error": f"Error getting person tracking information: {str(e)}"}]
+    
+    async def get_statistics(self, entity_id: str) -> Dict:
+        """Get statistics for an entity"""
+        _LOGGER.debug("Requesting statistics for an entity")
+        try:
+            return await self.hass.async_add_executor_job(
+                lambda: self.hass.data["statistics"].get_latest_statistic(
+                    entity_id, "hour"
+                )
+            )
+        except Exception as e:
+            _LOGGER.exception("Error getting statistics: %s", str(e))
+            return [{"error": f"Error getting statistics: {str(e)}"}]
+        
+    async def get_scenes(self) -> List[Dict]:
+        """Get scene configurations"""
+        _LOGGER.debug("Requesting scene configurations")
+        try:
+            return [
+                {
+                "name": scene.name,
+                "entities": scene.entities
+            }
+            for scene in self.hass.states.async_all("scene")
+        ]
+        except Exception as e:
+            _LOGGER.exception("Error getting scene configurations: %s", str(e))
+            return [{"error": f"Error getting scene configurations: {str(e)}"}]
+        
+    async def get_weather_data(self) -> Dict[str, Any]:
+        """Get weather data from the configured weather entity."""
+        if not self.weather_entity:
+            return {
+                "error": "No weather entity configured. Please add a weather entity in the Llama Query configuration settings."
+            }
+        
+        try:
+            state = self.hass.states.get(self.weather_entity)
+            if not state:
+                return {
+                    "error": f"Weather entity {self.weather_entity} not found."
+                }
+            
+            return {
+                "temperature": state.attributes.get("temperature"),
+                "humidity": state.attributes.get("humidity"),
+                "pressure": state.attributes.get("pressure"),
+                "wind_speed": state.attributes.get("wind_speed"),
+                "forecast": state.attributes.get("forecast", []),
+                "state": state.state
+            }
+        except Exception as e:
+            _LOGGER.error(f"Error getting weather data: {str(e)}")
+            return {
+                "error": f"Error getting weather data: {str(e)}"
+            }
 
     async def process_query(self, user_query: str) -> Dict[str, Any]:
         """Process a user query and handle data requests."""
+        
+        # Check if weather entity exists when weather-related queries are made
+        if any(word in user_query.lower() for word in ['weather', 'temperature', 'forecast', 'rain', 'snow']):
+            if not self.weather_entity:
+                return {
+                    "request_type": "final_response",
+                    "response": "I notice you're asking about weather, but no weather entity has been configured. Please add a weather entity in the Llama Query configuration settings."
+                }
+
         try:
             _LOGGER.debug("Processing new query: %s", user_query)
             
@@ -104,7 +244,14 @@ class LlamaAgent:
                 - get_entities_by_domain(domain): Get all entities in a domain
                 - get_calendar_events(entity_id?): Get calendar events
                 - get_automations(): Get all automations
-                - get_weather_data(): Get current weather data
+                - get_weather_data(): Get current weather data (requires weather entity to be configured)
+                - get_device_registry(): Get connected device details
+                - get_area_registry(): Get room/area information
+                - get_history(entity_id, hours): Get historical state changes
+                - get_logbook_entries(hours): Get recent events
+                - get_person_data(): Get person tracking information
+                - get_statistics(entity_id): Get sensor statistics
+                - get_scenes(): Get scene configurations
                 
                 IMPORTANT: You must ALWAYS respond with a valid JSON object. Do not include any text before or after the JSON.
                 When you need data, respond with this exact JSON format:
@@ -176,8 +323,29 @@ class LlamaAgent:
                                 data = await self.get_calendar_events(parameters.get("entity_id"))
                             elif request_type == "get_automations":
                                 data = await self.get_automations()
+                            elif request_type == "get_device_registry":
+                                data = await self.get_device_registry()
                             elif request_type == "get_weather_data":
                                 data = await self.get_weather_data()
+                            elif request_type == "get_area_registry":
+                                data = await self.get_area_registry()
+                            elif request_type == "get_history":
+                                data = await self.get_history(
+                                    parameters.get("entity_id"),
+                                    parameters.get("hours", 24)
+                                )
+                            elif request_type == "get_logbook_entries":
+                                data = await self.get_logbook_entries(
+                                    parameters.get("hours", 24)
+                                )
+                            elif request_type == "get_person_data":
+                                data = await self.get_person_data()
+                            elif request_type == "get_statistics":
+                                data = await self.get_statistics(
+                                    parameters.get("entity_id")
+                                )
+                            elif request_type == "get_scenes":
+                                data = await self.get_scenes()
                             else:
                                 data = {"error": f"Unknown request type: {request_type}"}
                                 _LOGGER.warning("Unknown request type: %s", request_type)
@@ -322,3 +490,32 @@ class LlamaAgent:
             except Exception as e:
                 _LOGGER.exception("Exception while querying Llama API: %s", str(e))
                 raise 
+
+    async def _get_weather_data(self) -> Dict[str, Any]:
+        """Get weather data from the configured weather entity."""
+        weather_entity = self.hass.data[DOMAIN].get(CONF_WEATHER_ENTITY)
+        if not weather_entity:
+            return {
+                "error": "No weather entity configured. Please add a weather entity in the Llama Query configuration settings."
+            }
+        
+        try:
+            state = self.hass.states.get(weather_entity)
+            if not state:
+                return {
+                    "error": f"Weather entity {weather_entity} not found."
+                }
+            
+            return {
+                "temperature": state.attributes.get("temperature"),
+                "humidity": state.attributes.get("humidity"),
+                "pressure": state.attributes.get("pressure"),
+                "wind_speed": state.attributes.get("wind_speed"),
+                "forecast": state.attributes.get("forecast", []),
+                "state": state.state
+            }
+        except Exception as e:
+            _LOGGER.error(f"Error getting weather data: {str(e)}")
+            return {
+                "error": f"Error getting weather data: {str(e)}"
+            } 

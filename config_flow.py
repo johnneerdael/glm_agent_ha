@@ -11,14 +11,16 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_API_KEY, CONF_WEATHER_ENTITY
 
 _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required("api_key"): str,
+        vol.Optional("weather_entity"): str,
     }
 )
 
@@ -49,6 +51,18 @@ async def validate_api_key(hass: HomeAssistant, api_key: str) -> bool:
             _LOGGER.error(f"API validation failed: {str(e)}")
             return False
 
+async def validate_weather_entity(hass: HomeAssistant, entity_id: str | None) -> bool:
+    """Validate that the weather entity exists and is of the correct domain."""
+    if not entity_id:
+        return True  # Weather entity is optional
+    
+    entity_reg = er.async_get(hass)
+    entity = entity_reg.async_get(entity_id)
+    
+    if entity and entity.domain == "weather":
+        return True
+    return False
+
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Llama Query."""
 
@@ -63,13 +77,27 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 # Validate the API key
-                if await validate_api_key(self.hass, user_input["api_key"]):
-                    return self.async_create_entry(
-                        title="Llama Query",
-                        data=user_input
-                    )
-                else:
+                if not await validate_api_key(self.hass, user_input["api_key"]):
                     errors["base"] = "invalid_api_key"
+                    return self.async_show_form(
+                        step_id="user",
+                        data_schema=STEP_USER_DATA_SCHEMA,
+                        errors=errors,
+                    )
+
+                # Validate weather entity if provided
+                if not await validate_weather_entity(self.hass, user_input.get("weather_entity")):
+                    errors["base"] = "invalid_weather_entity"
+                    return self.async_show_form(
+                        step_id="user",
+                        data_schema=STEP_USER_DATA_SCHEMA,
+                        errors=errors,
+                    )
+
+                return self.async_create_entry(
+                    title="Llama Query",
+                    data=user_input
+                )
             except Exception:
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
