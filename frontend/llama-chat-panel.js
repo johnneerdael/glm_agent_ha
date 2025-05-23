@@ -15,10 +15,7 @@ class LlamaChatPanel extends LitElement {
       _messages: { type: Array, reflect: false, attribute: false },
       _isLoading: { type: Boolean, reflect: false, attribute: false },
       _error: { type: String, reflect: false, attribute: false },
-      _pendingAutomation: { type: Object, reflect: false, attribute: false },
-      _retryCount: { type: Number, reflect: false, attribute: false },
-      _maxRetries: { type: Number, reflect: false, attribute: false },
-      _debounceTimeout: { type: Number, reflect: false, attribute: false }
+      _pendingAutomation: { type: Object, reflect: false, attribute: false }
     };
   }
 
@@ -45,10 +42,42 @@ class LlamaChatPanel extends LitElement {
       .clear-button {
         margin-left: auto;
         --mdc-theme-primary: var(--error-color);
-        --mdc-theme-on-primary: var(--text-primary-color);
-        --mdc-typography-button-font-size: 14px;
-        --mdc-button-height: 36px;
-        --mdc-button-padding: 0 16px;
+        --mdc-theme-on-primary: #fff;
+        --mdc-typography-button-font-size: 13px;
+        --mdc-button-height: 32px;
+        --mdc-button-padding: 0 12px;
+        border-radius: 16px;
+        background: var(--error-color);
+        color: #fff;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 12px;
+        font-weight: 500;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        min-width: unset;
+        width: auto;
+        height: 32px;
+      }
+      .clear-button:hover {
+        background: var(--error-color);
+        opacity: 0.92;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.13);
+      }
+      .clear-button:active {
+        transform: translateY(0);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+      }
+      .clear-button ha-icon {
+        --mdc-icon-size: 16px;
+        margin-right: 2px;
+        color: #fff;
+      }
+      .clear-button span {
+        color: #fff;
+        font-weight: 500;
       }
       .content {
         flex-grow: 1;
@@ -232,198 +261,16 @@ class LlamaChatPanel extends LitElement {
     this._isLoading = false;
     this._error = null;
     this._pendingAutomation = null;
-    this._retryCount = 0;
-    this._maxRetries = 3;
-    this._debounceTimeout = null;
-    this._eventUnsubscribe = null;
     console.debug("LlamaChatPanel constructor called");
   }
 
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    if (this._eventUnsubscribe) {
-      this._eventUnsubscribe();
-    }
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    console.debug("LlamaChatPanel connected");
-    if (this.hass) {
-      this._eventUnsubscribe = this.hass.connection.subscribeEvents(
-        (event) => this._handleLlamaResponse(event),
-        'llama_query_response'
-      );
-    }
-  }
-
-  _sanitizeInput(input) {
-    // Basic XSS prevention
-    return input.replace(/[&<>"']/g, (char) => {
-      const entities = {
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-      };
-      return entities[char];
-    });
-  }
-
-  async _sendMessage() {
-    const promptEl = this.shadowRoot.querySelector('#prompt');
-    const prompt = this._sanitizeInput(promptEl.value.trim());
-    if (!prompt || this._isLoading) return;
-
-    // Clear any existing debounce timeout
-    if (this._debounceTimeout) {
-      clearTimeout(this._debounceTimeout);
-    }
-
-    // Set a new debounce timeout
-    this._debounceTimeout = setTimeout(async () => {
-      console.debug("Sending message:", prompt);
-
-      // Add user message
-      this._messages = [...this._messages, { type: 'user', text: prompt }];
-      promptEl.value = '';
-      this._isLoading = true;
-      this._error = null;
-      this._retryCount = 0;
-
-      try {
-        console.debug("Calling llama_query service");
-        await this.hass.callService('llama_query', 'query', {
-          prompt: prompt
-        });
-      } catch (error) {
-        console.error("Error calling service:", error);
-        this._handleError(error);
-      }
-    }, 300); // 300ms debounce
-  }
-
-  _handleError(error) {
-    if (this._retryCount < this._maxRetries) {
-      this._retryCount++;
-      console.debug(`Retrying request (${this._retryCount}/${this._maxRetries})`);
-      setTimeout(() => this._sendMessage(), 1000 * this._retryCount);
-    } else {
-      this._error = this._getUserFriendlyError(error);
-      this._isLoading = false;
-      this._retryCount = 0;
-    }
-  }
-
-  _getUserFriendlyError(error) {
-    if (error.message.includes('timeout')) {
-      return 'The request timed out. Please try again.';
-    } else if (error.message.includes('network')) {
-      return 'Network error. Please check your connection and try again.';
-    } else if (error.message.includes('401')) {
-      return 'Authentication error. Please check your API key.';
-    } else if (error.message.includes('429')) {
-      return 'Too many requests. Please wait a moment before trying again.';
-    }
-    return 'An error occurred while processing your request. Please try again.';
-  }
-
-  _handleLlamaResponse(event) {
-    console.debug("Received llama response:", event);
-    this._isLoading = false;
-    this._retryCount = 0;
-
-    if (event.data.success) {
-      let message = { type: 'assistant', text: event.data.answer };
-      
-      try {
-        const response = JSON.parse(event.data.answer);
-        if (response.request_type === 'automation_suggestion') {
-          message.automation = response.automation;
-          this._pendingAutomation = response.automation;
-        } else if (response.request_type === 'final_response') {
-          message.text = response.response;
-        }
-      } catch (e) {
-        console.debug("Response is not JSON, using as-is:", event.data.answer);
-      }
-      
-      this._messages = [...this._messages, message];
-    } else {
-      this._error = event.data.error || 'An error occurred';
-      this._messages = [
-        ...this._messages,
-        { type: 'assistant', text: `Error: ${this._error}` }
-      ];
-    }
-  }
-
-  async _approveAutomation(automation) {
-    if (!this._validateAutomation(automation)) {
-      this._error = 'Invalid automation configuration';
-      return;
-    }
-
-    this._isLoading = true;
-    try {
-      const result = await this.hass.callService('llama_query', 'create_automation', {
-        automation: automation
-      });
-      
-      console.debug("Automation creation result:", result);
-      
-      if (result && result.message) {
-        this._messages = [...this._messages, {
-          type: 'assistant',
-          text: result.message
-        }];
-      } else {
-        this._messages = [...this._messages, {
-          type: 'assistant',
-          text: `Automation "${automation.alias}" has been created successfully!`
-        }];
-      }
-      this._pendingAutomation = null;
-    } catch (error) {
-      console.error("Error creating automation:", error);
-      this._error = this._getUserFriendlyError(error);
-      this._messages = [...this._messages, {
-        type: 'assistant',
-        text: `Error: ${this._error}`
-      }];
-    }
-    this._isLoading = false;
-  }
-
-  _validateAutomation(automation) {
-    if (!automation || typeof automation !== 'object') return false;
-    if (!automation.alias || typeof automation.alias !== 'string') return false;
-    if (!automation.description || typeof automation.description !== 'string') return false;
-    if (!automation.trigger || !Array.isArray(automation.trigger)) return false;
-    if (!automation.action || !Array.isArray(automation.action)) return false;
-    return true;
-  }
-
-  async _rejectAutomation() {
-    if (confirm('Are you sure you want to reject this automation?')) {
-      this._messages = [...this._messages, {
-        type: 'assistant',
-        text: 'Automation creation cancelled. Would you like to try something else?'
-      }];
-      this._pendingAutomation = null;
-    }
-  }
-
-  _clearChat() {
-    if (confirm('Are you sure you want to clear the chat history?')) {
-      this._messages = [];
-      this._error = null;
-      this._pendingAutomation = null;
-    }
-  }
-
   render() {
+    console.debug("Rendering with state:", {
+      messages: this._messages,
+      isLoading: this._isLoading,
+      error: this._error
+    });
+
     return html`
       <div class="header">
         <ha-icon icon="mdi:robot"></ha-icon>
@@ -432,7 +279,10 @@ class LlamaChatPanel extends LitElement {
           class="clear-button"
           @click=${this._clearChat}
           .disabled=${this._isLoading}
-        >Clear Chat</ha-button>
+        >
+          <ha-icon icon="mdi:delete-sweep"></ha-icon>
+          <span>Clear Chat</span>
+        </ha-button>
       </div>
       <div class="content">
         <div class="chat-container">
@@ -514,9 +364,122 @@ class LlamaChatPanel extends LitElement {
     }
   }
 
+  async _sendMessage() {
+    const promptEl = this.shadowRoot.querySelector('#prompt');
+    const prompt = promptEl.value.trim();
+    if (!prompt || this._isLoading) return;
+
+    console.debug("Sending message:", prompt);
+
+    // Add user message
+    this._messages = [...this._messages, { type: 'user', text: prompt }];
+    promptEl.value = '';
+    this._isLoading = true;
+    this._error = null;
+
+    try {
+      console.debug("Calling llama_query service");
+      await this.hass.callService('llama_query', 'query', {
+        prompt: prompt
+      });
+    } catch (error) {
+      console.error("Error calling service:", error);
+      this._error = error.message || 'An error occurred while processing your request';
+      this._isLoading = false;
+    }
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    console.debug("LlamaChatPanel connected");
+    if (this.hass) {
+      this.hass.connection.subscribeEvents(
+        (event) => this._handleLlamaResponse(event),
+        'llama_query_response'
+      );
+    }
+  }
+
+  _handleLlamaResponse(event) {
+    console.debug("Received llama response:", event);
+    this._isLoading = false;
+    if (event.data.success) {
+      let message = { type: 'assistant', text: event.data.answer };
+      
+      // Check if the response contains an automation suggestion
+      try {
+        const response = JSON.parse(event.data.answer);
+        if (response.request_type === 'automation_suggestion') {
+          message.automation = response.automation;
+        } else if (response.request_type === 'final_response') {
+          // If it's a final response, use the response field
+          message.text = response.response;
+        }
+      } catch (e) {
+        // Not a JSON response, treat as normal message
+        console.debug("Response is not JSON, using as-is:", event.data.answer);
+      }
+      
+      this._messages = [...this._messages, message];
+    } else {
+      this._error = event.data.error || 'An error occurred';
+      this._messages = [
+        ...this._messages,
+        { type: 'assistant', text: `Error: ${this._error}` }
+      ];
+    }
+  }
+
+  async _approveAutomation(automation) {
+    this._isLoading = true;
+    try {
+      const result = await this.hass.callService('llama_query', 'create_automation', {
+        automation: automation
+      });
+      
+      console.debug("Automation creation result:", result);
+      
+      // The result should be an object with a message property
+      if (result && result.message) {
+        this._messages = [...this._messages, {
+          type: 'assistant',
+          text: result.message
+        }];
+      } else {
+        // Fallback success message if no message is provided
+        this._messages = [...this._messages, {
+          type: 'assistant',
+          text: `Automation "${automation.alias}" has been created successfully!`
+        }];
+      }
+    } catch (error) {
+      console.error("Error creating automation:", error);
+      this._error = error.message || 'An error occurred while creating the automation';
+      this._messages = [...this._messages, {
+        type: 'assistant',
+        text: `Error: ${this._error}`
+      }];
+    }
+    this._isLoading = false;
+  }
+
+  _rejectAutomation() {
+    this._messages = [...this._messages, {
+      type: 'assistant',
+      text: 'Automation creation cancelled. Would you like to try something else?'
+    }];
+  }
+
   shouldUpdate(changedProps) {
     // Only update if internal state changes, not on every hass update
     return changedProps.has('_messages') || changedProps.has('_isLoading') || changedProps.has('_error');
+  }
+
+  _clearChat() {
+    this._messages = [];
+    this._isLoading = false;
+    this._error = null;
+    this._pendingAutomation = null;
   }
 }
 

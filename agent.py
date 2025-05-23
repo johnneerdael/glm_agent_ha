@@ -449,7 +449,7 @@ class LlamaAgent:
                 - get_entities_by_domain(domain): Get all entities in a domain
                 - get_calendar_events(entity_id?): Get calendar events
                 - get_automations(): Get all automations
-                - get_weather_data(): Get current weather and forecast data (requires weather entity to be configured)
+                - get_weather_data(): Get current weather and forecast data
                 - get_entity_registry(): Get entity registry entries
                 - get_device_registry(): Get device registry entries
                 - get_area_registry(): Get room/area information
@@ -458,6 +458,8 @@ class LlamaAgent:
                 - get_person_data(): Get person tracking information
                 - get_statistics(entity_id): Get sensor statistics
                 - get_scenes(): Get scene configurations
+                - set_entity_state(entity_id, state, attributes?): Set state of an entity (e.g., turn on/off lights, open/close covers)
+                - create_automation(automation): Create a new automation with the provided configuration
                 
                 You can also create automations when users ask for them. When you detect that a user wants to create an automation,
                 respond with a JSON object in this format:
@@ -566,6 +568,16 @@ class LlamaAgent:
                                 )
                             elif request_type == "get_scenes":
                                 data = await self.get_scenes()
+                            elif request_type == "set_entity_state":
+                                data = await self.set_entity_state(
+                                    parameters.get("entity_id"),
+                                    parameters.get("state"),
+                                    parameters.get("attributes")
+                                )
+                            elif request_type == "create_automation":
+                                data = await self.create_automation(
+                                    parameters.get("automation")
+                                )
                             else:
                                 data = {"error": f"Unknown request type: {request_type}"}
                                 _LOGGER.warning("Unknown request type: %s", request_type)
@@ -777,4 +789,80 @@ class LlamaAgent:
         """Clear the conversation history and cache."""
         self.conversation_history = []
         self._cache.clear()
-        _LOGGER.debug("Conversation history and cache cleared") 
+        _LOGGER.debug("Conversation history and cache cleared")
+
+    async def set_entity_state(self, entity_id: str, state: str, attributes: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Set the state of an entity."""
+        try:
+            _LOGGER.debug("Setting state for entity %s to %s with attributes: %s", 
+                         entity_id, state, json.dumps(attributes or {}))
+            
+            # Validate entity exists
+            if not self.hass.states.get(entity_id):
+                return {
+                    "error": f"Entity {entity_id} not found"
+                }
+            
+            # Call the appropriate service based on the domain
+            domain = entity_id.split('.')[0]
+            
+            if domain == "light":
+                service = "turn_on" if state.lower() in ["on", "true", "1"] else "turn_off"
+                service_data = {"entity_id": entity_id}
+                if attributes and service == "turn_on":
+                    service_data.update(attributes)
+                await self.hass.services.async_call("light", service, service_data)
+            
+            elif domain == "switch":
+                service = "turn_on" if state.lower() in ["on", "true", "1"] else "turn_off"
+                await self.hass.services.async_call("switch", service, {"entity_id": entity_id})
+            
+            elif domain == "cover":
+                if state.lower() in ["open", "up"]:
+                    service = "open_cover"
+                elif state.lower() in ["close", "down"]:
+                    service = "close_cover"
+                elif state.lower() == "stop":
+                    service = "stop_cover"
+                else:
+                    return {"error": f"Invalid state {state} for cover entity"}
+                await self.hass.services.async_call("cover", service, {"entity_id": entity_id})
+            
+            elif domain == "climate":
+                service_data = {"entity_id": entity_id}
+                if state.lower() in ["on", "true", "1"]:
+                    service = "turn_on"
+                elif state.lower() in ["off", "false", "0"]:
+                    service = "turn_off"
+                elif state.lower() in ["heat", "cool", "dry", "fan_only", "auto"]:
+                    service = "set_hvac_mode"
+                    service_data["hvac_mode"] = state.lower()
+                else:
+                    return {"error": f"Invalid state {state} for climate entity"}
+                await self.hass.services.async_call("climate", service, service_data)
+            
+            elif domain == "fan":
+                service = "turn_on" if state.lower() in ["on", "true", "1"] else "turn_off"
+                service_data = {"entity_id": entity_id}
+                if attributes and service == "turn_on":
+                    service_data.update(attributes)
+                await self.hass.services.async_call("fan", service, service_data)
+            
+            else:
+                # For other domains, try to set the state directly
+                await self.hass.states.async_set(entity_id, state, attributes or {})
+            
+            # Get the new state to confirm the change
+            new_state = self.hass.states.get(entity_id)
+            return {
+                "success": True,
+                "entity_id": entity_id,
+                "new_state": new_state.state,
+                "new_attributes": new_state.attributes
+            }
+            
+        except Exception as e:
+            _LOGGER.exception("Error setting entity state: %s", str(e))
+            return {
+                "error": f"Error setting entity state: {str(e)}"
+            } 
