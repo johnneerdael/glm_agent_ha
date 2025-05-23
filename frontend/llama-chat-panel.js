@@ -14,7 +14,8 @@ class LlamaChatPanel extends LitElement {
       panel: { type: Object, reflect: false, attribute: false },
       _messages: { type: Array, reflect: false, attribute: false },
       _isLoading: { type: Boolean, reflect: false, attribute: false },
-      _error: { type: String, reflect: false, attribute: false }
+      _error: { type: String, reflect: false, attribute: false },
+      _pendingAutomation: { type: Object, reflect: false, attribute: false }
     };
   }
 
@@ -183,6 +184,34 @@ class LlamaChatPanel extends LitElement {
         border: 1px solid var(--error-color);
         animation: fadeIn 0.3s ease-out;
       }
+      .automation-suggestion {
+        background: var(--secondary-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 12px;
+        padding: 16px;
+        margin: 8px 0;
+      }
+      .automation-title {
+        font-weight: 500;
+        margin-bottom: 8px;
+      }
+      .automation-description {
+        margin-bottom: 16px;
+        color: var(--secondary-text-color);
+      }
+      .automation-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .automation-details {
+        margin-top: 8px;
+        padding: 8px;
+        background: var(--primary-background-color);
+        border-radius: 8px;
+        font-family: monospace;
+        white-space: pre-wrap;
+        overflow-x: auto;
+      }
     `;
   }
 
@@ -191,6 +220,7 @@ class LlamaChatPanel extends LitElement {
     this._messages = [];
     this._isLoading = false;
     this._error = null;
+    this._pendingAutomation = null;
     console.debug("LlamaChatPanel constructor called");
   }
 
@@ -212,6 +242,25 @@ class LlamaChatPanel extends LitElement {
             ${this._messages.map(msg => html`
               <div class="message ${msg.type}-message">
                 ${msg.text}
+                ${msg.automation ? html`
+                  <div class="automation-suggestion">
+                    <div class="automation-title">${msg.automation.alias}</div>
+                    <div class="automation-description">${msg.automation.description}</div>
+                    <div class="automation-details">
+                      ${JSON.stringify(msg.automation, null, 2)}
+                    </div>
+                    <div class="automation-actions">
+                      <ha-button
+                        @click=${() => this._approveAutomation(msg.automation)}
+                        .disabled=${this._isLoading}
+                      >Approve</ha-button>
+                      <ha-button
+                        @click=${() => this._rejectAutomation()}
+                        .disabled=${this._isLoading}
+                      >Reject</ha-button>
+                    </div>
+                  </div>
+                ` : ''}
               </div>
             `)}
             ${this._isLoading ? html`
@@ -307,10 +356,23 @@ class LlamaChatPanel extends LitElement {
     console.debug("Received llama response:", event);
     this._isLoading = false;
     if (event.data.success) {
-      this._messages = [
-        ...this._messages,
-        { type: 'assistant', text: event.data.answer }
-      ];
+      let message = { type: 'assistant', text: event.data.answer };
+      
+      // Check if the response contains an automation suggestion
+      try {
+        const response = JSON.parse(event.data.answer);
+        if (response.request_type === 'automation_suggestion') {
+          message.automation = response.automation;
+        } else if (response.request_type === 'final_response') {
+          // If it's a final response, use the response field
+          message.text = response.response;
+        }
+      } catch (e) {
+        // Not a JSON response, treat as normal message
+        console.debug("Response is not JSON, using as-is:", event.data.answer);
+      }
+      
+      this._messages = [...this._messages, message];
     } else {
       this._error = event.data.error || 'An error occurred';
       this._messages = [
@@ -318,6 +380,46 @@ class LlamaChatPanel extends LitElement {
         { type: 'assistant', text: `Error: ${this._error}` }
       ];
     }
+  }
+
+  async _approveAutomation(automation) {
+    this._isLoading = true;
+    try {
+      const result = await this.hass.callService('llama_query', 'create_automation', {
+        automation: automation
+      });
+      
+      console.debug("Automation creation result:", result);
+      
+      // The result should be an object with a message property
+      if (result && result.message) {
+        this._messages = [...this._messages, {
+          type: 'assistant',
+          text: result.message
+        }];
+      } else {
+        // Fallback success message if no message is provided
+        this._messages = [...this._messages, {
+          type: 'assistant',
+          text: `Automation "${automation.alias}" has been created successfully!`
+        }];
+      }
+    } catch (error) {
+      console.error("Error creating automation:", error);
+      this._error = error.message || 'An error occurred while creating the automation';
+      this._messages = [...this._messages, {
+        type: 'assistant',
+        text: `Error: ${this._error}`
+      }];
+    }
+    this._isLoading = false;
+  }
+
+  _rejectAutomation() {
+    this._messages = [...this._messages, {
+      type: 'assistant',
+      text: 'Automation creation cancelled. Would you like to try something else?'
+    }];
   }
 
   shouldUpdate(changedProps) {

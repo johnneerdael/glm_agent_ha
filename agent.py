@@ -2,6 +2,8 @@
 import logging
 import json
 import aiohttp
+import time
+import yaml
 from typing import Dict, Any, List, Optional
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -221,21 +223,68 @@ class LlamaAgent:
                 "error": f"Error getting weather data: {str(e)}"
             }
 
+    async def create_automation(self, automation_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new automation by appending to automations.yaml and reloading."""
+        try:
+            _LOGGER.debug("Creating automation with config: %s", json.dumps(automation_config))
+            
+            # Validate required fields
+            if not all(key in automation_config for key in ['alias', 'trigger', 'action']):
+                return {
+                    "error": "Missing required fields in automation configuration"
+                }
+            
+            # Generate a unique ID for the automation
+            automation_id = str(int(time.time() * 1000))
+            
+            # Create the automation entry
+            automation_entry = {
+                'id': automation_id,
+                'alias': automation_config['alias'],
+                'description': automation_config.get('description', ''),
+                'trigger': automation_config['trigger'],
+                'condition': automation_config.get('condition', []),
+                'action': automation_config['action'],
+                'mode': 'single'  # Default mode
+            }
+            
+            # Read current automations.yaml using async executor
+            automations_path = self.hass.config.path('automations.yaml')
+            try:
+                current_automations = await self.hass.async_add_executor_job(
+                    lambda: yaml.safe_load(open(automations_path, 'r')) or []
+                )
+            except FileNotFoundError:
+                current_automations = []
+            
+            # Append new automation
+            current_automations.append(automation_entry)
+            
+            # Write back to file using async executor
+            await self.hass.async_add_executor_job(
+                lambda: yaml.dump(current_automations, open(automations_path, 'w'), default_flow_style=False)
+            )
+            
+            # Reload automations
+            await self.hass.services.async_call('automation', 'reload')
+            
+            return {
+                "success": True,
+                "message": f"Automation '{automation_config['alias']}' created successfully"
+            }
+            
+        except Exception as e:
+            _LOGGER.exception("Error creating automation: %s", str(e))
+            return {
+                "error": f"Error creating automation: {str(e)}"
+            }
+
     async def process_query(self, user_query: str) -> Dict[str, Any]:
         """Process a user query and handle data requests."""
-        
-        # Check if weather entity exists when weather-related queries are made
-        if any(word in user_query.lower() for word in ['weather', 'temperature', 'forecast', 'rain', 'snow']):
-            if not self.weather_entity:
-                return {
-                    "request_type": "final_response",
-                    "response": "I notice you're asking about weather, but no weather entity has been configured. Please add a weather entity in the Llama Query configuration settings."
-                }
-
         try:
             _LOGGER.debug("Processing new query: %s", user_query)
             
-            # Initial system message explaining available data types
+            # Initial system message explaining available data types and capabilities
             system_message = {
                 "role": "system",
                 "content": """You are an AI assistant integrated with Home Assistant. 
@@ -253,8 +302,20 @@ class LlamaAgent:
                 - get_statistics(entity_id): Get sensor statistics
                 - get_scenes(): Get scene configurations
                 
-                IMPORTANT: You must ALWAYS respond with a valid JSON object. Do not include any text before or after the JSON.
-                When you need data, respond with this exact JSON format:
+                You can also create automations when users ask for them. When you detect that a user wants to create an automation,
+                respond with a JSON object in this format:
+                {
+                    "request_type": "automation_suggestion",
+                    "automation": {
+                        "alias": "Name of the automation",
+                        "description": "Description of what the automation does",
+                        "trigger": [...],  // Array of trigger conditions
+                        "condition": [...], // Optional array of conditions
+                        "action": [...]     // Array of actions to perform
+                    }
+                }
+                
+                For all other responses, use this exact JSON format:
                 {
                     "request_type": "data_request",
                     "request": "command_name",
@@ -267,7 +328,7 @@ class LlamaAgent:
                     "response": "your answer to the user"
                 }
                 
-                DO NOT include any text before or after the JSON object. The response must be a single, valid JSON object.
+                IMPORTANT: You must ALWAYS respond with a valid JSON object. Do not include any text before or after the JSON.
                 DO NOT include any special characters or formatting in your response."""
             }
 
@@ -384,6 +445,19 @@ class LlamaAgent:
                             return {
                                 "success": True,
                                 "answer": response_data.get("response", "")
+                            }
+                        elif response_data.get("request_type") == "automation_suggestion":
+                            # Add automation suggestion to conversation history
+                            self.conversation_history.append({
+                                "role": "assistant",
+                                "content": response
+                            })
+                            
+                            # Return automation suggestion
+                            _LOGGER.debug("Received automation suggestion: %s", json.dumps(response_data.get("automation")))
+                            return {
+                                "success": True,
+                                "answer": json.dumps(response_data)
                             }
                         else:
                             _LOGGER.warning("Unknown response type: %s", response_data.get("request_type"))
