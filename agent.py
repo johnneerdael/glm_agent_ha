@@ -5,6 +5,7 @@ import aiohttp
 import time
 import yaml
 from typing import Dict, Any, List, Optional
+from datetime import datetime, timedelta
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 from .const import DOMAIN, CONF_WEATHER_ENTITY
@@ -21,8 +22,66 @@ class LlamaAgent:
         self.weather_entity = weather_entity
         self.LLAMA_API_URL = "https://api.llama.com/v1/chat/completions"
         self.conversation_history = []
+        self._cache = {}
+        self._cache_timeout = 300  # 5 minutes
+        self._max_retries = 3
+        self._retry_delay = 1  # seconds
+        self._rate_limit = 60  # requests per minute
+        self._last_request_time = 0
+        self._request_count = 0
+        self._request_window_start = time.time()
         _LOGGER.debug("LlamaAgent initialized with API URL: %s and weather entity: %s", 
                      self.LLAMA_API_URL, self.weather_entity)
+
+    def _validate_api_key(self) -> bool:
+        """Validate the API key format."""
+        if not self.api_key or not isinstance(self.api_key, str):
+            return False
+        # Add more specific validation based on your API key format
+        return len(self.api_key) >= 32
+
+    def _check_rate_limit(self) -> bool:
+        """Check if we're within rate limits."""
+        current_time = time.time()
+        if current_time - self._request_window_start >= 60:
+            self._request_count = 0
+            self._request_window_start = current_time
+        
+        if self._request_count >= self._rate_limit:
+            return False
+        
+        self._request_count += 1
+        return True
+
+    def _get_cached_data(self, key: str) -> Optional[Any]:
+        """Get data from cache if it's still valid."""
+        if key in self._cache:
+            timestamp, data = self._cache[key]
+            if time.time() - timestamp < self._cache_timeout:
+                return data
+            del self._cache[key]
+        return None
+
+    def _set_cached_data(self, key: str, data: Any) -> None:
+        """Store data in cache with timestamp."""
+        self._cache[key] = (time.time(), data)
+
+    def _sanitize_automation_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Sanitize automation configuration to prevent injection attacks."""
+        sanitized = {}
+        for key, value in config.items():
+            if key in ['alias', 'description']:
+                # Sanitize strings
+                sanitized[key] = str(value).strip()[:100]  # Limit length
+            elif key in ['trigger', 'condition', 'action']:
+                # Validate arrays
+                if isinstance(value, list):
+                    sanitized[key] = value
+            elif key == 'mode':
+                # Validate mode
+                if value in ['single', 'restart', 'queued', 'parallel']:
+                    sanitized[key] = value
+        return sanitized
 
     async def get_entity_state(self, entity_id: str) -> Dict[str, Any]:
         """Get the state of a specific entity."""
@@ -101,6 +160,34 @@ class LlamaAgent:
         except Exception as e:
             _LOGGER.exception("Error getting registry entries: %s", str(e))
             return [{"error": f"Error getting registry entries: {str(e)}"}]
+
+    async def get_device_registry(self) -> List[Dict]:
+        """Get device registry entries"""
+        _LOGGER.debug("Requesting all device registry entries")
+        try:
+            registry = self.hass.data.get("device_registry")
+            if not registry:
+                return []
+            return [
+                {
+                    "id": device.id,
+                    "name": device.name,
+                    "model": device.model,
+                    "manufacturer": device.manufacturer,
+                    "sw_version": device.sw_version,
+                    "hw_version": device.hw_version,
+                    "connections": device.connections,
+                    "identifiers": device.identifiers,
+                    "area_id": device.area_id,
+                    "disabled": device.disabled,
+                    "entry_type": device.entry_type,
+                    "name_by_user": device.name_by_user
+                }
+                for device in registry.devices.values()
+            ]
+        except Exception as e:
+            _LOGGER.exception("Error getting device registry entries: %s", str(e))
+            return [{"error": f"Error getting device registry entries: {str(e)}"}]
 
     async def get_history(self, entity_id: str, hours: int = 24) -> List[Dict]:
         """Get historical state changes for an entity"""
@@ -196,35 +283,77 @@ class LlamaAgent:
             return [{"error": f"Error getting scene configurations: {str(e)}"}]
         
     async def get_weather_data(self) -> Dict[str, Any]:
-        """Get weather data from the configured weather entity."""
-        if not self.weather_entity:
-            return {
-                "error": "No weather entity configured. Please add a weather entity in the Llama Query configuration settings."
-            }
-        
+        """Get weather data from any available weather entity in the system."""
         try:
-            state = self.hass.states.get(self.weather_entity)
-            if not state:
+            # Find all weather entities
+            weather_entities = [
+                state for state in self.hass.states.async_all()
+                if state.domain == "weather"
+            ]
+            
+            if not weather_entities:
                 return {
-                    "error": f"Weather entity {self.weather_entity} not found."
+                    "error": "No weather entities found in the system. Please add a weather integration."
                 }
             
+            # Use the first available weather entity
+            state = weather_entities[0]
+            _LOGGER.debug("Using weather entity: %s", state.entity_id)
+            
+            # Get all available attributes
+            all_attributes = state.attributes
+            _LOGGER.debug("Available weather attributes: %s", json.dumps(all_attributes))
+            
+            # Get forecast data
+            forecast = all_attributes.get("forecast", [])
+            
+            # Process forecast data
+            processed_forecast = []
+            for day in forecast:
+                forecast_entry = {
+                    "datetime": day.get("datetime"),
+                    "temperature": day.get("temperature"),
+                    "condition": day.get("condition"),
+                    "precipitation": day.get("precipitation"),
+                    "precipitation_probability": day.get("precipitation_probability"),
+                    "humidity": day.get("humidity"),
+                    "wind_speed": day.get("wind_speed"),
+                    "wind_bearing": day.get("wind_bearing")
+                }
+                # Only add entries that have at least some data
+                if any(v is not None for v in forecast_entry.values()):
+                    processed_forecast.append(forecast_entry)
+            
+            # Get current weather data
+            current = {
+                "entity_id": state.entity_id,
+                "temperature": all_attributes.get("temperature"),
+                "humidity": all_attributes.get("humidity"),
+                "pressure": all_attributes.get("pressure"),
+                "wind_speed": all_attributes.get("wind_speed"),
+                "wind_bearing": all_attributes.get("wind_bearing"),
+                "condition": state.state,
+                "forecast_available": len(processed_forecast) > 0
+            }
+            
+            # Log the processed data for debugging
+            _LOGGER.debug("Processed weather data: %s", json.dumps({
+                "current": current,
+                "forecast_count": len(processed_forecast)
+            }))
+            
             return {
-                "temperature": state.attributes.get("temperature"),
-                "humidity": state.attributes.get("humidity"),
-                "pressure": state.attributes.get("pressure"),
-                "wind_speed": state.attributes.get("wind_speed"),
-                "forecast": state.attributes.get("forecast", []),
-                "state": state.state
+                "current": current,
+                "forecast": processed_forecast
             }
         except Exception as e:
-            _LOGGER.error(f"Error getting weather data: {str(e)}")
+            _LOGGER.exception("Error getting weather data: %s", str(e))
             return {
                 "error": f"Error getting weather data: {str(e)}"
             }
 
     async def create_automation(self, automation_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new automation by appending to automations.yaml and reloading."""
+        """Create a new automation with validation and sanitization."""
         try:
             _LOGGER.debug("Creating automation with config: %s", json.dumps(automation_config))
             
@@ -234,18 +363,21 @@ class LlamaAgent:
                     "error": "Missing required fields in automation configuration"
                 }
             
+            # Sanitize configuration
+            sanitized_config = self._sanitize_automation_config(automation_config)
+            
             # Generate a unique ID for the automation
-            automation_id = str(int(time.time() * 1000))
+            automation_id = f"llama_auto_{int(time.time() * 1000)}"
             
             # Create the automation entry
             automation_entry = {
                 'id': automation_id,
-                'alias': automation_config['alias'],
-                'description': automation_config.get('description', ''),
-                'trigger': automation_config['trigger'],
-                'condition': automation_config.get('condition', []),
-                'action': automation_config['action'],
-                'mode': 'single'  # Default mode
+                'alias': sanitized_config['alias'],
+                'description': sanitized_config.get('description', ''),
+                'trigger': sanitized_config['trigger'],
+                'condition': sanitized_config.get('condition', []),
+                'action': sanitized_config['action'],
+                'mode': sanitized_config.get('mode', 'single')
             }
             
             # Read current automations.yaml using async executor
@@ -256,6 +388,12 @@ class LlamaAgent:
                 )
             except FileNotFoundError:
                 current_automations = []
+            
+            # Check for duplicate automation names
+            if any(auto.get('alias') == automation_entry['alias'] for auto in current_automations):
+                return {
+                    "error": f"An automation with the name '{automation_entry['alias']}' already exists"
+                }
             
             # Append new automation
             current_automations.append(automation_entry)
@@ -268,9 +406,12 @@ class LlamaAgent:
             # Reload automations
             await self.hass.services.async_call('automation', 'reload')
             
+            # Clear automation-related caches
+            self._cache.clear()
+            
             return {
                 "success": True,
-                "message": f"Automation '{automation_config['alias']}' created successfully"
+                "message": f"Automation '{automation_entry['alias']}' created successfully"
             }
             
         except Exception as e:
@@ -280,21 +421,37 @@ class LlamaAgent:
             }
 
     async def process_query(self, user_query: str) -> Dict[str, Any]:
-        """Process a user query and handle data requests."""
+        """Process a user query with input validation and rate limiting."""
         try:
+            if not user_query or not isinstance(user_query, str):
+                return {
+                    "success": False,
+                    "error": "Invalid query format"
+                }
+
+            # Sanitize user input
+            user_query = user_query.strip()[:1000]  # Limit length and trim whitespace
+            
             _LOGGER.debug("Processing new query: %s", user_query)
             
+            # Check cache for identical query
+            cache_key = f"query_{hash(user_query)}"
+            cached_result = self._get_cached_data(cache_key)
+            if cached_result:
+                return cached_result
+
             # Initial system message explaining available data types and capabilities
             system_message = {
                 "role": "system",
                 "content": """You are an AI assistant integrated with Home Assistant. 
-                You can request specific data by using these commands:
+                You can request specific data by using only these commands:
                 - get_entity_state(entity_id): Get state of a specific entity
                 - get_entities_by_domain(domain): Get all entities in a domain
                 - get_calendar_events(entity_id?): Get calendar events
                 - get_automations(): Get all automations
-                - get_weather_data(): Get current weather data (requires weather entity to be configured)
-                - get_device_registry(): Get connected device details
+                - get_weather_data(): Get current weather and forecast data (requires weather entity to be configured)
+                - get_entity_registry(): Get entity registry entries
+                - get_device_registry(): Get device registry entries
                 - get_area_registry(): Get room/area information
                 - get_history(entity_id, hours): Get historical state changes
                 - get_logbook_entries(hours): Get recent events
@@ -328,7 +485,7 @@ class LlamaAgent:
                     "response": "your answer to the user"
                 }
                 
-                IMPORTANT: You must ALWAYS respond with a valid JSON object. Do not include any text before or after the JSON.
+                IMPORTANT: You must ALWAYS respond with a valid JSON object. Do not include any text before or after the JSON. use only the commands above.
                 DO NOT include any special characters or formatting in your response."""
             }
 
@@ -384,6 +541,8 @@ class LlamaAgent:
                                 data = await self.get_calendar_events(parameters.get("entity_id"))
                             elif request_type == "get_automations":
                                 data = await self.get_automations()
+                            elif request_type == "get_entity_registry":
+                                data = await self.get_entity_registry()
                             elif request_type == "get_device_registry":
                                 data = await self.get_device_registry()
                             elif request_type == "get_weather_data":
@@ -442,10 +601,12 @@ class LlamaAgent:
                             
                             # Return final response
                             _LOGGER.debug("Received final response: %s", response_data.get("response"))
-                            return {
+                            result = {
                                 "success": True,
                                 "answer": response_data.get("response", "")
                             }
+                            self._set_cached_data(cache_key, result)
+                            return result
                         elif response_data.get("request_type") == "automation_suggestion":
                             # Add automation suggestion to conversation history
                             self.conversation_history.append({
@@ -455,10 +616,12 @@ class LlamaAgent:
                             
                             # Return automation suggestion
                             _LOGGER.debug("Received automation suggestion: %s", json.dumps(response_data.get("automation")))
-                            return {
+                            result = {
                                 "success": True,
                                 "answer": json.dumps(response_data)
                             }
+                            self._set_cached_data(cache_key, result)
+                            return result
                         else:
                             _LOGGER.warning("Unknown response type: %s", response_data.get("request_type"))
                             return {
@@ -469,10 +632,12 @@ class LlamaAgent:
                     except json.JSONDecodeError as e:
                         _LOGGER.warning("Failed to parse response as JSON: %s", str(e))
                         # If response is not valid JSON, return it as final response
-                        return {
+                        result = {
                             "success": True,
                             "answer": response
                         }
+                        self._set_cached_data(cache_key, result)
+                        return result
                         
                 except Exception as e:
                     _LOGGER.exception("Error processing AI response: %s", str(e))
@@ -483,10 +648,12 @@ class LlamaAgent:
 
             # If we've reached max iterations without a final response
             _LOGGER.warning("Reached maximum iterations without final response")
-            return {
+            result = {
                 "success": False,
                 "error": "Maximum iterations reached without final response"
             }
+            self._set_cached_data(cache_key, result)
+            return result
             
         except Exception as e:
             _LOGGER.exception("Error in process_query: %s", str(e))
@@ -496,100 +663,118 @@ class LlamaAgent:
             }
 
     async def _get_llama_response(self) -> str:
-        """Get response from Llama API."""
+        """Get response from Llama API with retries and rate limiting."""
+        if not self._validate_api_key():
+            raise ValueError("Invalid API key")
+
+        if not self._check_rate_limit():
+            raise Exception("Rate limit exceeded. Please try again later.")
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
 
+        # Limit conversation history to last 10 messages to prevent token overflow
+        recent_messages = self.conversation_history[-10:] if len(self.conversation_history) > 10 else self.conversation_history
+
         payload = {
             "model": "Llama-4-Maverick-17B-128E-Instruct-FP8",
-            "messages": self.conversation_history,
-            "max_tokens": 2048
+            "messages": recent_messages,
+            "max_tokens": 2048,
+            "temperature": 0.7,
+            "top_p": 0.9
         }
 
-        _LOGGER.debug("Sending request to Llama API with payload: %s", 
-                     json.dumps(payload, default=str))
+        _LOGGER.debug("Sending request to Llama API with %d messages", len(recent_messages))
 
-        async with aiohttp.ClientSession() as session:
+        retry_count = 0
+        last_error = None
+
+        while retry_count < self._max_retries:
             try:
-                async with session.post(self.LLAMA_API_URL, headers=headers, json=payload) as resp:
-                    if resp.status != 200:
-                        error_msg = f"API error {resp.status}: {await resp.text()}"
-                        _LOGGER.error("Llama API error: %s", error_msg)
-                        raise Exception(error_msg)
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        self.LLAMA_API_URL,
+                        headers=headers,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=30)
+                    ) as resp:
+                        if resp.status == 429:  # Rate limit
+                            retry_after = int(resp.headers.get('Retry-After', self._retry_delay))
+                            await asyncio.sleep(retry_after)
+                            retry_count += 1
+                            continue
 
-                    data = await resp.json()
-                    _LOGGER.debug("Received raw response from Llama API: %s", 
-                                json.dumps(data, default=str))
-                    
-                    # Extract the actual response from the API response
-                    if 'completion_message' in data:
-                        completion = data['completion_message']
-                        if isinstance(completion, dict) and 'content' in completion:
-                            content = completion['content']
-                            if isinstance(content, dict) and 'text' in content:
-                                response = content['text']
-                                _LOGGER.debug("Extracted text response: %s", response)
-                                
-                                # Clean up the response
-                                # Remove any text before the first {
-                                json_start = response.find('{')
-                                if json_start >= 0:
-                                    response = response[json_start:]
-                                    
-                                    # Remove any text after the last }
-                                    json_end = response.rfind('}')
-                                    if json_end >= 0:
-                                        response = response[:json_end + 1]
-                                        
-                                        # Try to parse as JSON to validate
-                                        try:
-                                            json.loads(response)
-                                            _LOGGER.debug("Cleaned and validated JSON response: %s", response)
-                                            return response
-                                        except json.JSONDecodeError:
-                                            _LOGGER.warning("Failed to parse cleaned response as JSON: %s", response)
-                                
-                                # If we couldn't extract valid JSON, return the raw response
-                                _LOGGER.warning("Could not extract valid JSON, returning raw response")
-                                return response
-                    
-                    _LOGGER.warning("No valid response found in API response")
-                    raise Exception("No valid response found in API response")
-                    
+                        if resp.status != 200:
+                            error_text = await resp.text()
+                            try:
+                                error_json = json.loads(error_text)
+                                error_msg = f"API error {resp.status}: {error_json.get('detail', error_text)}"
+                            except json.JSONDecodeError:
+                                error_msg = f"API error {resp.status}: {error_text}"
+                            
+                            _LOGGER.error("Llama API error: %s", error_msg)
+                            
+                            # If it's a 500 error, try to clear conversation history and retry
+                            if resp.status == 500 and retry_count == 0:
+                                _LOGGER.warning("Received 500 error, clearing conversation history and retrying")
+                                self.clear_conversation_history()
+                                retry_count += 1
+                                continue
+                            
+                            raise Exception(error_msg)
+
+                        data = await resp.json()
+                        _LOGGER.debug("Received raw response from Llama API: %s", 
+                                    json.dumps(data, default=str))
+                        
+                        return self._process_api_response(data)
+
             except aiohttp.ClientError as e:
-                _LOGGER.exception("Network error while querying Llama API: %s", str(e))
-                raise Exception(f"Network error: {str(e)}")
+                last_error = e
+                retry_count += 1
+                if retry_count < self._max_retries:
+                    await asyncio.sleep(self._retry_delay * retry_count)
+                continue
             except Exception as e:
-                _LOGGER.exception("Exception while querying Llama API: %s", str(e))
-                raise 
+                last_error = e
+                break
 
-    async def _get_weather_data(self) -> Dict[str, Any]:
-        """Get weather data from the configured weather entity."""
-        weather_entity = self.hass.data[DOMAIN].get(CONF_WEATHER_ENTITY)
-        if not weather_entity:
-            return {
-                "error": "No weather entity configured. Please add a weather entity in the Llama Query configuration settings."
-            }
+        raise Exception(f"Failed after {retry_count} retries. Last error: {str(last_error)}")
+
+    def _process_api_response(self, data: Dict[str, Any]) -> str:
+        """Process and validate API response."""
+        if 'completion_message' not in data:
+            raise ValueError("Invalid API response format")
+
+        completion = data['completion_message']
+        if not isinstance(completion, dict) or 'content' not in completion:
+            raise ValueError("Invalid completion message format")
+
+        content = completion['content']
+        if not isinstance(content, dict) or 'text' not in content:
+            raise ValueError("Invalid content format")
+
+        response = content['text']
         
-        try:
-            state = self.hass.states.get(weather_entity)
-            if not state:
-                return {
-                    "error": f"Weather entity {weather_entity} not found."
-                }
-            
-            return {
-                "temperature": state.attributes.get("temperature"),
-                "humidity": state.attributes.get("humidity"),
-                "pressure": state.attributes.get("pressure"),
-                "wind_speed": state.attributes.get("wind_speed"),
-                "forecast": state.attributes.get("forecast", []),
-                "state": state.state
-            }
-        except Exception as e:
-            _LOGGER.error(f"Error getting weather data: {str(e)}")
-            return {
-                "error": f"Error getting weather data: {str(e)}"
-            } 
+        # Extract JSON from response
+        json_start = response.find('{')
+        json_end = response.rfind('}')
+        
+        if json_start >= 0 and json_end >= 0:
+            json_str = response[json_start:json_end + 1]
+            try:
+                # Validate JSON
+                json.loads(json_str)
+                return json_str
+            except json.JSONDecodeError:
+                _LOGGER.warning("Invalid JSON in response: %s", json_str)
+        
+        return response
+
+    def clear_conversation_history(self) -> None:
+        """Clear the conversation history and cache."""
+        self.conversation_history = []
+        self._cache.clear()
+        _LOGGER.debug("Conversation history and cache cleared") 
