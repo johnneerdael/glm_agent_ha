@@ -31,11 +31,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Llama Query from a config entry."""
     try:
+        _LOGGER.debug(f"Llama Query config entry data: {entry.data}")
         hass.data[DOMAIN] = {
             "agent": LlamaAgent(
                 hass,
-                entry.data[CONF_API_KEY],
-                entry.data.get(CONF_WEATHER_ENTITY)
+                entry.data  # Pass the config entry data dict directly
             )
         }
     except Exception as err:

@@ -1,9 +1,18 @@
+"""
+Example config:
+llama_query:
+  ai_provider: openai  # or 'llama', 'gemini'
+  llama_token: "..."
+  openai_token: "..."
+  gemini_token: "..."
+"""
 """The Llama Query agent implementation."""
 import logging
 import json
 import aiohttp
 import time
 import yaml
+import asyncio
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from homeassistant.core import HomeAssistant
@@ -12,15 +21,148 @@ from .const import DOMAIN, CONF_WEATHER_ENTITY
 
 _LOGGER = logging.getLogger(__name__)
 
-class LlamaAgent:
-    """Agent for handling Llama queries with dynamic data requests."""
+# === AI Client Abstractions ===
+class BaseAIClient:
+    async def get_response(self, messages, **kwargs):
+        raise NotImplementedError
 
-    def __init__(self, hass: HomeAssistant, api_key: str, weather_entity: str = None):
-        """Initialize the agent."""
+class LlamaClient(BaseAIClient):
+    def __init__(self, token):
+        self.token = token
+        self.api_url = "https://api.llama.com/v1/chat/completions"
+    async def get_response(self, messages, **kwargs):
+        _LOGGER.debug(f"Llama API URL: {self.api_url}")
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "Llama-4-Maverick-17B-128E-Instruct-FP8",
+            "messages": messages,
+            "max_tokens": 2048,
+            "temperature": 0.7,
+            "top_p": 0.9
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    raise Exception(f"Llama API error {resp.status}: {await resp.text()}")
+                data = await resp.json()
+                # Extract text from Llama response
+                completion = data.get('completion_message', {})
+                content = completion.get('content', {})
+                return content.get('text', str(data))
+
+class OpenAIClient(BaseAIClient):
+    def __init__(self, token):
+        self.token = token
+        self.api_url = "https://api.openai.com/v1/chat/completions"
+    async def get_response(self, messages, **kwargs):
+        _LOGGER.debug(f"OpenAI API URL: {self.api_url}")
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "gpt-3.5-turbo",
+            "messages": messages,
+            "max_tokens": 2048,
+            "temperature": 0.7,
+            "top_p": 0.9
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    raise Exception(f"OpenAI API error {resp.status}: {await resp.text()}")
+                data = await resp.json()
+                # Extract text from OpenAI response
+                choices = data.get('choices', [])
+                if choices and 'message' in choices[0]:
+                    return choices[0]['message'].get('content', str(data))
+                return str(data)
+
+class GeminiClient(BaseAIClient):
+    def __init__(self, token):
+        self.token = token
+        self.api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+    async def get_response(self, messages, **kwargs):
+        _LOGGER.debug(f"Gemini API URL: {self.api_url}")
+        # Gemini expects a different message format
+        gemini_messages = [{"role": m["role"], "parts": [m["content"]]} for m in messages]
+        payload = {
+            "contents": gemini_messages
+        }
+        url = f"{self.api_url}?key={self.token}"
+        headers = {"Content-Type": "application/json"}
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    raise Exception(f"Gemini API error {resp.status}: {await resp.text()}")
+                data = await resp.json()
+                # Extract text from Gemini response
+                candidates = data.get('candidates', [])
+                if candidates and 'content' in candidates[0]:
+                    parts = candidates[0]['content'].get('parts', [])
+                    if parts:
+                        return parts[0].get('text', str(data))
+                return str(data)
+
+# === Main Agent ===
+class LlamaAgent:
+    """Agent for handling Llama queries with dynamic data requests and multiple AI providers."""
+
+    SYSTEM_PROMPT = {
+        "role": "system",
+        "content": (
+            "You are an AI assistant integrated with Home Assistant.\n"
+            "You can request specific data by using only these commands:\n"
+            "- get_entity_state(entity_id): Get state of a specific entity\n"
+            "- get_entities_by_domain(domain): Get all entities in a domain\n"
+            "- get_calendar_events(entity_id?): Get calendar events\n"
+            "- get_automations(): Get all automations\n"
+            "- get_weather_data(): Get current weather and forecast data\n"
+            "- get_entity_registry(): Get entity registry entries\n"
+            "- get_device_registry(): Get device registry entries\n"
+            "- get_area_registry(): Get room/area information\n"
+            "- get_history(entity_id, hours): Get historical state changes\n"
+            "- get_logbook_entries(hours): Get recent events\n"
+            "- get_person_data(): Get person tracking information\n"
+            "- get_statistics(entity_id): Get sensor statistics\n"
+            "- get_scenes(): Get scene configurations\n"
+            "- set_entity_state(entity_id, state, attributes?): Set state of an entity (e.g., turn on/off lights, open/close covers)\n"
+            "- create_automation(automation): Create a new automation with the provided configuration\n\n"
+            "You can also create automations when users ask for them. When you detect that a user wants to create an automation,\n"
+            "respond with a JSON object in this format:\n"
+            "{\n"
+            "  \"request_type\": \"automation_suggestion\",\n"
+            "  \"automation\": {\n"
+            "    \"alias\": \"Name of the automation\",\n"
+            "    \"description\": \"Description of what the automation does\",\n"
+            "    \"trigger\": [...],  // Array of trigger conditions\n"
+            "    \"condition\": [...], // Optional array of conditions\n"
+            "    \"action\": [...]     // Array of actions to perform\n"
+            "  }\n"
+            "}\n\n"
+            "For all other responses, use this exact JSON format:\n"
+            "{\n"
+            "  \"request_type\": \"data_request\",\n"
+            "  \"request\": \"command_name\",\n"
+            "  \"parameters\": {...}\n"
+            "}\n\n"
+            "When you have all the data you need, respond with this exact JSON format:\n"
+            "{\n"
+            "  \"request_type\": \"final_response\",\n"
+            "  \"response\": \"your answer to the user\"\n"
+            "}\n\n"
+            "IMPORTANT: You must ALWAYS respond with a valid JSON object. Do not include any text before or after the JSON. use only the commands above.\n"
+            "DO NOT include any special characters or formatting in your response."
+        )
+    }
+
+    def __init__(self, hass: HomeAssistant, config: Dict[str, Any]):
+        """Initialize the agent with provider selection."""
         self.hass = hass
-        self.api_key = api_key
-        self.weather_entity = weather_entity
-        self.LLAMA_API_URL = "https://api.llama.com/v1/chat/completions"
+        self.config = config
         self.conversation_history = []
         self._cache = {}
         self._cache_timeout = 300  # 5 minutes
@@ -30,15 +172,22 @@ class LlamaAgent:
         self._last_request_time = 0
         self._request_count = 0
         self._request_window_start = time.time()
-        _LOGGER.debug("LlamaAgent initialized with API URL: %s and weather entity: %s", 
-                     self.LLAMA_API_URL, self.weather_entity)
+        provider = config.get("ai_provider", "llama")
+        _LOGGER.debug(f"ai_provider from config: {provider}")
+        if provider == "openai":
+            self.ai_client = OpenAIClient(config.get("llm_token"))
+        elif provider == "gemini":
+            self.ai_client = GeminiClient(config.get("llm_token"))
+        else:
+            self.ai_client = LlamaClient(config.get("llm_token"))
+        _LOGGER.debug(f"LlamaAgent initialized with provider: {provider}")
 
     def _validate_api_key(self) -> bool:
         """Validate the API key format."""
-        if not self.api_key or not isinstance(self.api_key, str):
+        if not self.config.get("llm_token") or not isinstance(self.config.get("llm_token"), str):
             return False
         # Add more specific validation based on your API key format
-        return len(self.api_key) >= 32
+        return len(self.config.get("llm_token")) >= 32
 
     def _check_rate_limit(self) -> bool:
         """Check if we're within rate limits."""
@@ -440,61 +589,10 @@ class LlamaAgent:
             if cached_result:
                 return cached_result
 
-            # Initial system message explaining available data types and capabilities
-            system_message = {
-                "role": "system",
-                "content": """You are an AI assistant integrated with Home Assistant. 
-                You can request specific data by using only these commands:
-                - get_entity_state(entity_id): Get state of a specific entity
-                - get_entities_by_domain(domain): Get all entities in a domain
-                - get_calendar_events(entity_id?): Get calendar events
-                - get_automations(): Get all automations
-                - get_weather_data(): Get current weather and forecast data
-                - get_entity_registry(): Get entity registry entries
-                - get_device_registry(): Get device registry entries
-                - get_area_registry(): Get room/area information
-                - get_history(entity_id, hours): Get historical state changes
-                - get_logbook_entries(hours): Get recent events
-                - get_person_data(): Get person tracking information
-                - get_statistics(entity_id): Get sensor statistics
-                - get_scenes(): Get scene configurations
-                - set_entity_state(entity_id, state, attributes?): Set state of an entity (e.g., turn on/off lights, open/close covers)
-                - create_automation(automation): Create a new automation with the provided configuration
-                
-                You can also create automations when users ask for them. When you detect that a user wants to create an automation,
-                respond with a JSON object in this format:
-                {
-                    "request_type": "automation_suggestion",
-                    "automation": {
-                        "alias": "Name of the automation",
-                        "description": "Description of what the automation does",
-                        "trigger": [...],  // Array of trigger conditions
-                        "condition": [...], // Optional array of conditions
-                        "action": [...]     // Array of actions to perform
-                    }
-                }
-                
-                For all other responses, use this exact JSON format:
-                {
-                    "request_type": "data_request",
-                    "request": "command_name",
-                    "parameters": {...}
-                }
-                
-                When you have all the data you need, respond with this exact JSON format:
-                {
-                    "request_type": "final_response",
-                    "response": "your answer to the user"
-                }
-                
-                IMPORTANT: You must ALWAYS respond with a valid JSON object. Do not include any text before or after the JSON. use only the commands above.
-                DO NOT include any special characters or formatting in your response."""
-            }
-
             # Add system message to conversation if it's the first message
             if not self.conversation_history:
                 _LOGGER.debug("Adding system message to new conversation")
-                self.conversation_history.append(system_message)
+                self.conversation_history.append(self.SYSTEM_PROMPT)
 
             # Add user query to conversation
             self.conversation_history.append({
@@ -675,115 +773,26 @@ class LlamaAgent:
             }
 
     async def _get_llama_response(self) -> str:
-        """Get response from Llama API with retries and rate limiting."""
-        if not self._validate_api_key():
-            raise ValueError("Invalid API key")
-
+        """Get response from the selected AI provider with retries and rate limiting."""
         if not self._check_rate_limit():
             raise Exception("Rate limit exceeded. Please try again later.")
-
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-
-        # Limit conversation history to last 10 messages to prevent token overflow
-        recent_messages = self.conversation_history[-10:] if len(self.conversation_history) > 10 else self.conversation_history
-
-        payload = {
-            "model": "Llama-4-Maverick-17B-128E-Instruct-FP8",
-            "messages": recent_messages,
-            "max_tokens": 2048,
-            "temperature": 0.7,
-            "top_p": 0.9
-        }
-
-        _LOGGER.debug("Sending request to Llama API with %d messages", len(recent_messages))
-
         retry_count = 0
         last_error = None
-
+        # Limit conversation history to last 10 messages to prevent token overflow
+        recent_messages = self.conversation_history[-10:] if len(self.conversation_history) > 10 else self.conversation_history
+        # Ensure system prompt is always the first message
+        if not recent_messages or recent_messages[0].get("role") != "system":
+            recent_messages = [self.SYSTEM_PROMPT] + recent_messages
         while retry_count < self._max_retries:
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(
-                        self.LLAMA_API_URL,
-                        headers=headers,
-                        json=payload,
-                        timeout=aiohttp.ClientTimeout(total=30)
-                    ) as resp:
-                        if resp.status == 429:  # Rate limit
-                            retry_after = int(resp.headers.get('Retry-After', self._retry_delay))
-                            await asyncio.sleep(retry_after)
-                            retry_count += 1
-                            continue
-
-                        if resp.status != 200:
-                            error_text = await resp.text()
-                            try:
-                                error_json = json.loads(error_text)
-                                error_msg = f"API error {resp.status}: {error_json.get('detail', error_text)}"
-                            except json.JSONDecodeError:
-                                error_msg = f"API error {resp.status}: {error_text}"
-                            
-                            _LOGGER.error("Llama API error: %s", error_msg)
-                            
-                            # If it's a 500 error, try to clear conversation history and retry
-                            if resp.status == 500 and retry_count == 0:
-                                _LOGGER.warning("Received 500 error, clearing conversation history and retrying")
-                                self.clear_conversation_history()
-                                retry_count += 1
-                                continue
-                            
-                            raise Exception(error_msg)
-
-                        data = await resp.json()
-                        _LOGGER.debug("Received raw response from Llama API: %s", 
-                                    json.dumps(data, default=str))
-                        
-                        return self._process_api_response(data)
-
-            except aiohttp.ClientError as e:
+                return await self.ai_client.get_response(recent_messages)
+            except Exception as e:
                 last_error = e
                 retry_count += 1
                 if retry_count < self._max_retries:
                     await asyncio.sleep(self._retry_delay * retry_count)
                 continue
-            except Exception as e:
-                last_error = e
-                break
-
         raise Exception(f"Failed after {retry_count} retries. Last error: {str(last_error)}")
-
-    def _process_api_response(self, data: Dict[str, Any]) -> str:
-        """Process and validate API response."""
-        if 'completion_message' not in data:
-            raise ValueError("Invalid API response format")
-
-        completion = data['completion_message']
-        if not isinstance(completion, dict) or 'content' not in completion:
-            raise ValueError("Invalid completion message format")
-
-        content = completion['content']
-        if not isinstance(content, dict) or 'text' not in content:
-            raise ValueError("Invalid content format")
-
-        response = content['text']
-        
-        # Extract JSON from response
-        json_start = response.find('{')
-        json_end = response.rfind('}')
-        
-        if json_start >= 0 and json_end >= 0:
-            json_str = response[json_start:json_end + 1]
-            try:
-                # Validate JSON
-                json.loads(json_str)
-                return json_str
-            except json.JSONDecodeError:
-                _LOGGER.warning("Invalid JSON in response: %s", json_str)
-        
-        return response
 
     def clear_conversation_history(self) -> None:
         """Clear the conversation history and cache."""
