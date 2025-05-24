@@ -2,8 +2,8 @@
     "config": {
         "step": {
             "user": {
-                "title": "Llama Query Configuration",
-                "description": "Enter your Llama API key and optionally select a weather entity",
+                "title": "AI Agent HA Configuration",
+                "description": "Enter your API key and optionally select a weather entity",
                 "data": {
                     "api_key": "API Key",
                     "weather_entity": "Weather Entity (Optional)"

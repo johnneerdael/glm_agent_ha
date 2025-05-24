@@ -15,7 +15,7 @@ from homeassistant.const import Platform
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.exceptions import ConfigEntryNotReady
 from .const import DOMAIN, CONF_API_KEY, CONF_WEATHER_ENTITY
-from .agent import LlamaAgent
+from .agent import AiAgentHaAgent
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         _LOGGER.debug(f"Llama Query config entry data: {entry.data}")
         hass.data[DOMAIN] = {
-            "agent": LlamaAgent(
+            "agent": AiAgentHaAgent(
                 hass,
                 entry.data  # Pass the config entry data dict directly
             )
@@ -45,7 +45,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         """Handle the query service call."""
         agent = hass.data[DOMAIN]["agent"]
         result = await agent.process_query(call.data.get("prompt", ""))
-        hass.bus.async_fire("llama_query_response", result)
+        hass.bus.async_fire("ai_agent_ha_response", result)
 
     async def async_handle_create_automation(call):
         """Handle the create_automation service call."""
@@ -59,15 +59,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register static path for frontend
     hass.http.register_static_path(
-        "/frontend_es5/llama-chat",
-        hass.config.path("custom_components/llama_query/frontend"),
+        "/frontend/ai_agent_ha",
+        hass.config.path("custom_components/ai_agent_ha/frontend"),
         cache_headers=False,
     )
 
     # Try to unregister existing panel first
     try:
         from homeassistant.components.frontend import async_remove_panel
-        await async_remove_panel(hass, "llama-chat")
+        await async_remove_panel(hass, "ai_agent_ha")
     except Exception as e:
         _LOGGER.debug("No existing panel to remove: %s", str(e))
 
@@ -76,14 +76,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async_register_built_in_panel(
             hass,
             component_name="custom",
-            sidebar_title="Llama Chat",
+            sidebar_title="AI Agent HA",
             sidebar_icon="mdi:robot",
-            frontend_url_path="llama-chat",
+            frontend_url_path="ai_agent_ha",
             require_admin=False,
             config={
                 "_panel_custom": {
-                    "name": "llama-chat-panel",
-                    "module_url": "/frontend_es5/llama-chat/llama-chat-panel.js",
+                    "name": "ai_agent_ha-panel",
+                    "module_url": "/frontend/ai_agent_ha/ai_agent_ha-panel.js",
                     "embed_iframe": False,
                 }
             }
@@ -99,7 +99,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     try:
         from homeassistant.components.frontend import async_remove_panel
-        await async_remove_panel(hass, "llama-chat")
+        await async_remove_panel(hass, "ai_agent_ha")
     except Exception as e:
         _LOGGER.debug("Error removing panel: %s", str(e))
 

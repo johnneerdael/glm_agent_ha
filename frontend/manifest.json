@@ -1,8 +1,8 @@
 {
-    "name": "Llama Chat",
+    "name": "AI Agent HA",
     "render_readme": true,
-    "domains": ["llama_query", "weather"],
+    "domains": ["ai_agent_ha", "weather"],
     "homeassistant": "2023.1.0",
     "iot_class": "Local Push",
-    "js_url": "llama-chat-panel.js"
+    "js_url": "ai_agent_ha-panel.js"
 } 

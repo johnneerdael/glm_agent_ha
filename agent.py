@@ -1,10 +1,9 @@
 """
 Example config:
-llama_query:
-  ai_provider: openai  # or 'llama', 'gemini'
+ai_agent_ha:
+  ai_provider: openai  # or 'llama'
   llama_token: "..."
   openai_token: "..."
-  gemini_token: "..."
 """
 """The Llama Query agent implementation."""
 import logging
@@ -31,7 +30,7 @@ class LlamaClient(BaseAIClient):
         self.token = token
         self.api_url = "https://api.llama.com/v1/chat/completions"
     async def get_response(self, messages, **kwargs):
-        _LOGGER.debug(f"Llama API URL: {self.api_url}")
+        _LOGGER.debug("Making request to Llama API")
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
@@ -46,7 +45,9 @@ class LlamaClient(BaseAIClient):
         async with aiohttp.ClientSession() as session:
             async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                 if resp.status != 200:
-                    raise Exception(f"Llama API error {resp.status}: {await resp.text()}")
+                    error_text = await resp.text()
+                    _LOGGER.error("Llama API error %d", resp.status)
+                    raise Exception(f"Llama API error {resp.status}")
                 data = await resp.json()
                 # Extract text from Llama response
                 completion = data.get('completion_message', {})
@@ -58,7 +59,7 @@ class OpenAIClient(BaseAIClient):
         self.token = token
         self.api_url = "https://api.openai.com/v1/chat/completions"
     async def get_response(self, messages, **kwargs):
-        _LOGGER.debug(f"OpenAI API URL: {self.api_url}")
+        _LOGGER.debug("Making request to OpenAI API")
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
@@ -73,7 +74,9 @@ class OpenAIClient(BaseAIClient):
         async with aiohttp.ClientSession() as session:
             async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                 if resp.status != 200:
-                    raise Exception(f"OpenAI API error {resp.status}: {await resp.text()}")
+                    error_text = await resp.text()
+                    _LOGGER.error("OpenAI API error %d", resp.status)
+                    raise Exception(f"OpenAI API error {resp.status}")
                 data = await resp.json()
                 # Extract text from OpenAI response
                 choices = data.get('choices', [])
@@ -81,34 +84,8 @@ class OpenAIClient(BaseAIClient):
                     return choices[0]['message'].get('content', str(data))
                 return str(data)
 
-class GeminiClient(BaseAIClient):
-    def __init__(self, token):
-        self.token = token
-        self.api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
-    async def get_response(self, messages, **kwargs):
-        _LOGGER.debug(f"Gemini API URL: {self.api_url}")
-        # Gemini expects a different message format
-        gemini_messages = [{"role": m["role"], "parts": [m["content"]]} for m in messages]
-        payload = {
-            "contents": gemini_messages
-        }
-        url = f"{self.api_url}?key={self.token}"
-        headers = {"Content-Type": "application/json"}
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                if resp.status != 200:
-                    raise Exception(f"Gemini API error {resp.status}: {await resp.text()}")
-                data = await resp.json()
-                # Extract text from Gemini response
-                candidates = data.get('candidates', [])
-                if candidates and 'content' in candidates[0]:
-                    parts = candidates[0]['content'].get('parts', [])
-                    if parts:
-                        return parts[0].get('text', str(data))
-                return str(data)
-
 # === Main Agent ===
-class LlamaAgent:
+class AiAgentHaAgent:
     """Agent for handling Llama queries with dynamic data requests and multiple AI providers."""
 
     SYSTEM_PROMPT = {
@@ -173,14 +150,12 @@ class LlamaAgent:
         self._request_count = 0
         self._request_window_start = time.time()
         provider = config.get("ai_provider", "llama")
-        _LOGGER.debug(f"ai_provider from config: {provider}")
+        _LOGGER.debug("Initializing AiAgentHaAgent with provider: %s", provider)
         if provider == "openai":
             self.ai_client = OpenAIClient(config.get("llm_token"))
-        elif provider == "gemini":
-            self.ai_client = GeminiClient(config.get("llm_token"))
         else:
             self.ai_client = LlamaClient(config.get("llm_token"))
-        _LOGGER.debug(f"LlamaAgent initialized with provider: {provider}")
+        _LOGGER.debug("AiAgentHaAgent initialized successfully")
 
     def _validate_api_key(self) -> bool:
         """Validate the API key format."""

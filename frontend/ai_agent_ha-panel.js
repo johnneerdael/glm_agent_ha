@@ -4,9 +4,9 @@ import {
   css,
 } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 
-console.log("Llama Chat Panel loading..."); // Debug log
+console.log("AI Agent HA Panel loading..."); // Debug log
 
-class LlamaChatPanel extends LitElement {
+class AiAgentHaPanel extends LitElement {
   static get properties() {
     return {
       hass: { type: Object, reflect: false, attribute: false },
@@ -261,7 +261,7 @@ class LlamaChatPanel extends LitElement {
     this._isLoading = false;
     this._error = null;
     this._pendingAutomation = null;
-    console.debug("LlamaChatPanel constructor called");
+    console.debug("AI Agent HA Panel constructor called");
   }
 
   render() {
@@ -274,7 +274,7 @@ class LlamaChatPanel extends LitElement {
     return html`
       <div class="header">
         <ha-icon icon="mdi:robot"></ha-icon>
-        Llama Chat
+        AI Agent HA
         <ha-button
           class="clear-button"
           @click=${this._clearChat}
@@ -378,8 +378,8 @@ class LlamaChatPanel extends LitElement {
     this._error = null;
 
     try {
-      console.debug("Calling llama_query service");
-      await this.hass.callService('llama_query', 'query', {
+      console.debug("Calling ai_agent_ha service");
+      await this.hass.callService('ai_agent_ha', 'query', {
         prompt: prompt
       });
     } catch (error) {
@@ -391,11 +391,11 @@ class LlamaChatPanel extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    console.debug("LlamaChatPanel connected");
+    console.debug("AI Agent HA Panel connected");
     if (this.hass) {
       this.hass.connection.subscribeEvents(
         (event) => this._handleLlamaResponse(event),
-        'llama_query_response'
+        'ai_agent_ha_response'
       );
     }
   }
@@ -433,7 +433,7 @@ class LlamaChatPanel extends LitElement {
   async _approveAutomation(automation) {
     this._isLoading = true;
     try {
-      const result = await this.hass.callService('llama_query', 'create_automation', {
+      const result = await this.hass.callService('ai_agent_ha', 'create_automation', {
         automation: automation
       });
       
@@ -483,6 +483,6 @@ class LlamaChatPanel extends LitElement {
   }
 }
 
-customElements.define("llama-chat-panel", LlamaChatPanel);
+customElements.define("ai_agent_ha-panel", AiAgentHaPanel);
 
-console.log("Llama Chat Panel registered");
+console.log("AI Agent HA Panel registered");

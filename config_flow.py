@@ -20,21 +20,19 @@ from .const import DOMAIN, CONF_API_KEY, CONF_WEATHER_ENTITY
 
 _LOGGER = logging.getLogger(__name__)
 
-AI_PROVIDERS = {
+PROVIDERS = {
     "llama": "Llama",
     "openai": "OpenAI",
-    "gemini": "Gemini"
 }
 
-PROVIDER_TOKEN_LABELS = {
-    "llama": "Llama API Token",
+TOKEN_NAMES = {
+    "llama": "Llama API Key",
     "openai": "OpenAI API Key",
-    "gemini": "Gemini API Key"
 }
 
 DEFAULT_PROVIDER = "llama"
 
-class LlamaQueryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Llama Query."""
 
     VERSION = 1
@@ -44,7 +42,7 @@ class LlamaQueryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         errors = {}
         provider = user_input.get("ai_provider") if user_input else DEFAULT_PROVIDER
-        token_label = PROVIDER_TOKEN_LABELS.get(provider, "API Token")
+        token_label = TOKEN_NAMES.get(provider, "API Token")
 
         if user_input is not None:
             try:
@@ -54,7 +52,7 @@ class LlamaQueryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     raise InvalidApiKey
 
                 return self.async_create_entry(
-                    title=f"Llama Query ({AI_PROVIDERS.get(user_input['ai_provider'], user_input['ai_provider'])})",
+                    title=f"AI Agent HA ({PROVIDERS.get(user_input['ai_provider'], user_input['ai_provider'])})",
                     data={
                         "ai_provider": user_input["ai_provider"],
                         "llm_token": user_input["llm_token"]
@@ -69,7 +67,7 @@ class LlamaQueryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required("ai_provider", default=provider): vol.In(list(AI_PROVIDERS.keys())),
+                vol.Required("ai_provider", default=provider): vol.In(list(PROVIDERS.keys())),
                 vol.Required("llm_token"): str,
             }),
             errors=errors,
@@ -81,19 +79,18 @@ class LlamaQueryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        return LlamaQueryOptionsFlowHandler(config_entry)
+        return AiAgentHaOptionsFlowHandler()
 
 class InvalidApiKey(HomeAssistantError):
     """Error to indicate there is an invalid API key."""
 
-class LlamaQueryOptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self, config_entry):
-        self.config_entry = config_entry
+class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
+    pass
 
     async def async_step_init(self, user_input=None):
         errors = {}
         provider = user_input.get("ai_provider") if user_input else self.config_entry.data.get("ai_provider", DEFAULT_PROVIDER)
-        token_label = PROVIDER_TOKEN_LABELS.get(provider, "API Token")
+        token_label = TOKEN_NAMES.get(provider, "API Token")
         default_token = user_input.get("llm_token") if user_input else self.config_entry.data.get("llm_token", "")
 
         if user_input is not None:
@@ -111,7 +108,7 @@ class LlamaQueryOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
-                vol.Required("ai_provider", default=provider): vol.In(list(AI_PROVIDERS.keys())),
+                vol.Required("ai_provider", default=provider): vol.In(list(PROVIDERS.keys())),
                 vol.Required("llm_token", default=default_token): str,
             }),
             errors=errors,
