@@ -40,18 +40,7 @@ A Home Assistant custom component that provides an AI-powered agent capable of g
 
 ## Configuration
 
-The integration will automatically register a new panel in the sidebar named **AI Agent HA**. No YAML configuration is required. If you need to customize:
-
-```yaml
-# Example (optional)
-ai_agent_ha:
-  api_key: YOUR_OPENAI_API_KEY
-  model: gpt-4
-  max_tokens: 512
-```
-
-Place this under `configuration.yaml` if you want to override defaults.
-
+The integration will automatically register a new panel in the sidebar named **AI Agent HA**. No YAML configuration is required. 
 ---
 
 ## Usage
@@ -65,20 +54,7 @@ Place this under `configuration.yaml` if you want to override defaults.
 
 The component will create the automation under `.storage/ai_agent_ha_automations` and reload automations automatically.
 
----
 
-## Development
-
-* Install dependencies:
-
-  ```bash
-  pip install -r requirements.txt
-  ```
-* Run tests:
-
-  ```bash
-  pytest
-  ```
 
 ---
 
