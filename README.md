@@ -10,7 +10,7 @@ A Home Assistant custom component that provides an AI-powered agent capable of g
 * **Entity-Aware**: Automatically discovers and uses your existing Home Assistant entities.
 * **UI Integration**: Manage and approve suggested automations directly from Home Assistant's UI (see screenshot below).
 
-![AI Agent HA Usage Screenshot](./assets/screenshot.png)
+![AI Agent HA Usage Screenshot](./assets/Screenshot.png)
 
 ---
 
