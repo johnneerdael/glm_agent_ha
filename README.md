@@ -1,6 +1,6 @@
 # AI Agent HA Custom Integration
 
-A Home Assistant custom component that provides an AI-powered agent capable of generating automations based on natural language queries. The agent connects to all entities in your Home Assistant instance and uses OpenAI's API to translate user requests into valid Home Assistant automations.
+A Home Assistant custom component that provides an AI-powered agent capable of generating automations based on natural language queries. The agent connects to all entities in your Home Assistant instance and uses OpenAI's or Llama API to translate user requests into valid Home operations including creating automations for you!
 
 ---
 
