@@ -3,11 +3,13 @@
     "name": "AI Agent HA",
     "documentation": "https://github.com/custom-components/ai_agent_ha",
     "dependencies": [],
-    "codeowners": [],
+    "codeowners": ["@sbenodiz"],
     "requirements": ["aiohttp"],
-    "version": "1.0.0",
+    "version": "0.1.0",
     "config_flow": true,
     "iot_class": "cloud_polling",
-    "icon": "icon.png"
+    "icon": "icon.png",
+    "issue_tracker": "https://github.com/sbenodiz/ai_agent_ha/issues"
 }
+
   
