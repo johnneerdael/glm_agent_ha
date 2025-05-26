@@ -1,8 +1,8 @@
 {
     "domain": "ai_agent_ha",
     "name": "AI Agent HA",
-    "codeowners": ["@MindrustUK"],
-    "documentation": "https://github.com/custom-components/ai_agent_ha",
+    "codeowners": ["@sbenodiz"],
+    "documentation": "https://github.com/sbenodiz/ai_agent_ha/",
     "dependencies": [],
     "requirements": ["aiohttp"],
     "version": "0.1.0",
