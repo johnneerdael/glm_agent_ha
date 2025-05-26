@@ -63,6 +63,7 @@ The component will create the automation under `.storage/ai_agent_ha_automations
 
 Contributions are welcome! Please open issues or pull requests on [GitHub](https://github.com/sbenodiz/ai_agent_ha).
 
+
 ---
 
 ## License
