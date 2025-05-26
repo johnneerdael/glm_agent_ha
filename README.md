@@ -35,7 +35,7 @@ A Home Assistant custom component that provides an AI-powered agent capable of g
 
 5. Click **Add Integration** and search for **AI Agent HA**.
 
-6. Follow the prompts to configure your OpenAI API key (if required).
+6. Follow the prompts to configure your Llama or OpenAI API key.
 
 ---
 
