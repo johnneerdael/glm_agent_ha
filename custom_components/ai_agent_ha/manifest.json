@@ -1,9 +1,9 @@
 {
     "domain": "ai_agent_ha",
     "name": "AI Agent HA",
+    "codeowners": ["@sbenodiz"],
     "documentation": "https://github.com/custom-components/ai_agent_ha",
     "dependencies": [],
-    "codeowners": ["@sbenodiz"],
     "requirements": ["aiohttp"],
     "version": "0.1.0",
     "config_flow": true,
