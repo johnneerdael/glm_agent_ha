@@ -2,23 +2,13 @@ name: Validate with hassfest
 
 on:
   push:
-    branches:
-      - "**"
   pull_request:
-    branches:
-      - "**"
   schedule:
-    # optional: run daily at midnight UTC
-    - cron: '0 0 * * *'
+    - cron: "0 0 * * *"
 
 jobs:
-  hassfest:
-    runs-on: ubuntu-latest
+  validate:
+    runs-on: "ubuntu-latest"
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Run hassfest
-        uses: home-assistant/actions/hassfest@master
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: "actions/checkout@v3"
+      - uses: home-assistant/actions/hassfest@master
