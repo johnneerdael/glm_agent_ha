@@ -8,7 +8,17 @@ on:
 
 jobs:
   validate:
-    runs-on: "ubuntu-latest"
+    runs-on: ubuntu-latest
     steps:
-      - uses: "actions/checkout@v3"
-      - uses: home-assistant/actions/hassfest@master
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Install TurboJPEG native library
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libturbojpeg0-dev
+
+      - name: Run HASSFest on AI Agent HA only
+        uses: home-assistant/actions/hassfest@master
+        with:
+          path: custom_components/ai_agent_ha
