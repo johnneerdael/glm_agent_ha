@@ -16,6 +16,7 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.exceptions import ConfigEntryNotReady
 from .const import DOMAIN, CONF_API_KEY, CONF_WEATHER_ENTITY
 from .agent import AiAgentHaAgent
+from homeassistant.components.http import StaticPathConfig
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,11 +59,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_register(DOMAIN, "create_automation", async_handle_create_automation)
 
     # Register static path for frontend
-    hass.http.register_static_path(
-        "/frontend/ai_agent_ha",
-        hass.config.path("custom_components/ai_agent_ha/frontend"),
-        cache_headers=False,
-    )
+    await hass.http.async_register_static_paths([
+        StaticPathConfig(
+            "/frontend/ai_agent_ha",
+            hass.config.path("custom_components/ai_agent_ha/frontend"),
+            False
+        )
+    ])
 
     # Try to unregister existing panel first
     try:
