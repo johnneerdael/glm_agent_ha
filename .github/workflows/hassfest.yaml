@@ -1,30 +1,31 @@
-name: Validate AI Agent HA with hassfest
+ name: Validate AI Agent HA with hassfest
 
-on:
-  push:
-    paths:
-      - 'custom_components/ai_agent_ha/**'
-  pull_request:
-    paths:
-      - 'custom_components/ai_agent_ha/**'
-  schedule:
-    - cron: '0 0 * * *'
+ on:
+   push:
+     paths:
+       - 'custom_components/ai_agent_ha/**'
+   pull_request:
+     paths:
+       - 'custom_components/ai_agent_ha/**'
+   schedule:
+     - cron: '0 0 * * *'
 
-jobs:
-  hassfest:
-    runs-on: ubuntu-latest
+ jobs:
+   hassfest:
+     runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+     steps:
+       - name: Checkout repository
+-        uses: actions/checkout@v3
++        uses: actions/checkout@v4
 
-      - name: Install TurboJPEG native library
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libturbojpeg0-dev
+       - name: Install TurboJPEG native library
+         run: |
+           sudo apt-get update
+           sudo apt-get install -y libturbojpeg0-dev
 
-      - name: Run HASSFest on AI Agent HA only
-        # 👇 Correct full path to the action
-        uses: home-assistant/actions/hassfest@v1
-        with:
-          path: custom_components/ai_agent_ha
+       - name: Run HASSFest on AI Agent HA only
+-        uses: home-assistant/actions/hassfest@v1
++        uses: home-assistant/actions/hassfest@master
+         with:
+           path: custom_components/ai_agent_ha
