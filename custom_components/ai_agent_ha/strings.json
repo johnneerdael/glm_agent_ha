@@ -1,0 +1,22 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "AI Agent HA Configuration",
+                "description": "Enter your API key and optionally select a weather entity",
+                "data": {
+                    "api_key": "API Key",
+                    "weather_entity": "Weather Entity (Optional)"
+                }
+            }
+        },
+        "error": {
+            "invalid_api_key": "Invalid API key",
+            "invalid_weather_entity": "Invalid weather entity selected",
+            "unknown": "Unexpected error"
+        },
+        "abort": {
+            "already_configured": "Device is already configured"
+        }
+    }
+} 
