@@ -1,7 +1,6 @@
 {
   "name": "AI Agent HA",
   "render_readme": true,
-  "domains": ["ai_agent_ha"],
-  "country": ["US"],
+  "country": "US",
   "homeassistant": "2024.1.0"
 }
