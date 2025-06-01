@@ -17,25 +17,28 @@ A Home Assistant custom component that provides an AI-powered agent capable of g
 
 ## Installation
 
+### Via HACS (Recommended)
+
+1. Install HACS if you haven't already.
+2. Open HACS in Home Assistant and navigate to **Integrations**.
+3. Click **Explore & Add Repositories** and search for **AI Agent HA**.
+4. Click on the repository, then click **Download**.
+5. Restart Home Assistant.
+6. In the Home Assistant UI, go to **Settings → Devices & Services → Integrations**.
+7. Click **Add Integration** and search for **AI Agent HA**.
+8. Follow the prompts to configure your Llama or OpenAI API key.
+
+### Manual Installation
+
 1. Clone or download this repository:
-
    ```bash
-   git clone https://github.com/sbenodiz/ai_agent_ha.git
-   ```
+git clone https://github.com/sbenodiz/ai_agent_ha.git
+2. Copy the ai_agent_ha folder into your Home Assistant custom_components directory
+4. Restart Home Assistant.
+5. In the Home Assistant UI, go to **Settings → Devices & Services → Integrations**.
+6. Click **Add Integration** and search for **AI Agent HA**.
+7. Follow the prompts to configure your Llama or OpenAI API key.
 
-2. Copy the `ai_agent_ha` folder into your Home Assistant `custom_components` directory:
-
-   ```bash
-   cp -R ai_agent_ha /config/custom_components/
-   ```
-
-3. Restart Home Assistant.
-
-4. In the Home Assistant UI, go to **Settings → Devices & Services → Integrations**.
-
-5. Click **Add Integration** and search for **AI Agent HA**.
-
-6. Follow the prompts to configure your Llama or OpenAI API key.
 
 ---
 
