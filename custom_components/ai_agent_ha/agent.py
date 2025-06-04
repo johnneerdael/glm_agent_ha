@@ -1,9 +1,9 @@
 """
 Example config:
 ai_agent_ha:
-  ai_provider: openai  # or 'llama'
-  llama_token: "..."
-  openai_token: "..."
+ai_provider: openai  # or 'llama'
+llama_token: "..."
+openai_token: "..."
 """
 """The Llama Query agent implementation."""
 import logging
@@ -108,7 +108,7 @@ class AiAgentHaAgent:
             "- get_scenes(): Get scene configurations\n"
             "- set_entity_state(entity_id, state, attributes?): Set state of an entity (e.g., turn on/off lights, open/close covers)\n"
             "- create_automation(automation): Create a new automation with the provided configuration\n\n"
-            "You can also create automations when users ask for them. When you detect that a user wants to create an automation,\n"
+            "You can also create automations when users ask for them. When you detect that a user wants to create an automation. make sure to request first entities so you know the entities ids to trigger on. pay attention that if you want to set specfic days in the autoamtion you should use those days: ['fri', 'mon', 'sat', 'sun', 'thu', 'tue', 'wed'] \n"
             "respond with a JSON object in this format:\n"
             "{\n"
             "  \"request_type\": \"automation_suggestion\",\n"
@@ -222,7 +222,7 @@ class AiAgentHaAgent:
                 "last_changed": state.last_changed.isoformat() if state.last_changed else None,
                 "friendly_name": state.attributes.get("friendly_name"),
                 "attributes": {k: (v.isoformat() if hasattr(v, 'isoformat') else v) 
-                             for k, v in state.attributes.items()}
+                            for k, v in state.attributes.items()}
             }
             _LOGGER.debug("Retrieved entity state: %s", json.dumps(result))
             return result
@@ -235,7 +235,7 @@ class AiAgentHaAgent:
         try:
             _LOGGER.debug("Requesting all entities for domain: %s", domain)
             states = [state for state in self.hass.states.async_all() 
-                     if state.entity_id.startswith(f"{domain}.")]
+                    if state.entity_id.startswith(f"{domain}.")]
             _LOGGER.debug("Found %d entities in domain %s", len(states), domain)
             return [await self.get_entity_state(state.entity_id) for state in states]
         except Exception as e:
@@ -779,7 +779,7 @@ class AiAgentHaAgent:
         """Set the state of an entity."""
         try:
             _LOGGER.debug("Setting state for entity %s to %s with attributes: %s", 
-                         entity_id, state, json.dumps(attributes or {}))
+                        entity_id, state, json.dumps(attributes or {}))
             
             # Validate entity exists
             if not self.hass.states.get(entity_id):
