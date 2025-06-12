@@ -20,6 +20,9 @@ from homeassistant.components.http import StaticPathConfig
 
 _LOGGER = logging.getLogger(__name__)
 
+# Config schema - this integration only supports config entries
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
 # Define service schema to accept a custom prompt
 SERVICE_SCHEMA = vol.Schema({
     vol.Optional('prompt'): cv.string,
