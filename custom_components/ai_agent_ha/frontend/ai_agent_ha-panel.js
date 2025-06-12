@@ -397,6 +397,7 @@ class AiAgentHaPanel extends LitElement {
     this._error = null;
     this._pendingAutomation = null;
     this._promptHistory = [];
+    this._promptHistoryLoaded = false;
     this._showPredefinedPrompts = true;
     this._showPromptHistory = true;
     this._predefinedPrompts = [
@@ -432,6 +433,20 @@ class AiAgentHaPanel extends LitElement {
       );
       // Load prompt history from Home Assistant storage
       await this._loadPromptHistory();
+    }
+  }
+
+  updated(changedProps) {
+    console.debug("Updated called with:", changedProps);
+
+    if (changedProps.has('_messages') || changedProps.has('_isLoading')) {
+      this._scrollToBottom();
+    }
+
+    // Load prompt history when hass becomes available
+    if (changedProps.has('hass') && this.hass && !this._promptHistoryLoaded) {
+      this._promptHistoryLoaded = true;
+      this._loadPromptHistory();
     }
   }
 
@@ -537,37 +552,82 @@ class AiAgentHaPanel extends LitElement {
   }
 
   async _loadPromptHistory() {
+    if (!this.hass) {
+      console.debug('Hass not available, skipping prompt history load');
+      return;
+    }
+    
+    console.debug('Loading prompt history...');
     try {
       const result = await this.hass.callService('ai_agent_ha', 'load_prompt_history', {});
-      if (result && result.history) {
-        this._promptHistory = result.history;
+      console.debug('Prompt history service result:', result);
+      
+      if (result && result.response && result.response.history) {
+        this._promptHistory = result.response.history;
+        console.debug('Loaded prompt history from service:', this._promptHistory);
         this.requestUpdate();
+      } else if (result && result.history) {
+        this._promptHistory = result.history;
+        console.debug('Loaded prompt history from service (direct):', this._promptHistory);
+        this.requestUpdate();
+      } else {
+        console.debug('No prompt history returned from service, checking localStorage');
+        // Fallback to localStorage if service returns no data
+        this._loadFromLocalStorage();
       }
     } catch (error) {
-      console.error('Error loading prompt history:', error);
+      console.error('Error loading prompt history from service:', error);
       // Fallback to localStorage if service fails
-      try {
-        const saved = localStorage.getItem('ai_agent_ha_prompt_history');
-        this._promptHistory = saved ? JSON.parse(saved) : [];
-      } catch (e) {
+      this._loadFromLocalStorage();
+    }
+  }
+
+  _loadFromLocalStorage() {
+    try {
+      const saved = localStorage.getItem('ai_agent_ha_prompt_history');
+      if (saved) {
+        this._promptHistory = JSON.parse(saved);
+        console.debug('Loaded prompt history from localStorage:', this._promptHistory);
+        this.requestUpdate();
+      } else {
+        console.debug('No prompt history in localStorage');
         this._promptHistory = [];
       }
+    } catch (e) {
+      console.error('Error loading from localStorage:', e);
+      this._promptHistory = [];
     }
   }
 
   async _savePromptHistory() {
+    if (!this.hass) {
+      console.debug('Hass not available, saving to localStorage only');
+      this._saveToLocalStorage();
+      return;
+    }
+
+    console.debug('Saving prompt history:', this._promptHistory);
     try {
-      await this.hass.callService('ai_agent_ha', 'save_prompt_history', {
+      const result = await this.hass.callService('ai_agent_ha', 'save_prompt_history', {
         history: this._promptHistory
       });
+      console.debug('Save prompt history result:', result);
+      
+      // Also save to localStorage as backup
+      this._saveToLocalStorage();
     } catch (error) {
-      console.error('Error saving prompt history:', error);
+      console.error('Error saving prompt history to service:', error);
       // Fallback to localStorage if service fails
-      try {
-        localStorage.setItem('ai_agent_ha_prompt_history', JSON.stringify(this._promptHistory));
-      } catch (e) {
-        console.error('Error saving to localStorage:', e);
-      }
+      this._saveToLocalStorage();
+    }
+  }
+
+  _saveToLocalStorage() {
+    try {
+      localStorage.setItem('ai_agent_ha_prompt_history', JSON.stringify(this._promptHistory));
+      console.debug('Saved prompt history to localStorage');
+    } catch (e) {
+      console.error('Error saving to localStorage:', e);
     }
   }
 
@@ -651,13 +711,7 @@ class AiAgentHaPanel extends LitElement {
     `;
   }
 
-  updated(changedProps) {
-    console.debug("Updated called with:", changedProps);
 
-    if (changedProps.has('_messages') || changedProps.has('_isLoading')) {
-      this._scrollToBottom();
-    }
-  }
 
   _scrollToBottom() {
     const messages = this.shadowRoot.querySelector('#messages');

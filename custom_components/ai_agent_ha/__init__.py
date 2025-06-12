@@ -72,6 +72,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         agent = hass.data[DOMAIN]["agent"]
         user_id = call.context.user_id if call.context.user_id else "default"
         result = await agent.load_user_prompt_history(user_id)
+        _LOGGER.debug("Load prompt history result: %s", result)
         return result
 
     # Register services
