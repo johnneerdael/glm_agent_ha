@@ -2,43 +2,46 @@
     "config": {
         "step": {
             "user": {
-                "title": "AI Agent HA - Select Provider",
-                "description": "Choose your AI provider",
+                "title": "Choose AI Provider",
+                "description": "Select your AI provider",
                 "data": {
                     "ai_provider": "AI Provider"
                 },
                 "data_description": {
-                    "ai_provider": "Select your preferred AI provider"
+                    "ai_provider": "Choose your preferred AI provider"
                 }
             },
             "configure": {
-                "title": "AI Agent HA - Configure {provider}",
-                "description": "Configure your {provider} API credentials and model",
+                "title": "Configure {provider}",
+                "description": "Enter your {token_label} and optionally select a model",
                 "data": {
                     "llama_token": "Llama API Token",
                     "openai_token": "OpenAI API Key",
                     "gemini_token": "Google Gemini API Key",
                     "openrouter_token": "OpenRouter API Key",
+                    "anthropic_token": "Anthropic API Key",
                     "model": "Model (Optional)",
-                    "custom_model": "Custom Model Name (Optional)"
+                    "custom_model": "Custom Model (Optional)"
                 },
                 "data_description": {
                     "llama_token": "Enter your Llama API token",
                     "openai_token": "Enter your OpenAI API key",
                     "gemini_token": "Enter your Google Gemini API key",
                     "openrouter_token": "Enter your OpenRouter API key",
-                    "model": "Choose a predefined model or select 'Custom...' to use a custom model",
-                    "custom_model": "Enter a custom model name (overrides the dropdown selection above)"
+                    "anthropic_token": "Enter your Anthropic API key",
+                    "model": "Choose a predefined model or select 'Custom...' to enter your own",
+                    "custom_model": "Enter a custom model name (only used if 'Custom...' is selected above)"
                 }
             }
         },
         "error": {
-            "invalid_api_key": "Invalid API key or token",
+            "invalid_api_key": "Invalid API key format",
+            "unknown": "Unknown error occurred",
             "llama_token": "Llama API token is required",
             "openai_token": "OpenAI API key is required",
             "gemini_token": "Google Gemini API key is required",
             "openrouter_token": "OpenRouter API key is required",
-            "unknown": "Unexpected error occurred"
+            "anthropic_token": "Anthropic API key is required"
         },
         "abort": {
             "already_configured": "AI Agent HA is already configured"
@@ -47,33 +50,35 @@
     "options": {
         "step": {
             "init": {
-                "title": "AI Agent HA - Select Provider",
-                "description": "Choose your AI provider (Current: {current_provider})",
+                "title": "AI Provider Settings",
+                "description": "Current provider: {current_provider}. Select a provider to configure",
                 "data": {
                     "ai_provider": "AI Provider"
                 },
                 "data_description": {
-                    "ai_provider": "Select your preferred AI provider"
+                    "ai_provider": "Choose your preferred AI provider"
                 }
             },
             "configure_options": {
-                "title": "AI Agent HA - Configure {provider}",
-                "description": "Update your {provider} API credentials and model",
+                "title": "Configure {provider}",
+                "description": "Update your {token_label} and model settings",
                 "data": {
                     "llama_token": "Llama API Token",
                     "openai_token": "OpenAI API Key",
                     "gemini_token": "Google Gemini API Key",
                     "openrouter_token": "OpenRouter API Key",
-                    "model": "Model (Optional)",
-                    "custom_model": "Custom Model Name (Optional)"
+                    "anthropic_token": "Anthropic API Key",
+                    "model": "Model",
+                    "custom_model": "Custom Model (Optional)"
                 },
                 "data_description": {
                     "llama_token": "Enter your Llama API token",
                     "openai_token": "Enter your OpenAI API key",
                     "gemini_token": "Enter your Google Gemini API key",
                     "openrouter_token": "Enter your OpenRouter API key",
-                    "model": "Choose a predefined model or select 'Custom...' to use a custom model",
-                    "custom_model": "Enter a custom model name (overrides the dropdown selection above)"
+                    "anthropic_token": "Enter your Anthropic API key",
+                    "model": "Choose a model or select 'Custom...' to enter your own",
+                    "custom_model": "Enter a custom model name (only used if 'Custom...' is selected above)"
                 }
             }
         }

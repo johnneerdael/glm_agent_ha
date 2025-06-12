@@ -1,17 +1,19 @@
 """
 Example config:
 ai_agent_ha:
-  ai_provider: openai  # or 'llama', 'gemini', 'openrouter'
+  ai_provider: openai  # or 'llama', 'gemini', 'openrouter', 'anthropic'
   llama_token: "..."
   openai_token: "..."
   gemini_token: "..."
   openrouter_token: "..."
+  anthropic_token: "..."
   # Model configuration (optional, defaults will be used if not specified)
   models:
     openai: "gpt-3.5-turbo"  # or "gpt-4", "gpt-4-turbo", etc.
     llama: "Llama-4-Maverick-17B-128E-Instruct-FP8"
     gemini: "gemini-1.5-flash"  # or "gemini-1.5-pro", "gemini-1.0-pro", etc.
     openrouter: "openai/gpt-4o"  # or any model available on OpenRouter
+    anthropic: "claude-3-5-sonnet-20241022"  # or "claude-3-opus-20240229", etc.
 """
 """The AI Agent implementation with multiple provider support."""
 import logging
@@ -165,6 +167,69 @@ class GeminiClient(BaseAIClient):
                         return parts[0].get('text', str(data))
                 return str(data)
 
+class AnthropicClient(BaseAIClient):
+    def __init__(self, token, model="claude-3-5-sonnet-20241022"):
+        self.token = token
+        self.model = model
+        self.api_url = "https://api.anthropic.com/v1/messages"
+    
+    async def get_response(self, messages, **kwargs):
+        _LOGGER.debug("Making request to Anthropic API with model: %s", self.model)
+        headers = {
+            "x-api-key": self.token,
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01"
+        }
+        
+        # Convert OpenAI-style messages to Anthropic format
+        system_message = None
+        anthropic_messages = []
+        
+        for message in messages:
+            role = message.get("role", "user")
+            content = message.get("content", "")
+            
+            if role == "system":
+                # Anthropic uses a separate system parameter
+                system_message = content
+            elif role == "user":
+                anthropic_messages.append({
+                    "role": "user",
+                    "content": content
+                })
+            elif role == "assistant":
+                anthropic_messages.append({
+                    "role": "assistant", 
+                    "content": content
+                })
+        
+        payload = {
+            "model": self.model,
+            "max_tokens": 2048,
+            "temperature": 0.7,
+            "messages": anthropic_messages
+        }
+        
+        # Add system message if present
+        if system_message:
+            payload["system"] = system_message
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    _LOGGER.error("Anthropic API error %d: %s", resp.status, error_text)
+                    raise Exception(f"Anthropic API error {resp.status}")
+                data = await resp.json()
+                # Extract text from Anthropic response
+                content_blocks = data.get('content', [])
+                if content_blocks and isinstance(content_blocks, list):
+                    # Get the text from the first content block
+                    for block in content_blocks:
+                        if block.get('type') == 'text':
+                            return block.get('text', str(data))
+                return str(data)
+
 class OpenRouterClient(BaseAIClient):
     def __init__(self, token, model="openai/gpt-4o"):
         self.token = token
@@ -280,6 +345,9 @@ class AiAgentHaAgent:
         elif provider == "openrouter":
             model = models_config.get("openrouter", "openai/gpt-4o")
             self.ai_client = OpenRouterClient(config.get("openrouter_token"), model)
+        elif provider == "anthropic":
+            model = models_config.get("anthropic", "claude-3-5-sonnet-20241022")
+            self.ai_client = AnthropicClient(config.get("anthropic_token"), model)
         else:  # default to llama if somehow specified
             model = models_config.get("llama", "Llama-4-Maverick-17B-128E-Instruct-FP8")
             self.ai_client = LlamaClient(config.get("llama_token"), model)
@@ -296,6 +364,8 @@ class AiAgentHaAgent:
             token = self.config.get("gemini_token")
         elif provider == "openrouter":
             token = self.config.get("openrouter_token")
+        elif provider == "anthropic":
+            token = self.config.get("anthropic_token")
         else:
             token = self.config.get("llama_token")
         

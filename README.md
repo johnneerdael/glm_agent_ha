@@ -1,10 +1,10 @@
 # AI Agent HA
 
-A powerful Home Assistant custom integration that connects your Home Assistant instance with multiple AI providers (OpenAI, Google Gemini, OpenRouter, and Llama) to translate user requests into valid Home Assistant operations, including creating automations automatically!
+A powerful Home Assistant custom integration that connects your Home Assistant instance with multiple AI providers (OpenAI, Google Gemini, Anthropic (Claude), OpenRouter, and Llama) to translate user requests into valid Home Assistant operations, including creating automations automatically!
 
 ## ✨ Features
 
-- 🤖 **Multiple AI Provider Support**: OpenAI, Google Gemini, OpenRouter, and Llama
+- 🤖 **Multiple AI Provider Support**: OpenAI, Google Gemini, Anthropic (Claude), OpenRouter, and Llama
 - 🎯 **Model Selection**: Choose from predefined models or use custom model names
 - 🏠 **Smart Home Control**: Turn lights on/off, control climate, and manage devices
 - ⚡ **Automation Creation**: Automatically create automations based on natural language
@@ -22,6 +22,14 @@ A powerful Home Assistant custom integration that connects your Home Assistant i
 ### Google Gemini
 - **Models**: Gemini 1.5 Flash, Gemini 1.5 Pro, Gemini 1.0 Pro, Gemini 2.0 Flash Exp
 - **Setup**: Get API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+
+### Anthropic (Claude)
+- **Models**: Claude 3.5 Sonnet, Claude 3.5 Haiku, Claude 3 Opus, Claude 3 Sonnet, Claude 3 Haiku
+- **Setup**: Get API key from [Anthropic Console](https://docs.anthropic.com/en/docs/get-started)
+- **Popular Models**:
+  - `claude-3-5-sonnet-20241022` (Latest and most capable)
+  - `claude-3-5-haiku-20241022` (Fast and efficient)
+  - `claude-3-opus-20240229` (Most powerful for complex tasks)
 
 ### OpenRouter
 - **Models**: Access to 100+ models including Claude, Llama, Mistral, and more
@@ -71,6 +79,7 @@ The integration uses a two-step configuration process:
 Select your preferred AI provider from the dropdown:
 - OpenAI
 - Google Gemini  
+- Anthropic (Claude)
 - OpenRouter
 - Llama
 
@@ -84,10 +93,10 @@ Enter your API credentials and optionally select a model:
 ```yaml
 # Example configuration.yaml (optional - integration supports config flow only)
 ai_agent_ha:
-  ai_provider: openai
-  openai_token: "sk-..."
+  ai_provider: anthropic
+  anthropic_token: "sk-ant-..."
   models:
-    openai: "gpt-4"
+    anthropic: "claude-3-5-sonnet-20241022"
 ```
 
 ## 🎮 Usage
@@ -119,6 +128,7 @@ data:
 ### Custom Models
 Enter any model name in the "Custom Model" field:
 - OpenAI: `gpt-4-0125-preview`
+- Anthropic: `claude-3-opus-20240229`
 - OpenRouter: `anthropic/claude-3-opus`
 - Gemini: `gemini-pro-vision`
 
