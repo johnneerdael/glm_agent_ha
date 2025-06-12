@@ -15,9 +15,6 @@ A powerful Home Assistant custom integration that connects your Home Assistant i
 
 ## 📸 Screenshots
 
-### Chat Interface
-![AI Agent HA Chat Interface](image/Screenshot.png)
-
 ### Automation Creation
 ![AI Agent HA Automation Creation](image/Screenshot2.png)
 
