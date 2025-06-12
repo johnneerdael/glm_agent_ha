@@ -394,14 +394,14 @@ class AiAgentHaPanel extends LitElement {
     console.debug("AI Agent HA Panel connected");
     if (this.hass) {
       this.hass.connection.subscribeEvents(
-        (event) => this._handleLlamaResponse(event),
+        (event) => this._handleAiResponse(event),
         'ai_agent_ha_response'
       );
     }
   }
 
-  _handleLlamaResponse(event) {
-    console.debug("Received llama response:", event);
+  _handleAiResponse(event) {
+    console.debug("Received AI agent response:", event);
     this._isLoading = false;
     if (event.data.success) {
       let message = { type: 'assistant', text: event.data.answer };

@@ -1,7 +1,7 @@
 query:
-  name: “Query LLaMA with Home Assistant context”
-  description: “Run a custom LLaMA prompt against your HA state dump.”
+  name: "Query AI Agent with Home Assistant context"
+  description: "Run a custom AI prompt against your Home Assistant state dump."
   fields:
     prompt:
-      description: “The question or instruction to send to the LLaMA model.”
-      example: “Which rooms have lights on?”
+      description: "The question or instruction to send to the AI model."
+      example: "Turn on all the lights in the living room"

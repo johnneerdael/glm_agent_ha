@@ -265,7 +265,7 @@ class AiAgentHaAgent:
         self._request_count = 0
         self._request_window_start = time.time()
         
-        provider = config.get("ai_provider", "llama")
+        provider = config.get("ai_provider", "openai")
         models_config = config.get("models", {})
         
         _LOGGER.debug("Initializing AiAgentHaAgent with provider: %s", provider)
@@ -280,7 +280,7 @@ class AiAgentHaAgent:
         elif provider == "openrouter":
             model = models_config.get("openrouter", "openai/gpt-4o")
             self.ai_client = OpenRouterClient(config.get("openrouter_token"), model)
-        else:  # default to llama
+        else:  # default to llama if somehow specified
             model = models_config.get("llama", "Llama-4-Maverick-17B-128E-Instruct-FP8")
             self.ai_client = LlamaClient(config.get("llama_token"), model)
         
@@ -288,7 +288,7 @@ class AiAgentHaAgent:
 
     def _validate_api_key(self) -> bool:
         """Validate the API key format."""
-        provider = self.config.get("ai_provider", "llama")
+        provider = self.config.get("ai_provider", "openai")
         
         if provider == "openai":
             token = self.config.get("openai_token")
@@ -699,7 +699,7 @@ class AiAgentHaAgent:
             sanitized_config = self._sanitize_automation_config(automation_config)
             
             # Generate a unique ID for the automation
-            automation_id = f"llama_auto_{int(time.time() * 1000)}"
+            automation_id = f"ai_agent_auto_{int(time.time() * 1000)}"
             
             # Create the automation entry
             automation_entry = {
