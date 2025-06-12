@@ -1,11 +1,19 @@
 """
 Example config:
 ai_agent_ha:
-ai_provider: openai  # or 'llama'
-llama_token: "..."
-openai_token: "..."
+  ai_provider: openai  # or 'llama', 'gemini', 'openrouter'
+  llama_token: "..."
+  openai_token: "..."
+  gemini_token: "..."
+  openrouter_token: "..."
+  # Model configuration (optional, defaults will be used if not specified)
+  models:
+    openai: "gpt-3.5-turbo"  # or "gpt-4", "gpt-4-turbo", etc.
+    llama: "Llama-4-Maverick-17B-128E-Instruct-FP8"
+    gemini: "gemini-1.5-flash"  # or "gemini-1.5-pro", "gemini-1.0-pro", etc.
+    openrouter: "openai/gpt-4o"  # or any model available on OpenRouter
 """
-"""The Llama Query agent implementation."""
+"""The AI Agent implementation with multiple provider support."""
 import logging
 import json
 import aiohttp
@@ -26,17 +34,19 @@ class BaseAIClient:
         raise NotImplementedError
 
 class LlamaClient(BaseAIClient):
-    def __init__(self, token):
+    def __init__(self, token, model="Llama-4-Maverick-17B-128E-Instruct-FP8"):
         self.token = token
+        self.model = model
         self.api_url = "https://api.llama.com/v1/chat/completions"
+    
     async def get_response(self, messages, **kwargs):
-        _LOGGER.debug("Making request to Llama API")
+        _LOGGER.debug("Making request to Llama API with model: %s", self.model)
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
         }
         payload = {
-            "model": "Llama-4-Maverick-17B-128E-Instruct-FP8",
+            "model": self.model,
             "messages": messages,
             "max_tokens": 2048,
             "temperature": 0.7,
@@ -46,7 +56,7 @@ class LlamaClient(BaseAIClient):
             async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                 if resp.status != 200:
                     error_text = await resp.text()
-                    _LOGGER.error("Llama API error %d", resp.status)
+                    _LOGGER.error("Llama API error %d: %s", resp.status, error_text)
                     raise Exception(f"Llama API error {resp.status}")
                 data = await resp.json()
                 # Extract text from Llama response
@@ -55,17 +65,19 @@ class LlamaClient(BaseAIClient):
                 return content.get('text', str(data))
 
 class OpenAIClient(BaseAIClient):
-    def __init__(self, token):
+    def __init__(self, token, model="gpt-3.5-turbo"):
         self.token = token
+        self.model = model
         self.api_url = "https://api.openai.com/v1/chat/completions"
+    
     async def get_response(self, messages, **kwargs):
-        _LOGGER.debug("Making request to OpenAI API")
+        _LOGGER.debug("Making request to OpenAI API with model: %s", self.model)
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
         }
         payload = {
-            "model": "gpt-3.5-turbo",
+            "model": self.model,
             "messages": messages,
             "max_tokens": 2048,
             "temperature": 0.7,
@@ -75,7 +87,7 @@ class OpenAIClient(BaseAIClient):
             async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                 if resp.status != 200:
                     error_text = await resp.text()
-                    _LOGGER.error("OpenAI API error %d", resp.status)
+                    _LOGGER.error("OpenAI API error %d: %s", resp.status, error_text)
                     raise Exception(f"OpenAI API error {resp.status}")
                 data = await resp.json()
                 # Extract text from OpenAI response
@@ -84,9 +96,112 @@ class OpenAIClient(BaseAIClient):
                     return choices[0]['message'].get('content', str(data))
                 return str(data)
 
+class GeminiClient(BaseAIClient):
+    def __init__(self, token, model="gemini-1.5-flash"):
+        self.token = token
+        self.model = model
+        self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    
+    async def get_response(self, messages, **kwargs):
+        _LOGGER.debug("Making request to Gemini API with model: %s", self.model)
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        # Convert OpenAI-style messages to Gemini format
+        gemini_contents = []
+        for message in messages:
+            role = message.get("role", "user")
+            content = message.get("content", "")
+            
+            if role == "system":
+                # Gemini doesn't have a system role, so we prepend it to the first user message
+                if not gemini_contents:
+                    gemini_contents.append({
+                        "role": "user",
+                        "parts": [{"text": f"System: {content}"}]
+                    })
+                else:
+                    # Add system message as user message
+                    gemini_contents.append({
+                        "role": "user", 
+                        "parts": [{"text": f"System: {content}"}]
+                    })
+            elif role == "user":
+                gemini_contents.append({
+                    "role": "user",
+                    "parts": [{"text": content}]
+                })
+            elif role == "assistant":
+                gemini_contents.append({
+                    "role": "model",
+                    "parts": [{"text": content}]
+                })
+        
+        payload = {
+            "contents": gemini_contents,
+            "generationConfig": {
+                "temperature": 0.7,
+                "topP": 0.9,
+                "maxOutputTokens": 2048
+            }
+        }
+        
+        # Add API key as query parameter
+        url_with_key = f"{self.api_url}?key={self.token}"
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url_with_key, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    _LOGGER.error("Gemini API error %d: %s", resp.status, error_text)
+                    raise Exception(f"Gemini API error {resp.status}")
+                data = await resp.json()
+                # Extract text from Gemini response
+                candidates = data.get('candidates', [])
+                if candidates and 'content' in candidates[0]:
+                    parts = candidates[0]['content'].get('parts', [])
+                    if parts:
+                        return parts[0].get('text', str(data))
+                return str(data)
+
+class OpenRouterClient(BaseAIClient):
+    def __init__(self, token, model="openai/gpt-4o"):
+        self.token = token
+        self.model = model
+        self.api_url = "https://openrouter.ai/api/v1/chat/completions"
+    
+    async def get_response(self, messages, **kwargs):
+        _LOGGER.debug("Making request to OpenRouter API with model: %s", self.model)
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://home-assistant.io",  # Optional for OpenRouter rankings
+            "X-Title": "Home Assistant AI Agent"  # Optional for OpenRouter rankings
+        }
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": 2048,
+            "temperature": 0.7,
+            "top_p": 0.9
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    _LOGGER.error("OpenRouter API error %d: %s", resp.status, error_text)
+                    raise Exception(f"OpenRouter API error {resp.status}")
+                data = await resp.json()
+                # Extract text from OpenRouter response (OpenAI-compatible format)
+                choices = data.get('choices', [])
+                if choices and 'message' in choices[0]:
+                    return choices[0]['message'].get('content', str(data))
+                return str(data)
+
 # === Main Agent ===
 class AiAgentHaAgent:
-    """Agent for handling Llama queries with dynamic data requests and multiple AI providers."""
+    """Agent for handling queries with dynamic data requests and multiple AI providers."""
 
     SYSTEM_PROMPT = {
         "role": "system",
@@ -149,20 +264,45 @@ class AiAgentHaAgent:
         self._last_request_time = 0
         self._request_count = 0
         self._request_window_start = time.time()
+        
         provider = config.get("ai_provider", "llama")
+        models_config = config.get("models", {})
+        
         _LOGGER.debug("Initializing AiAgentHaAgent with provider: %s", provider)
+        
+        # Initialize the appropriate AI client with model selection
         if provider == "openai":
-            self.ai_client = OpenAIClient(config.get("llm_token"))
-        else:
-            self.ai_client = LlamaClient(config.get("llm_token"))
-        _LOGGER.debug("AiAgentHaAgent initialized successfully")
+            model = models_config.get("openai", "gpt-3.5-turbo")
+            self.ai_client = OpenAIClient(config.get("openai_token"), model)
+        elif provider == "gemini":
+            model = models_config.get("gemini", "gemini-1.5-flash")
+            self.ai_client = GeminiClient(config.get("gemini_token"), model)
+        elif provider == "openrouter":
+            model = models_config.get("openrouter", "openai/gpt-4o")
+            self.ai_client = OpenRouterClient(config.get("openrouter_token"), model)
+        else:  # default to llama
+            model = models_config.get("llama", "Llama-4-Maverick-17B-128E-Instruct-FP8")
+            self.ai_client = LlamaClient(config.get("llama_token"), model)
+        
+        _LOGGER.debug("AiAgentHaAgent initialized successfully with provider: %s, model: %s", provider, model)
 
     def _validate_api_key(self) -> bool:
         """Validate the API key format."""
-        if not self.config.get("llm_token") or not isinstance(self.config.get("llm_token"), str):
+        provider = self.config.get("ai_provider", "llama")
+        
+        if provider == "openai":
+            token = self.config.get("openai_token")
+        elif provider == "gemini":
+            token = self.config.get("gemini_token")
+        elif provider == "openrouter":
+            token = self.config.get("openrouter_token")
+        else:
+            token = self.config.get("llama_token")
+        
+        if not token or not isinstance(token, str):
             return False
         # Add more specific validation based on your API key format
-        return len(self.config.get("llm_token")) >= 32
+        return len(token) >= 32
 
     def _check_rate_limit(self) -> bool:
         """Check if we're within rate limits."""
@@ -268,7 +408,8 @@ class AiAgentHaAgent:
         """Get entity registry entries"""
         _LOGGER.debug("Requesting all entity registry entries")
         try:
-            registry = self.hass.data.get("entity_registry")
+            from homeassistant.helpers import entity_registry as er
+            registry = er.async_get(self.hass)
             if not registry:
                 return []
             return [
@@ -277,19 +418,22 @@ class AiAgentHaAgent:
                     "device_id": entry.device_id,
                     "platform": entry.platform,
                     "disabled": entry.disabled,
-                    "area_id": entry.area_id
+                    "area_id": entry.area_id,
+                    "original_name": entry.original_name,
+                    "unique_id": entry.unique_id
                 } 
                 for entry in registry.entities.values()
             ]
         except Exception as e:
-            _LOGGER.exception("Error getting registry entries: %s", str(e))
-            return [{"error": f"Error getting registry entries: {str(e)}"}]
+            _LOGGER.exception("Error getting entity registry entries: %s", str(e))
+            return [{"error": f"Error getting entity registry entries: {str(e)}"}]
 
     async def get_device_registry(self) -> List[Dict]:
         """Get device registry entries"""
         _LOGGER.debug("Requesting all device registry entries")
         try:
-            registry = self.hass.data.get("device_registry")
+            from homeassistant.helpers import device_registry as dr
+            registry = dr.async_get(self.hass)
             if not registry:
                 return []
             return [
@@ -300,11 +444,11 @@ class AiAgentHaAgent:
                     "manufacturer": device.manufacturer,
                     "sw_version": device.sw_version,
                     "hw_version": device.hw_version,
-                    "connections": device.connections,
-                    "identifiers": device.identifiers,
+                    "connections": list(device.connections) if device.connections else [],
+                    "identifiers": list(device.identifiers) if device.identifiers else [],
                     "area_id": device.area_id,
-                    "disabled": device.disabled,
-                    "entry_type": device.entry_type,
+                    "disabled": device.disabled_by is not None,
+                    "entry_type": device.entry_type.value if device.entry_type else None,
                     "name_by_user": device.name_by_user
                 }
                 for device in registry.devices.values()
@@ -315,15 +459,30 @@ class AiAgentHaAgent:
 
     async def get_history(self, entity_id: str, hours: int = 24) -> List[Dict]:
         """Get historical state changes for an entity"""
-        _LOGGER.debug("Requesting historical state changes for an entity")
+        _LOGGER.debug("Requesting historical state changes for entity: %s", entity_id)
         try:
+            from homeassistant.components import history
             now = dt_util.utcnow()
             start = now - timedelta(hours=hours)
-            return await self.hass.async_add_executor_job(
-                lambda: self.hass.data["history"].get_state_changes_during_period(
-                    start, now, entity_id=entity_id
-                )
+            
+            # Get history using the history component
+            history_data = await self.hass.async_add_executor_job(
+                history.get_significant_states,
+                self.hass, start, now, [entity_id]
             )
+            
+            # Convert to serializable format
+            result = []
+            for entity_id_key, states in history_data.items():
+                for state in states:
+                    result.append({
+                        "entity_id": state.entity_id,
+                        "state": state.state,
+                        "last_changed": state.last_changed.isoformat(),
+                        "last_updated": state.last_updated.isoformat(),
+                        "attributes": dict(state.attributes)
+                    })
+            return result
         except Exception as e:
             _LOGGER.exception("Error getting history: %s", str(e))
             return [{"error": f"Error getting history: {str(e)}"}]
@@ -332,11 +491,27 @@ class AiAgentHaAgent:
         """Get recent logbook entries"""
         _LOGGER.debug("Requesting recent logbook entries")
         try:
+            from homeassistant.components import logbook
             now = dt_util.utcnow()
             start = now - timedelta(hours=hours)
-            return await self.hass.async_add_executor_job(
-                lambda: self.hass.data["logbook"].get_entries(start, now)
+            
+            # Get logbook entries
+            entries = await self.hass.async_add_executor_job(
+                logbook.get_events, self.hass, start, now
             )
+            
+            # Convert to serializable format
+            result = []
+            for entry in entries:
+                result.append({
+                    "when": entry.get("when"),
+                    "name": entry.get("name"),
+                    "message": entry.get("message"),
+                    "entity_id": entry.get("entity_id"),
+                    "state": entry.get("state"),
+                    "domain": entry.get("domain")
+                })
+            return result
         except Exception as e:
             _LOGGER.exception("Error getting logbook entries: %s", str(e))
             return [{"error": f"Error getting logbook entries: {str(e)}"}]
@@ -345,63 +520,96 @@ class AiAgentHaAgent:
         """Get area registry information"""
         _LOGGER.debug("Get area registry information")
         try:
-            registry = self.hass.data.get("area_registry")
+            from homeassistant.helpers import area_registry as ar
+            registry = ar.async_get(self.hass)
             if not registry:
                 return {}
-            return {
-                area.id: {
+            
+            result = {}
+            for area in registry.areas.values():
+                result[area.id] = {
                     "name": area.name,
-                    "devices": [d.id for d in registry.devices.get(area.id, [])],
-                    "entities": [e.entity_id for e in registry.entities.get(area.id, [])]
+                    "normalized_name": area.normalized_name,
+                    "picture": area.picture,
+                    "icon": area.icon,
+                    "floor_id": area.floor_id,
+                    "labels": list(area.labels) if area.labels else []
                 }
-                for area in registry.areas.values()
-            }
+            return result
         except Exception as e:
             _LOGGER.exception("Error getting area registry: %s", str(e))
-            return [{"error": f"Error getting area registry: {str(e)}"}]
+            return {"error": f"Error getting area registry: {str(e)}"}
         
     async def get_person_data(self) -> List[Dict]:
         """Get person tracking information"""
         _LOGGER.debug("Requesting person tracking information")
         try:
-            return [
-                {
-                "entity_id": state.entity_id,
-                "name": state.name,
-                "state": state.state,
-                "latitude": state.attributes.get("latitude"),
-                "longitude": state.attributes.get("longitude")
-            }
-            for state in self.hass.states.async_all("person")
-        ]
+            result = []
+            for state in self.hass.states.async_all("person"):
+                result.append({
+                    "entity_id": state.entity_id,
+                    "name": state.attributes.get("friendly_name", state.entity_id),
+                    "state": state.state,
+                    "latitude": state.attributes.get("latitude"),
+                    "longitude": state.attributes.get("longitude"),
+                    "source": state.attributes.get("source"),
+                    "gps_accuracy": state.attributes.get("gps_accuracy"),
+                    "last_changed": state.last_changed.isoformat() if state.last_changed else None
+                })
+            return result
         except Exception as e:
             _LOGGER.exception("Error getting person tracking information: %s", str(e))
             return [{"error": f"Error getting person tracking information: {str(e)}"}]
     
     async def get_statistics(self, entity_id: str) -> Dict:
         """Get statistics for an entity"""
-        _LOGGER.debug("Requesting statistics for an entity")
+        _LOGGER.debug("Requesting statistics for entity: %s", entity_id)
         try:
-            return await self.hass.async_add_executor_job(
-                lambda: self.hass.data["statistics"].get_latest_statistic(
-                    entity_id, "hour"
-                )
+            from homeassistant.components import recorder
+            # Check if recorder is available
+            if not self.hass.data.get(recorder.DATA_INSTANCE):
+                return {"error": "Recorder component is not available"}
+                
+            from homeassistant.components.recorder.statistics import get_latest_short_term_statistics
+            
+            # Get latest statistics
+            stats = await self.hass.async_add_executor_job(
+                get_latest_short_term_statistics,
+                self.hass, 1, entity_id, True, set()
             )
+            
+            if entity_id in stats:
+                stat_data = stats[entity_id][0] if stats[entity_id] else {}
+                return {
+                    "entity_id": entity_id,
+                    "start": stat_data.get("start"),
+                    "mean": stat_data.get("mean"),
+                    "min": stat_data.get("min"),
+                    "max": stat_data.get("max"),
+                    "last_reset": stat_data.get("last_reset"),
+                    "state": stat_data.get("state"),
+                    "sum": stat_data.get("sum")
+                }
+            else:
+                return {"error": f"No statistics available for entity {entity_id}"}
         except Exception as e:
             _LOGGER.exception("Error getting statistics: %s", str(e))
-            return [{"error": f"Error getting statistics: {str(e)}"}]
+            return {"error": f"Error getting statistics: {str(e)}"}
         
     async def get_scenes(self) -> List[Dict]:
         """Get scene configurations"""
         _LOGGER.debug("Requesting scene configurations")
         try:
-            return [
-                {
-                "name": scene.name,
-                "entities": scene.entities
-            }
-            for scene in self.hass.states.async_all("scene")
-        ]
+            result = []
+            for state in self.hass.states.async_all("scene"):
+                result.append({
+                    "entity_id": state.entity_id,
+                    "name": state.attributes.get("friendly_name", state.entity_id),
+                    "last_activated": state.attributes.get("last_activated"),
+                    "icon": state.attributes.get("icon"),
+                    "last_changed": state.last_changed.isoformat() if state.last_changed else None
+                })
+            return result
         except Exception as e:
             _LOGGER.exception("Error getting scene configurations: %s", str(e))
             return [{"error": f"Error getting scene configurations: {str(e)}"}]
@@ -585,13 +793,26 @@ class AiAgentHaAgent:
                 
                 try:
                     # Get AI response
-                    _LOGGER.debug("Requesting response from Llama API")
-                    response = await self._get_llama_response()
-                    _LOGGER.debug("Received response from Llama API: %s", response)
+                    _LOGGER.debug("Requesting response from AI provider")
+                    response = await self._get_ai_response()
+                    _LOGGER.debug("Received response from AI provider: %s", response)
                     
                     try:
                         # Try to parse the response as JSON
-                        response_data = json.loads(response)
+                        # First, try to extract JSON from response if it contains extra text
+                        response_clean = response.strip()
+                        
+                        # Look for JSON patterns (starting with { and ending with })
+                        json_start = response_clean.find('{')
+                        json_end = response_clean.rfind('}')
+                        
+                        if json_start != -1 and json_end != -1 and json_end > json_start:
+                            json_part = response_clean[json_start:json_end + 1]
+                            response_data = json.loads(json_part)
+                        else:
+                            # If no clear JSON pattern, try to parse the whole response
+                            response_data = json.loads(response_clean)
+                            
                         _LOGGER.debug("Parsed response data: %s", json.dumps(response_data))
                         
                         if response_data.get("request_type") == "data_request":
@@ -604,7 +825,7 @@ class AiAgentHaAgent:
                             # Add AI's response to conversation history
                             self.conversation_history.append({
                                 "role": "assistant",
-                                "content": response
+                                "content": json.dumps(response_data)  # Store clean JSON
                             })
                             
                             # Get requested data
@@ -661,19 +882,19 @@ class AiAgentHaAgent:
                                     "success": False,
                                     "error": data["error"]
                                 }
-                            elif isinstance(data, list) and any("error" in item for item in data):
-                                errors = [item["error"] for item in data if "error" in item]
+                            elif isinstance(data, list) and any("error" in item for item in data if isinstance(item, dict)):
+                                errors = [item["error"] for item in data if isinstance(item, dict) and "error" in item]
                                 return {
                                     "success": False,
                                     "error": "; ".join(errors)
                                 }
                             
-                            _LOGGER.debug("Retrieved data for request: %s", json.dumps(data))
+                            _LOGGER.debug("Retrieved data for request: %s", json.dumps(data, default=str))
                             
                             # Add data to conversation as a system message
                             self.conversation_history.append({
                                 "role": "system",
-                                "content": json.dumps({"data": data})
+                                "content": json.dumps({"data": data}, default=str)
                             })
                             continue
                         
@@ -681,7 +902,7 @@ class AiAgentHaAgent:
                             # Add final response to conversation history
                             self.conversation_history.append({
                                 "role": "assistant",
-                                "content": response
+                                "content": json.dumps(response_data)  # Store clean JSON
                             })
                             
                             # Return final response
@@ -696,7 +917,7 @@ class AiAgentHaAgent:
                             # Add automation suggestion to conversation history
                             self.conversation_history.append({
                                 "role": "assistant",
-                                "content": response
+                                "content": json.dumps(response_data)  # Store clean JSON
                             })
                             
                             # Return automation suggestion
@@ -715,7 +936,7 @@ class AiAgentHaAgent:
                             }
                             
                     except json.JSONDecodeError as e:
-                        _LOGGER.warning("Failed to parse response as JSON: %s", str(e))
+                        _LOGGER.warning("Failed to parse response as JSON: %s. Response: %s", str(e), response[:200])
                         # If response is not valid JSON, return it as final response
                         result = {
                             "success": True,
@@ -747,7 +968,7 @@ class AiAgentHaAgent:
                 "error": f"Error in process_query: {str(e)}"
             }
 
-    async def _get_llama_response(self) -> str:
+    async def _get_ai_response(self) -> str:
         """Get response from the selected AI provider with retries and rate limiting."""
         if not self._check_rate_limit():
             raise Exception("Rate limit exceeded. Please try again later.")

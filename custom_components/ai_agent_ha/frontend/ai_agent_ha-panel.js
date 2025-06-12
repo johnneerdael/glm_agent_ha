@@ -313,7 +313,7 @@ class AiAgentHaPanel extends LitElement {
             `)}
             ${this._isLoading ? html`
               <div class="loading">
-                <span>Llama is thinking</span>
+                <span>AI Agent is thinking</span>
                 <div class="loading-dots">
                   <div class="dot"></div>
                   <div class="dot"></div>
