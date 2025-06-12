@@ -26,6 +26,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
+from homeassistant.helpers.storage import Store
 from .const import DOMAIN, CONF_WEATHER_ENTITY
 
 _LOGGER = logging.getLogger(__name__)
@@ -74,6 +75,11 @@ class OpenAIClient(BaseAIClient):
     
     async def get_response(self, messages, **kwargs):
         _LOGGER.debug("Making request to OpenAI API with model: %s", self.model)
+        
+        # Validate token
+        if not self.token or not self.token.startswith("sk-"):
+            raise Exception("Invalid OpenAI API key format")
+            
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
@@ -85,18 +91,37 @@ class OpenAIClient(BaseAIClient):
             "temperature": 0.7,
             "top_p": 0.9
         }
+        
+        _LOGGER.debug("OpenAI request payload: %s", json.dumps(payload, indent=2))
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                response_text = await resp.text()
+                _LOGGER.debug("OpenAI API response status: %d", resp.status)
+                _LOGGER.debug("OpenAI API response: %s", response_text[:500])
+                
                 if resp.status != 200:
-                    error_text = await resp.text()
-                    _LOGGER.error("OpenAI API error %d: %s", resp.status, error_text)
-                    raise Exception(f"OpenAI API error {resp.status}")
-                data = await resp.json()
+                    _LOGGER.error("OpenAI API error %d: %s", resp.status, response_text)
+                    raise Exception(f"OpenAI API error {resp.status}: {response_text}")
+                    
+                try:
+                    data = json.loads(response_text)
+                except json.JSONDecodeError as e:
+                    _LOGGER.error("Failed to parse OpenAI response as JSON: %s", str(e))
+                    raise Exception(f"Invalid JSON response from OpenAI: {response_text[:200]}")
+                
                 # Extract text from OpenAI response
                 choices = data.get('choices', [])
                 if choices and 'message' in choices[0]:
-                    return choices[0]['message'].get('content', str(data))
-                return str(data)
+                    content = choices[0]['message'].get('content', '')
+                    if not content:
+                        _LOGGER.warning("OpenAI returned empty content in message")
+                        _LOGGER.debug("Full OpenAI response: %s", json.dumps(data, indent=2))
+                    return content
+                else:
+                    _LOGGER.warning("OpenAI response missing expected structure")
+                    _LOGGER.debug("Full OpenAI response: %s", json.dumps(data, indent=2))
+                    return str(data)
 
 class GeminiClient(BaseAIClient):
     def __init__(self, token, model="gemini-1.5-flash"):
@@ -106,6 +131,11 @@ class GeminiClient(BaseAIClient):
     
     async def get_response(self, messages, **kwargs):
         _LOGGER.debug("Making request to Gemini API with model: %s", self.model)
+        
+        # Validate token
+        if not self.token:
+            raise Exception("Missing Gemini API key")
+        
         headers = {
             "Content-Type": "application/json"
         }
@@ -152,19 +182,40 @@ class GeminiClient(BaseAIClient):
         # Add API key as query parameter
         url_with_key = f"{self.api_url}?key={self.token}"
         
+        _LOGGER.debug("Gemini request payload: %s", json.dumps(payload, indent=2))
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(url_with_key, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                response_text = await resp.text()
+                _LOGGER.debug("Gemini API response status: %d", resp.status)
+                _LOGGER.debug("Gemini API response: %s", response_text[:500])
+                
                 if resp.status != 200:
-                    error_text = await resp.text()
-                    _LOGGER.error("Gemini API error %d: %s", resp.status, error_text)
-                    raise Exception(f"Gemini API error {resp.status}")
-                data = await resp.json()
+                    _LOGGER.error("Gemini API error %d: %s", resp.status, response_text)
+                    raise Exception(f"Gemini API error {resp.status}: {response_text}")
+                    
+                try:
+                    data = json.loads(response_text)
+                except json.JSONDecodeError as e:
+                    _LOGGER.error("Failed to parse Gemini response as JSON: %s", str(e))
+                    raise Exception(f"Invalid JSON response from Gemini: {response_text[:200]}")
+                
                 # Extract text from Gemini response
                 candidates = data.get('candidates', [])
                 if candidates and 'content' in candidates[0]:
                     parts = candidates[0]['content'].get('parts', [])
                     if parts:
-                        return parts[0].get('text', str(data))
+                        content = parts[0].get('text', '')
+                        if not content:
+                            _LOGGER.warning("Gemini returned empty text content")
+                            _LOGGER.debug("Full Gemini response: %s", json.dumps(data, indent=2))
+                        return content
+                    else:
+                        _LOGGER.warning("Gemini response missing parts")
+                        _LOGGER.debug("Full Gemini response: %s", json.dumps(data, indent=2))
+                else:
+                    _LOGGER.warning("Gemini response missing expected structure")
+                    _LOGGER.debug("Full Gemini response: %s", json.dumps(data, indent=2))
                 return str(data)
 
 class AnthropicClient(BaseAIClient):
@@ -1049,10 +1100,30 @@ class AiAgentHaAgent:
         # Ensure system prompt is always the first message
         if not recent_messages or recent_messages[0].get("role") != "system":
             recent_messages = [self.SYSTEM_PROMPT] + recent_messages
+            
+        _LOGGER.debug("Sending %d messages to AI provider", len(recent_messages))
+        _LOGGER.debug("AI provider: %s", self.config.get("ai_provider", "unknown"))
+        
         while retry_count < self._max_retries:
             try:
-                return await self.ai_client.get_response(recent_messages)
+                _LOGGER.debug("Attempt %d/%d: Calling AI client", retry_count + 1, self._max_retries)
+                response = await self.ai_client.get_response(recent_messages)
+                _LOGGER.debug("AI client returned response of length: %d", len(response or ""))
+                _LOGGER.debug("AI response preview: %s", (response or "")[:200])
+                
+                # Check if response is empty
+                if not response or response.strip() == "":
+                    _LOGGER.warning("AI client returned empty response on attempt %d", retry_count + 1)
+                    if retry_count + 1 >= self._max_retries:
+                        raise Exception("AI provider returned empty response after all retries")
+                    else:
+                        retry_count += 1
+                        await asyncio.sleep(self._retry_delay * retry_count)
+                        continue
+                        
+                return response
             except Exception as e:
+                _LOGGER.error("AI client error on attempt %d: %s", retry_count + 1, str(e))
                 last_error = e
                 retry_count += 1
                 if retry_count < self._max_retries:
@@ -1140,4 +1211,25 @@ class AiAgentHaAgent:
             _LOGGER.exception("Error setting entity state: %s", str(e))
             return {
                 "error": f"Error setting entity state: {str(e)}"
-            } 
+            }
+
+    async def save_user_prompt_history(self, user_id: str, history: List[str]) -> Dict[str, Any]:
+        """Save user's prompt history to HA storage."""
+        try:
+            store = Store(self.hass, 1, f"ai_agent_ha_history_{user_id}")
+            await store.async_save({"history": history})
+            return {"success": True}
+        except Exception as e:
+            _LOGGER.exception("Error saving prompt history: %s", str(e))
+            return {"error": f"Error saving prompt history: {str(e)}"}
+
+    async def load_user_prompt_history(self, user_id: str) -> Dict[str, Any]:
+        """Load user's prompt history from HA storage."""
+        try:
+            store = Store(self.hass, 1, f"ai_agent_ha_history_{user_id}")
+            data = await store.async_load()
+            history = data.get("history", []) if data else []
+            return {"success": True, "history": history}
+        except Exception as e:
+            _LOGGER.exception("Error loading prompt history: %s", str(e))
+            return {"error": f"Error loading prompt history: {str(e)}", "history": []}

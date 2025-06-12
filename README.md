@@ -13,6 +13,14 @@ A powerful Home Assistant custom integration that connects your Home Assistant i
 - 🎨 **Beautiful UI**: Clean, modern chat interface
 - 🔄 **Real-time**: Instant responses and updates
 
+## 📸 Screenshots
+
+### Chat Interface
+![AI Agent HA Chat Interface](image/Screenshot.png)
+
+### Automation Creation
+![AI Agent HA Automation Creation](image/Screenshot2.png)
+
 ## 🚀 Supported AI Providers
 
 ### OpenAI
@@ -176,6 +184,14 @@ The integration provides these main components:
 - All communication uses HTTPS
 - No data is stored outside your Home Assistant instance
 - Provider-specific security practices are followed
+
+## ☕ Support the Project
+
+If you find this integration helpful and would like to support its development, you can buy me a coffee! Your support helps keep this project active and maintained.
+
+[![Buy Me A Coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-donate-yellow.svg)](https://www.buymeacoffee.com/sbenodiz)
+
+Every contribution, no matter how small, is greatly appreciated and helps fund the continued development and improvement of AI Agent HA.
 
 ## 📝 License
 
