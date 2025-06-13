@@ -1,7 +1,18 @@
 query:
-  name: “Query LLaMA with Home Assistant context”
-  description: “Run a custom LLaMA prompt against your HA state dump.”
+  name: "Query AI with Home Assistant context"
+  description: "Run a custom prompt against your selected AI provider."
   fields:
     prompt:
-      description: “The question or instruction to send to the LLaMA model.”
-      example: “Which rooms have lights on?”
+      description: "The question or instruction to send to the AI model."
+      example: "Which rooms have lights on?"
+    provider:
+      description: "The AI provider to use (openai, llama, gemini, openrouter)"
+      example: "openai"
+      default: "openai"
+      selector:
+        select:
+          options:
+            - "openai"
+            - "llama"
+            - "gemini"
+            - "openrouter"

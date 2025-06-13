@@ -6,6 +6,13 @@ import {
 
 console.log("AI Agent HA Panel loading..."); // Debug log
 
+const PROVIDERS = {
+  openai: "OpenAI",
+  llama: "Llama",
+  gemini: "Google Gemini",
+  openrouter: "OpenRouter"
+};
+
 class AiAgentHaPanel extends LitElement {
   static get properties() {
     return {
@@ -15,7 +22,10 @@ class AiAgentHaPanel extends LitElement {
       _messages: { type: Array, reflect: false, attribute: false },
       _isLoading: { type: Boolean, reflect: false, attribute: false },
       _error: { type: String, reflect: false, attribute: false },
-      _pendingAutomation: { type: Object, reflect: false, attribute: false }
+      _pendingAutomation: { type: Object, reflect: false, attribute: false },
+      _selectedProvider: { type: String, reflect: false, attribute: false },
+      _availableProviders: { type: Array, reflect: false, attribute: false },
+      _showProviderDropdown: { type: Boolean, reflect: false, attribute: false }
     };
   }
 
@@ -95,7 +105,6 @@ class AiAgentHaPanel extends LitElement {
         flex-grow: 1;
       }
       .messages {
-        height: calc(100vh - 320px);
         overflow-y: auto;
         border: 1px solid var(--divider-color);
         border-radius: 12px;
@@ -127,50 +136,120 @@ class AiAgentHaPanel extends LitElement {
         border-bottom-left-radius: 4px;
       }
       .input-container {
-        display: flex;
-        gap: 12px;
-        padding: 16px;
-        background: var(--primary-background-color);
+        position: relative;
+        width: 100%;
+        background: var(--card-background-color);
+        border: 1px solid var(--divider-color);
         border-radius: 12px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         margin-bottom: 24px;
-        width: 100%;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
       }
-      textarea {
-        flex-grow: 1;
-        padding: 12px 16px;
-        border: 1px solid var(--divider-color);
-        border-radius: 8px;
-        height: 56px;
-        resize: none;
-        font-size: 16px;
-        line-height: 1.5;
-        transition: border-color 0.3s ease, box-shadow 0.3s ease;
-        background: var(--primary-background-color);
-      }
-      textarea:focus {
-        outline: none;
+      .input-container:focus-within {
         border-color: var(--primary-color);
         box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.1);
       }
-      ha-button {
+      .input-main {
+        display: flex;
+        align-items: flex-end;
+        padding: 12px;
+        gap: 12px;
+      }
+      .input-wrapper {
+        flex-grow: 1;
+        position: relative;
+      }
+      textarea {
+        width: 100%;
+        min-height: 24px;
+        max-height: 200px;
+        padding: 12px 16px 12px 16px;
+        border: none;
+        outline: none;
+        resize: none;
+        font-size: 16px;
+        line-height: 1.5;
+        background: transparent;
+        color: var(--primary-text-color);
+        font-family: inherit;
+      }
+      textarea::placeholder {
+        color: var(--secondary-text-color);
+      }
+      .input-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 16px 12px 16px;
+        border-top: 1px solid var(--divider-color);
+        background: var(--card-background-color);
+        border-radius: 0 0 12px 12px;
+      }
+      .provider-selector {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .provider-button {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: var(--secondary-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--primary-text-color);
+        transition: all 0.2s ease;
+        min-width: 150px;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        background-image: url('data:image/svg+xml;charset=US-ASCII,<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5H7z" fill="currentColor"/></svg>');
+        background-repeat: no-repeat;
+        background-position: right 8px center;
+        padding-right: 30px;
+      }
+      .provider-button:hover {
+        background-color: var(--primary-background-color);
+        border-color: var(--primary-color);
+      }
+      .provider-button:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.2);
+      }
+      .provider-label {
+        font-size: 12px;
+        color: var(--secondary-text-color);
+        margin-right: 8px;
+      }
+      .send-button {
         --mdc-theme-primary: var(--primary-color);
         --mdc-theme-on-primary: var(--text-primary-color);
-        --mdc-typography-button-font-size: 16px;
+        --mdc-typography-button-font-size: 14px;
         --mdc-typography-button-text-transform: none;
         --mdc-typography-button-letter-spacing: 0;
         --mdc-typography-button-font-weight: 500;
-        --mdc-button-height: 56px;
-        --mdc-button-padding: 0 24px;
+        --mdc-button-height: 36px;
+        --mdc-button-padding: 0 16px;
         border-radius: 8px;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        transition: all 0.2s ease;
+        min-width: 80px;
       }
-      ha-button:hover {
+      .send-button:hover {
         transform: translateY(-1px);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
       }
-      ha-button:active {
+      .send-button:active {
         transform: translateY(0);
+      }
+      .send-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
       }
       .loading {
         display: flex;
@@ -252,6 +331,11 @@ class AiAgentHaPanel extends LitElement {
         white-space: pre-wrap;
         overflow-x: auto;
       }
+      .no-providers {
+        color: var(--error-color);
+        font-size: 14px;
+        padding: 8px;
+      }
     `;
   }
 
@@ -261,6 +345,10 @@ class AiAgentHaPanel extends LitElement {
     this._isLoading = false;
     this._error = null;
     this._pendingAutomation = null;
+    this._selectedProvider = null;
+    this._availableProviders = [];
+    this._showProviderDropdown = false;
+    this.providersLoaded = false;
     console.debug("AI Agent HA Panel constructor called");
   }
 
@@ -326,24 +414,97 @@ class AiAgentHaPanel extends LitElement {
             ` : ''}
           </div>
           <div class="input-container">
-            <textarea
-              id="prompt"
-              placeholder="Ask me anything about your Home Assistant..."
-              ?disabled=${this._isLoading}
-              @keydown=${this._handleKeyDown}
-            ></textarea>
-            <ha-button
-              @click=${this._sendMessage}
-              .disabled=${this._isLoading}
-            >Send</ha-button>
+            <div class="input-main">
+              <div class="input-wrapper">
+                <textarea
+                  id="prompt"
+                  placeholder="Ask me anything about your Home Assistant..."
+                  ?disabled=${this._isLoading}
+                  @keydown=${this._handleKeyDown}
+                  @input=${this._autoResize}
+                ></textarea>
+              </div>
+            </div>
+
+            <div class="input-footer">
+              <div class="provider-selector">
+                <span class="provider-label">Model:</span>
+                <select
+                  class="provider-button"
+                  @change=${(e) => this._selectProvider(e.target.value)}
+                  .value=${this._selectedProvider || ''}
+                >
+                  ${this._availableProviders.map(provider => html`
+                    <option
+                      value=${provider.value}
+                      ?selected=${provider.value === this._selectedProvider}
+                    >
+                      ${provider.label}
+                    </option>
+                  `)}
+                </select>
+              </div>
+
+              <ha-button
+                class="send-button"
+                @click=${this._sendMessage}
+                .disabled=${this._isLoading || !this._hasProviders()}
+              >
+                <ha-icon icon="mdi:send"></ha-icon>
+              </ha-button>
+            </div>
           </div>
         </div>
       </div>
     `;
   }
 
-  updated(changedProps) {
+  async updated(changedProps) {
     console.debug("Updated called with:", changedProps);
+    if (changedProps.has('hass') && this.hass && !this.providersLoaded) {
+      this.providersLoaded = true;
+
+      try {
+        // Uses the WebSocket API to get all entries with their complete data
+        const allEntries = await this.hass.callWS({ type: 'config_entries/get' });
+
+        const aiAgentEntries = allEntries.filter(
+          entry => entry.domain === 'ai_agent_ha'
+        );
+
+        if (aiAgentEntries.length > 0) {
+          // Fixed mapping to extract the supplier from the title
+          const titleToProviderMap = {
+            "AI Agent HA (OpenRouter)": "openrouter",
+            "AI Agent HA (Google Gemini)": "gemini",
+            "AI Agent HA (OpenAI)": "openai",
+            "AI Agent HA (Llama)": "llama"
+          };
+
+          this._availableProviders = aiAgentEntries.map(entry => {
+            const provider = titleToProviderMap[entry.title] || "unknown";
+            return {
+              value: provider,
+              label: PROVIDERS[provider] || provider
+            };
+          });
+
+          console.debug("Available AI providers (mapped from title):", this._availableProviders);
+
+          if (!this._selectedProvider && this._availableProviders.length > 0) {
+            this._selectedProvider = this._availableProviders[0].value;
+          }
+        } else {
+          console.debug("No 'ai_agent_ha' config entries found via WebSocket.");
+          this._availableProviders = [];
+        }
+      } catch (error) {
+        console.error("Error fetching config entries via WebSocket:", error);
+        this._error = error.message || 'Failed to load AI provider configurations.';
+        this._availableProviders = [];
+      }
+      this.requestUpdate();
+    }
 
     if (changedProps.has('_messages') || changedProps.has('_isLoading')) {
       this._scrollToBottom();
@@ -357,11 +518,34 @@ class AiAgentHaPanel extends LitElement {
     }
   }
 
+  _autoResize(e) {
+    const textarea = e.target;
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+  }
+
   _handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey && !this._isLoading) {
       e.preventDefault();
       this._sendMessage();
     }
+  }
+
+  _toggleProviderDropdown() {
+    this._showProviderDropdown = !this._showProviderDropdown;
+    console.log("Toggling provider dropdown:", this._showProviderDropdown);
+    this.requestUpdate(); // Añade esta línea para forzar la actualización
+  }
+
+  _selectProvider(provider) {
+    this._selectedProvider = provider;
+    console.debug("Provider changed to:", provider);
+    this.requestUpdate();
+  }
+
+  _getSelectedProviderLabel() {
+    const provider = this._availableProviders.find(p => p.value === this._selectedProvider);
+    return provider ? provider.label : 'Select Model';
   }
 
   async _sendMessage() {
@@ -370,17 +554,20 @@ class AiAgentHaPanel extends LitElement {
     if (!prompt || this._isLoading) return;
 
     console.debug("Sending message:", prompt);
+    console.debug("Sending message with provider:", this._selectedProvider);
 
     // Add user message
     this._messages = [...this._messages, { type: 'user', text: prompt }];
     promptEl.value = '';
+    promptEl.style.height = 'auto';
     this._isLoading = true;
     this._error = null;
 
     try {
       console.debug("Calling ai_agent_ha service");
       await this.hass.callService('ai_agent_ha', 'query', {
-        prompt: prompt
+        prompt: prompt,
+        provider: this._selectedProvider
       });
     } catch (error) {
       console.error("Error calling service:", error);
@@ -398,6 +585,13 @@ class AiAgentHaPanel extends LitElement {
         'ai_agent_ha_response'
       );
     }
+
+    // Cerrar dropdown al hacer clic fuera
+    document.addEventListener('click', (e) => {
+      if (!this.shadowRoot.querySelector('.provider-selector')?.contains(e.target)) {
+        this._showProviderDropdown = false;
+      }
+    });
   }
 
   _handleLlamaResponse(event) {
@@ -405,7 +599,7 @@ class AiAgentHaPanel extends LitElement {
     this._isLoading = false;
     if (event.data.success) {
       let message = { type: 'assistant', text: event.data.answer };
-      
+
       // Check if the response contains an automation suggestion
       try {
         const response = JSON.parse(event.data.answer);
@@ -419,7 +613,7 @@ class AiAgentHaPanel extends LitElement {
         // Not a JSON response, treat as normal message
         console.debug("Response is not JSON, using as-is:", event.data.answer);
       }
-      
+
       this._messages = [...this._messages, message];
     } else {
       this._error = event.data.error || 'An error occurred';
@@ -436,9 +630,9 @@ class AiAgentHaPanel extends LitElement {
       const result = await this.hass.callService('ai_agent_ha', 'create_automation', {
         automation: automation
       });
-      
+
       console.debug("Automation creation result:", result);
-      
+
       // The result should be an object with a message property
       if (result && result.message) {
         this._messages = [...this._messages, {
@@ -472,7 +666,12 @@ class AiAgentHaPanel extends LitElement {
 
   shouldUpdate(changedProps) {
     // Only update if internal state changes, not on every hass update
-    return changedProps.has('_messages') || changedProps.has('_isLoading') || changedProps.has('_error');
+    return changedProps.has('_messages')
+        || changedProps.has('_isLoading')
+        || changedProps.has('_error')
+        || changedProps.has('_availableProviders')
+        || changedProps.has('_selectedProvider')
+        || changedProps.has('_showProviderDropdown');
   }
 
   _clearChat() {
@@ -480,6 +679,14 @@ class AiAgentHaPanel extends LitElement {
     this._isLoading = false;
     this._error = null;
     this._pendingAutomation = null;
+  }
+
+  _getProviderInfo(providerId) {
+    return this._availableProviders.find(p => p.value === providerId);
+  }
+
+  _hasProviders() {
+    return this._availableProviders && this._availableProviders.length > 0;
   }
 }
 

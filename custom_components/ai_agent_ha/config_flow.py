@@ -2,23 +2,20 @@
 from __future__ import annotations
 
 import logging
+
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.selector import (
-    TextSelector,
-    TextSelectorConfig,
-    EntitySelector,
-    EntitySelectorConfig,
     SelectSelector,
     SelectSelectorConfig,
+    TextSelector,
+    TextSelectorConfig,
 )
-from homeassistant.const import CONF_NAME
 
-from .const import DOMAIN, CONF_API_KEY, CONF_WEATHER_ENTITY
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -95,29 +92,28 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
 
-    def __init__(self):
-        """Initialize the config flow."""
-        self.config_data = {}
-
     async def async_step_user(self, user_input=None):
-        """Handle the initial step - provider selection."""
+        """Handle the initial step."""
+        errors = {}
+
         if user_input is not None:
-            # Store selected provider and move to configure step
+            # Check if this provider is already configured
+            await self.async_set_unique_id(f"ai_agent_ha_{user_input['ai_provider']}")
+            self._abort_if_unique_id_configured()
+
             self.config_data = {"ai_provider": user_input["ai_provider"]}
             return await self.async_step_configure()
 
+        # Show provider selection form
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required("ai_provider", default=DEFAULT_PROVIDER): SelectSelector(
+                vol.Required("ai_provider"): SelectSelector(
                     SelectSelectorConfig(
                         options=[{"value": k, "label": v} for k, v in PROVIDERS.items()]
                     )
                 ),
-            }),
-            description_placeholders={
-                "provider": "AI Provider"
-            }
+            })
         )
 
     async def async_step_configure(self, user_input=None):
@@ -313,4 +309,4 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
                 "token_label": token_label,
                 "provider": PROVIDERS[provider],
             }
-        ) 
+        )
