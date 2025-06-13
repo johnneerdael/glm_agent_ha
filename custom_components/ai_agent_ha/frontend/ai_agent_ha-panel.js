@@ -649,7 +649,9 @@ class AiAgentHaPanel extends LitElement {
 
     console.debug('Loading prompt history...');
     try {
-      const result = await this.hass.callService('ai_agent_ha', 'load_prompt_history', {});
+      const result = await this.hass.callService('ai_agent_ha', 'load_prompt_history', {
+        provider: this._selectedProvider
+      });
       console.debug('Prompt history service result:', result);
 
       if (result && result.response && result.response.history) {
@@ -674,14 +676,18 @@ class AiAgentHaPanel extends LitElement {
 
   _loadFromLocalStorage() {
     try {
-      const saved = localStorage.getItem('ai_agent_ha_prompt_history');
-      if (saved) {
-        this._promptHistory = JSON.parse(saved);
-        console.debug('Loaded prompt history from localStorage:', this._promptHistory);
-        this.requestUpdate();
-      } else {
-        console.debug('No prompt history in localStorage');
-        this._promptHistory = [];
+      const savedList = localStorage.getItem('ai_agent_ha_prompt_history');
+      if (savedList) {
+        const parsedList = JSON.parse(savedList);
+        const saved = parsedList.history && parsedList.provider === this._selectedProvider ? parsedList.history : null;
+        if (saved) {
+          this._promptHistory = JSON.parse(saved);
+          console.debug('Loaded prompt history from localStorage:', this._promptHistory);
+          this.requestUpdate();
+        } else {
+          console.debug('No prompt history in localStorage');
+          this._promptHistory = [];
+        }
       }
     } catch (e) {
       console.error('Error loading from localStorage:', e);
@@ -699,7 +705,8 @@ class AiAgentHaPanel extends LitElement {
     console.debug('Saving prompt history:', this._promptHistory);
     try {
       const result = await this.hass.callService('ai_agent_ha', 'save_prompt_history', {
-        history: this._promptHistory
+        history: this._promptHistory,
+        provider: this._selectedProvider
       });
       console.debug('Save prompt history result:', result);
 
@@ -714,7 +721,11 @@ class AiAgentHaPanel extends LitElement {
 
   _saveToLocalStorage() {
     try {
-      localStorage.setItem('ai_agent_ha_prompt_history', JSON.stringify(this._promptHistory));
+      const data = {
+        provider: this._selectedProvider,
+        history: JSON.stringify(this._promptHistory)
+      }
+      localStorage.setItem('ai_agent_ha_prompt_history', JSON.stringify(data));
       console.debug('Saved prompt history to localStorage');
     } catch (e) {
       console.error('Error saving to localStorage:', e);
@@ -909,9 +920,10 @@ class AiAgentHaPanel extends LitElement {
     this.requestUpdate(); // Añade esta línea para forzar la actualización
   }
 
-  _selectProvider(provider) {
+  async _selectProvider(provider) {
     this._selectedProvider = provider;
     console.debug("Provider changed to:", provider);
+    await this._loadPromptHistory();
     this.requestUpdate();
   }
 

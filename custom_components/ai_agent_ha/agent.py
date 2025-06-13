@@ -55,6 +55,9 @@ class LlamaClient(BaseAIClient):
             "temperature": 0.7,
             "top_p": 0.9
         }
+
+        _LOGGER.debug("Llama request payload: %s", json.dumps(payload, indent=2))
+
         async with aiohttp.ClientSession() as session:
             async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=300)) as resp:
                 if resp.status != 200:
@@ -265,6 +268,8 @@ class AnthropicClient(BaseAIClient):
         if system_message:
             payload["system"] = system_message
         
+        _LOGGER.debug("Anthropic request payload: %s", json.dumps(payload, indent=2))
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                 if resp.status != 200:
@@ -302,6 +307,9 @@ class OpenRouterClient(BaseAIClient):
             "temperature": 0.7,
             "top_p": 0.9
         }
+
+        _LOGGER.debug("OpenRouter request payload: %s", json.dumps(payload, indent=2))
+
         async with aiohttp.ClientSession() as session:
             async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=300)) as resp:
                 if resp.status != 200:
@@ -311,6 +319,10 @@ class OpenRouterClient(BaseAIClient):
                 data = await resp.json()
                 # Extract text from OpenRouter response (OpenAI-compatible format)
                 choices = data.get('choices', [])
+                if not choices:
+                    _LOGGER.warning("OpenRouter response missing choices")
+                    _LOGGER.debug("Full OpenRouter response: %s", json.dumps(data, indent=2))
+                    return str(data)
                 if choices and 'message' in choices[0]:
                     return choices[0]['message'].get('content', str(data))
                 return str(data)
@@ -913,7 +925,12 @@ class AiAgentHaAgent:
                     "token_key": "llama_token",
                     "model": models_config.get("llama", "Llama-4-Maverick-17B-128E-Instruct-FP8"),
                     "client_class": LlamaClient
-                }
+                },
+                "anthropic": {
+                    "token_key": "anthropic_token",
+                    "model": models_config.get("anthropic", "claude-3-5-sonnet-20241022"),
+                    "client_class": AnthropicClient
+                },
             }
 
             # Validate provider and get configuration

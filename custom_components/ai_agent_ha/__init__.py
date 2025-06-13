@@ -77,7 +77,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def async_handle_save_prompt_history(call):
         """Handle the save_prompt_history service call."""
-        agent = hass.data[DOMAIN]["agent"]
+        agent = hass.data[DOMAIN]["agents"][call.data.get("provider")]
         user_id = call.context.user_id if call.context.user_id else "default"
         result = await agent.save_user_prompt_history(
             user_id, 
@@ -87,7 +87,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def async_handle_load_prompt_history(call):
         """Handle the load_prompt_history service call."""
-        agent = hass.data[DOMAIN]["agent"]
+        agent = hass.data[DOMAIN]["agents"][call.data.get("provider")]
         user_id = call.context.user_id if call.context.user_id else "default"
         result = await agent.load_user_prompt_history(user_id)
         _LOGGER.debug("Load prompt history result: %s", result)
