@@ -204,6 +204,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Home Assistant community for the excellent platform
 - All AI providers for their powerful APIs
+- Special thanks to @RmG152 for their valuable help with development
 - Contributors and testers who help improve this integration
 
 ---
