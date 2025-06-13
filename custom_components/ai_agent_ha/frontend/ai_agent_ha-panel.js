@@ -855,24 +855,32 @@ class AiAgentHaPanel extends LitElement {
         );
 
         if (aiAgentEntries.length > 0) {
-          // Fixed mapping to extract the supplier from the title
-          const titleToProviderMap = {
-            "AI Agent HA (OpenRouter)": "openrouter",
-            "AI Agent HA (Google Gemini)": "gemini",
-            "AI Agent HA (OpenAI)": "openai",
-            "AI Agent HA (Llama)": "llama",
-            "AI Agent HA (Anthropic)": "anthropic",
-          };
-
+          // More robust approach: extract provider from entry data or use title mapping as fallback
           this._availableProviders = aiAgentEntries.map(entry => {
-            const provider = titleToProviderMap[entry.title] || "unknown";
+            let provider = "unknown";
+            
+            // First try to get provider from entry data
+            if (entry.data && entry.data.ai_provider) {
+              provider = entry.data.ai_provider;
+            } else {
+              // Fallback to title mapping
+              const titleToProviderMap = {
+                "AI Agent HA (OpenRouter)": "openrouter",
+                "AI Agent HA (Google Gemini)": "gemini",
+                "AI Agent HA (OpenAI)": "openai",
+                "AI Agent HA (Llama)": "llama",
+                "AI Agent HA (Anthropic (Claude))": "anthropic",
+              };
+              provider = titleToProviderMap[entry.title] || "unknown";
+            }
+            
             return {
               value: provider,
               label: PROVIDERS[provider] || provider
             };
           });
 
-          console.debug("Available AI providers (mapped from title):", this._availableProviders);
+          console.debug("Available AI providers (mapped from data/title):", this._availableProviders);
 
           if (!this._selectedProvider && this._availableProviders.length > 0) {
             this._selectedProvider = this._availableProviders[0].value;

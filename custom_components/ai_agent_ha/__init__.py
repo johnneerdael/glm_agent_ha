@@ -58,40 +58,117 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Modify the query service handler to use the correct provider
     async def async_handle_query(call):
         """Handle the query service call."""
-        provider = call.data.get("provider")
-        if provider not in hass.data[DOMAIN]["agents"]:
-            provider = next(iter(hass.data[DOMAIN]["agents"].keys()))
-        
-        agent = hass.data[DOMAIN]["agents"][provider]
-        result = await agent.process_query(
-            call.data.get("prompt", ""),
-            provider=provider
-        )
-        hass.bus.async_fire("ai_agent_ha_response", result)
+        try:
+            # Check if agents are available
+            if DOMAIN not in hass.data or not hass.data[DOMAIN].get("agents"):
+                _LOGGER.error("No AI agents available. Please configure the integration first.")
+                result = {"error": "No AI agents configured"}
+                hass.bus.async_fire("ai_agent_ha_response", result)
+                return
+            
+            provider = call.data.get("provider")
+            if provider not in hass.data[DOMAIN]["agents"]:
+                # Get the first available provider
+                available_providers = list(hass.data[DOMAIN]["agents"].keys())
+                if not available_providers:
+                    _LOGGER.error("No AI agents available")
+                    result = {"error": "No AI agents configured"}
+                    hass.bus.async_fire("ai_agent_ha_response", result)
+                    return
+                provider = available_providers[0]
+                _LOGGER.debug(f"Using fallback provider: {provider}")
+            
+            agent = hass.data[DOMAIN]["agents"][provider]
+            result = await agent.process_query(
+                call.data.get("prompt", ""),
+                provider=provider
+            )
+            hass.bus.async_fire("ai_agent_ha_response", result)
+        except Exception as e:
+            _LOGGER.error(f"Error processing query: {e}")
+            result = {"error": str(e)}
+            hass.bus.async_fire("ai_agent_ha_response", result)
 
     async def async_handle_create_automation(call):
         """Handle the create_automation service call."""
-        agent = hass.data[DOMAIN]["agents"][call.data.get("provider")]
-        result = await agent.create_automation(call.data.get("automation", {}))
-        return result
+        try:
+            # Check if agents are available
+            if DOMAIN not in hass.data or not hass.data[DOMAIN].get("agents"):
+                _LOGGER.error("No AI agents available. Please configure the integration first.")
+                return {"error": "No AI agents configured"}
+            
+            provider = call.data.get("provider")
+            if provider not in hass.data[DOMAIN]["agents"]:
+                # Get the first available provider
+                available_providers = list(hass.data[DOMAIN]["agents"].keys())
+                if not available_providers:
+                    _LOGGER.error("No AI agents available")
+                    return {"error": "No AI agents configured"}
+                provider = available_providers[0]
+                _LOGGER.debug(f"Using fallback provider: {provider}")
+            
+            agent = hass.data[DOMAIN]["agents"][provider]
+            result = await agent.create_automation(call.data.get("automation", {}))
+            return result
+        except Exception as e:
+            _LOGGER.error(f"Error creating automation: {e}")
+            return {"error": str(e)}
 
     async def async_handle_save_prompt_history(call):
         """Handle the save_prompt_history service call."""
-        agent = hass.data[DOMAIN]["agents"][call.data.get("provider")]
-        user_id = call.context.user_id if call.context.user_id else "default"
-        result = await agent.save_user_prompt_history(
-            user_id, 
-            call.data.get("history", [])
-        )
-        return result
+        try:
+            # Check if agents are available
+            if DOMAIN not in hass.data or not hass.data[DOMAIN].get("agents"):
+                _LOGGER.error("No AI agents available. Please configure the integration first.")
+                return {"error": "No AI agents configured"}
+            
+            provider = call.data.get("provider")
+            if provider not in hass.data[DOMAIN]["agents"]:
+                # Get the first available provider
+                available_providers = list(hass.data[DOMAIN]["agents"].keys())
+                if not available_providers:
+                    _LOGGER.error("No AI agents available")
+                    return {"error": "No AI agents configured"}
+                provider = available_providers[0]
+                _LOGGER.debug(f"Using fallback provider: {provider}")
+            
+            agent = hass.data[DOMAIN]["agents"][provider]
+            user_id = call.context.user_id if call.context.user_id else "default"
+            result = await agent.save_user_prompt_history(
+                user_id, 
+                call.data.get("history", [])
+            )
+            return result
+        except Exception as e:
+            _LOGGER.error(f"Error saving prompt history: {e}")
+            return {"error": str(e)}
 
     async def async_handle_load_prompt_history(call):
         """Handle the load_prompt_history service call."""
-        agent = hass.data[DOMAIN]["agents"][call.data.get("provider")]
-        user_id = call.context.user_id if call.context.user_id else "default"
-        result = await agent.load_user_prompt_history(user_id)
-        _LOGGER.debug("Load prompt history result: %s", result)
-        return result
+        try:
+            # Check if agents are available
+            if DOMAIN not in hass.data or not hass.data[DOMAIN].get("agents"):
+                _LOGGER.error("No AI agents available. Please configure the integration first.")
+                return {"error": "No AI agents configured"}
+            
+            provider = call.data.get("provider")
+            if provider not in hass.data[DOMAIN]["agents"]:
+                # Get the first available provider
+                available_providers = list(hass.data[DOMAIN]["agents"].keys())
+                if not available_providers:
+                    _LOGGER.error("No AI agents available")
+                    return {"error": "No AI agents configured"}
+                provider = available_providers[0]
+                _LOGGER.debug(f"Using fallback provider: {provider}")
+            
+            agent = hass.data[DOMAIN]["agents"][provider]
+            user_id = call.context.user_id if call.context.user_id else "default"
+            result = await agent.load_user_prompt_history(user_id)
+            _LOGGER.debug("Load prompt history result: %s", result)
+            return result
+        except Exception as e:
+            _LOGGER.error(f"Error loading prompt history: {e}")
+            return {"error": str(e)}
 
     # Register services
     hass.services.async_register(DOMAIN, "query", async_handle_query)
