@@ -1,10 +1,10 @@
 query:
-  name: "Query AI with Home Assistant context"
-  description: "Run a custom prompt against your selected AI provider."
+  name: "Query AI Agent with Home Assistant context"
+  description: "Run a custom AI prompt against your Home Assistant state dump."
   fields:
     prompt:
       description: "The question or instruction to send to the AI model."
-      example: "Which rooms have lights on?"
+      example: "Turn on all the lights in the living room"
     provider:
       description: "The AI provider to use (openai, llama, gemini, openrouter)"
       example: "openai"

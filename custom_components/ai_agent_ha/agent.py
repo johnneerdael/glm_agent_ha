@@ -1,17 +1,19 @@
 """
 Example config:
 ai_agent_ha:
-  ai_provider: openai  # or 'llama', 'gemini', 'openrouter'
+  ai_provider: openai  # or 'llama', 'gemini', 'openrouter', 'anthropic'
   llama_token: "..."
   openai_token: "..."
   gemini_token: "..."
   openrouter_token: "..."
+  anthropic_token: "..."
   # Model configuration (optional, defaults will be used if not specified)
   models:
     openai: "gpt-3.5-turbo"  # or "gpt-4", "gpt-4-turbo", etc.
     llama: "Llama-4-Maverick-17B-128E-Instruct-FP8"
     gemini: "gemini-1.5-flash"  # or "gemini-1.5-pro", "gemini-1.0-pro", etc.
     openrouter: "openai/gpt-4o"  # or any model available on OpenRouter
+    anthropic: "claude-3-5-sonnet-20241022"  # or "claude-3-opus-20240229", etc.
 """
 """The AI Agent implementation with multiple provider support."""
 import logging
@@ -24,6 +26,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
+from homeassistant.helpers.storage import Store
 from .const import DOMAIN, CONF_WEATHER_ENTITY
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,6 +75,11 @@ class OpenAIClient(BaseAIClient):
     
     async def get_response(self, messages, **kwargs):
         _LOGGER.debug("Making request to OpenAI API with model: %s", self.model)
+        
+        # Validate token
+        if not self.token or not self.token.startswith("sk-"):
+            raise Exception("Invalid OpenAI API key format")
+            
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
@@ -83,18 +91,37 @@ class OpenAIClient(BaseAIClient):
             "temperature": 0.7,
             "top_p": 0.9
         }
+        
+        _LOGGER.debug("OpenAI request payload: %s", json.dumps(payload, indent=2))
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=300)) as resp:
+                response_text = await resp.text()
+                _LOGGER.debug("OpenAI API response status: %d", resp.status)
+                _LOGGER.debug("OpenAI API response: %s", response_text[:500])
+                
                 if resp.status != 200:
-                    error_text = await resp.text()
-                    _LOGGER.error("OpenAI API error %d: %s", resp.status, error_text)
-                    raise Exception(f"OpenAI API error {resp.status}")
-                data = await resp.json()
+                    _LOGGER.error("OpenAI API error %d: %s", resp.status, response_text)
+                    raise Exception(f"OpenAI API error {resp.status}: {response_text}")
+                    
+                try:
+                    data = json.loads(response_text)
+                except json.JSONDecodeError as e:
+                    _LOGGER.error("Failed to parse OpenAI response as JSON: %s", str(e))
+                    raise Exception(f"Invalid JSON response from OpenAI: {response_text[:200]}")
+                
                 # Extract text from OpenAI response
                 choices = data.get('choices', [])
                 if choices and 'message' in choices[0]:
-                    return choices[0]['message'].get('content', str(data))
-                return str(data)
+                    content = choices[0]['message'].get('content', '')
+                    if not content:
+                        _LOGGER.warning("OpenAI returned empty content in message")
+                        _LOGGER.debug("Full OpenAI response: %s", json.dumps(data, indent=2))
+                    return content
+                else:
+                    _LOGGER.warning("OpenAI response missing expected structure")
+                    _LOGGER.debug("Full OpenAI response: %s", json.dumps(data, indent=2))
+                    return str(data)
 
 class GeminiClient(BaseAIClient):
     def __init__(self, token, model="gemini-1.5-flash"):
@@ -104,6 +131,11 @@ class GeminiClient(BaseAIClient):
     
     async def get_response(self, messages, **kwargs):
         _LOGGER.debug("Making request to Gemini API with model: %s", self.model)
+        
+        # Validate token
+        if not self.token:
+            raise Exception("Missing Gemini API key")
+        
         headers = {
             "Content-Type": "application/json"
         }
@@ -150,19 +182,103 @@ class GeminiClient(BaseAIClient):
         # Add API key as query parameter
         url_with_key = f"{self.api_url}?key={self.token}"
         
+        _LOGGER.debug("Gemini request payload: %s", json.dumps(payload, indent=2))
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(url_with_key, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=300)) as resp:
+                response_text = await resp.text()
+                _LOGGER.debug("Gemini API response status: %d", resp.status)
+                _LOGGER.debug("Gemini API response: %s", response_text[:500])
+                
                 if resp.status != 200:
-                    error_text = await resp.text()
-                    _LOGGER.error("Gemini API error %d: %s", resp.status, error_text)
-                    raise Exception(f"Gemini API error {resp.status}")
-                data = await resp.json()
+                    _LOGGER.error("Gemini API error %d: %s", resp.status, response_text)
+                    raise Exception(f"Gemini API error {resp.status}: {response_text}")
+                    
+                try:
+                    data = json.loads(response_text)
+                except json.JSONDecodeError as e:
+                    _LOGGER.error("Failed to parse Gemini response as JSON: %s", str(e))
+                    raise Exception(f"Invalid JSON response from Gemini: {response_text[:200]}")
+                
                 # Extract text from Gemini response
                 candidates = data.get('candidates', [])
                 if candidates and 'content' in candidates[0]:
                     parts = candidates[0]['content'].get('parts', [])
                     if parts:
-                        return parts[0].get('text', str(data))
+                        content = parts[0].get('text', '')
+                        if not content:
+                            _LOGGER.warning("Gemini returned empty text content")
+                            _LOGGER.debug("Full Gemini response: %s", json.dumps(data, indent=2))
+                        return content
+                    else:
+                        _LOGGER.warning("Gemini response missing parts")
+                        _LOGGER.debug("Full Gemini response: %s", json.dumps(data, indent=2))
+                else:
+                    _LOGGER.warning("Gemini response missing expected structure")
+                    _LOGGER.debug("Full Gemini response: %s", json.dumps(data, indent=2))
+                return str(data)
+
+class AnthropicClient(BaseAIClient):
+    def __init__(self, token, model="claude-3-5-sonnet-20241022"):
+        self.token = token
+        self.model = model
+        self.api_url = "https://api.anthropic.com/v1/messages"
+    
+    async def get_response(self, messages, **kwargs):
+        _LOGGER.debug("Making request to Anthropic API with model: %s", self.model)
+        headers = {
+            "x-api-key": self.token,
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01"
+        }
+        
+        # Convert OpenAI-style messages to Anthropic format
+        system_message = None
+        anthropic_messages = []
+        
+        for message in messages:
+            role = message.get("role", "user")
+            content = message.get("content", "")
+            
+            if role == "system":
+                # Anthropic uses a separate system parameter
+                system_message = content
+            elif role == "user":
+                anthropic_messages.append({
+                    "role": "user",
+                    "content": content
+                })
+            elif role == "assistant":
+                anthropic_messages.append({
+                    "role": "assistant", 
+                    "content": content
+                })
+        
+        payload = {
+            "model": self.model,
+            "max_tokens": 2048,
+            "temperature": 0.7,
+            "messages": anthropic_messages
+        }
+        
+        # Add system message if present
+        if system_message:
+            payload["system"] = system_message
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    _LOGGER.error("Anthropic API error %d: %s", resp.status, error_text)
+                    raise Exception(f"Anthropic API error {resp.status}")
+                data = await resp.json()
+                # Extract text from Anthropic response
+                content_blocks = data.get('content', [])
+                if content_blocks and isinstance(content_blocks, list):
+                    # Get the text from the first content block
+                    for block in content_blocks:
+                        if block.get('type') == 'text':
+                            return block.get('text', str(data))
                 return str(data)
 
 class OpenRouterClient(BaseAIClient):
@@ -265,7 +381,7 @@ class AiAgentHaAgent:
         self._request_count = 0
         self._request_window_start = time.time()
         
-        provider = config.get("ai_provider", "llama")
+        provider = config.get("ai_provider", "openai")
         models_config = config.get("models", {})
         
         _LOGGER.debug("Initializing AiAgentHaAgent with provider: %s", provider)
@@ -280,7 +396,10 @@ class AiAgentHaAgent:
         elif provider == "openrouter":
             model = models_config.get("openrouter", "openai/gpt-4o")
             self.ai_client = OpenRouterClient(config.get("openrouter_token"), model)
-        else:  # default to llama
+        elif provider == "anthropic":
+            model = models_config.get("anthropic", "claude-3-5-sonnet-20241022")
+            self.ai_client = AnthropicClient(config.get("anthropic_token"), model)
+        else:  # default to llama if somehow specified
             model = models_config.get("llama", "Llama-4-Maverick-17B-128E-Instruct-FP8")
             self.ai_client = LlamaClient(config.get("llama_token"), model)
         
@@ -288,7 +407,7 @@ class AiAgentHaAgent:
 
     def _validate_api_key(self) -> bool:
         """Validate the API key format."""
-        provider = self.config.get("ai_provider", "llama")
+        provider = self.config.get("ai_provider", "openai")
         
         if provider == "openai":
             token = self.config.get("openai_token")
@@ -296,6 +415,8 @@ class AiAgentHaAgent:
             token = self.config.get("gemini_token")
         elif provider == "openrouter":
             token = self.config.get("openrouter_token")
+        elif provider == "anthropic":
+            token = self.config.get("anthropic_token")
         else:
             token = self.config.get("llama_token")
         
@@ -701,7 +822,7 @@ class AiAgentHaAgent:
             sanitized_config = self._sanitize_automation_config(automation_config)
             
             # Generate a unique ID for the automation
-            automation_id = f"llama_auto_{int(time.time() * 1000)}"
+            automation_id = f"ai_agent_auto_{int(time.time() * 1000)}"
             
             # Create the automation entry
             automation_entry = {
@@ -1052,10 +1173,30 @@ class AiAgentHaAgent:
         # Ensure system prompt is always the first message
         if not recent_messages or recent_messages[0].get("role") != "system":
             recent_messages = [self.SYSTEM_PROMPT] + recent_messages
+            
+        _LOGGER.debug("Sending %d messages to AI provider", len(recent_messages))
+        _LOGGER.debug("AI provider: %s", self.config.get("ai_provider", "unknown"))
+        
         while retry_count < self._max_retries:
             try:
-                return await self.ai_client.get_response(recent_messages)
+                _LOGGER.debug("Attempt %d/%d: Calling AI client", retry_count + 1, self._max_retries)
+                response = await self.ai_client.get_response(recent_messages)
+                _LOGGER.debug("AI client returned response of length: %d", len(response or ""))
+                _LOGGER.debug("AI response preview: %s", (response or "")[:200])
+                
+                # Check if response is empty
+                if not response or response.strip() == "":
+                    _LOGGER.warning("AI client returned empty response on attempt %d", retry_count + 1)
+                    if retry_count + 1 >= self._max_retries:
+                        raise Exception("AI provider returned empty response after all retries")
+                    else:
+                        retry_count += 1
+                        await asyncio.sleep(self._retry_delay * retry_count)
+                        continue
+                        
+                return response
             except Exception as e:
+                _LOGGER.error("AI client error on attempt %d: %s", retry_count + 1, str(e))
                 last_error = e
                 retry_count += 1
                 if retry_count < self._max_retries:
@@ -1143,4 +1284,25 @@ class AiAgentHaAgent:
             _LOGGER.exception("Error setting entity state: %s", str(e))
             return {
                 "error": f"Error setting entity state: {str(e)}"
-            } 
+            }
+
+    async def save_user_prompt_history(self, user_id: str, history: List[str]) -> Dict[str, Any]:
+        """Save user's prompt history to HA storage."""
+        try:
+            store = Store(self.hass, 1, f"ai_agent_ha_history_{user_id}")
+            await store.async_save({"history": history})
+            return {"success": True}
+        except Exception as e:
+            _LOGGER.exception("Error saving prompt history: %s", str(e))
+            return {"error": f"Error saving prompt history: {str(e)}"}
+
+    async def load_user_prompt_history(self, user_id: str) -> Dict[str, Any]:
+        """Load user's prompt history from HA storage."""
+        try:
+            store = Store(self.hass, 1, f"ai_agent_ha_history_{user_id}")
+            data = await store.async_load()
+            history = data.get("history", []) if data else []
+            return {"success": True, "history": history}
+        except Exception as e:
+            _LOGGER.exception("Error loading prompt history: %s", str(e))
+            return {"error": f"Error loading prompt history: {str(e)}", "history": []}

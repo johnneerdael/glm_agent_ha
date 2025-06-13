@@ -23,6 +23,10 @@ class AiAgentHaPanel extends LitElement {
       _isLoading: { type: Boolean, reflect: false, attribute: false },
       _error: { type: String, reflect: false, attribute: false },
       _pendingAutomation: { type: Object, reflect: false, attribute: false },
+      _promptHistory: { type: Array, reflect: false, attribute: false },
+      _showPredefinedPrompts: { type: Boolean, reflect: false, attribute: false },
+      _showPromptHistory: { type: Boolean, reflect: false, attribute: false },
+      _selectedPrompts: { type: Array, reflect: false, attribute: false },
       _selectedProvider: { type: String, reflect: false, attribute: false },
       _availableProviders: { type: Array, reflect: false, attribute: false },
       _showProviderDropdown: { type: Boolean, reflect: false, attribute: false }
@@ -102,27 +106,129 @@ class AiAgentHaPanel extends LitElement {
         padding: 0;
         display: flex;
         flex-direction: column;
-        flex-grow: 1;
+        height: 100%;
       }
       .messages {
         overflow-y: auto;
         border: 1px solid var(--divider-color);
         border-radius: 12px;
-        margin-bottom: 24px;
-        padding: 0;
+        margin-bottom: 16px;
+        padding: 16px;
         background: var(--primary-background-color);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        flex-grow: 1;
         width: 100%;
       }
+      .prompts-section {
+        margin-bottom: 12px;
+        padding: 12px 16px;
+        background: var(--secondary-background-color);
+        border-radius: 16px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+        border: 1px solid var(--divider-color);
+      }
+      .prompts-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--secondary-text-color);
+      }
+      .prompts-toggle {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+        color: var(--primary-color);
+        font-size: 12px;
+        font-weight: 500;
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition: background-color 0.2s ease;
+      }
+      .prompts-toggle:hover {
+        background: var(--primary-color);
+        color: var(--text-primary-color);
+      }
+      .prompts-toggle ha-icon {
+        --mdc-icon-size: 14px;
+      }
+      .prompt-bubbles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .prompt-bubble {
+        background: var(--primary-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 20px;
+        padding: 6px 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 12px;
+        line-height: 1.3;
+        color: var(--primary-text-color);
+        white-space: nowrap;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .prompt-bubble:hover {
+        border-color: var(--primary-color);
+        background: var(--primary-color);
+        color: var(--text-primary-color);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .prompt-bubble:active {
+        transform: translateY(0);
+      }
+      .history-bubble {
+        background: var(--primary-background-color);
+        border: 1px solid var(--accent-color);
+        border-radius: 20px;
+        padding: 6px 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 12px;
+        line-height: 1.3;
+        color: var(--accent-color);
+        white-space: nowrap;
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .history-bubble:hover {
+        background: var(--accent-color);
+        color: var(--text-primary-color);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .history-delete {
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        color: var(--error-color);
+        cursor: pointer;
+        --mdc-icon-size: 14px;
+      }
+      .history-bubble:hover .history-delete {
+        opacity: 1;
+        color: var(--text-primary-color);
+      }
       .message {
-        margin-bottom: 16px;
+        margin-bottom: 20px;
         padding: 12px 16px;
         border-radius: 12px;
-        max-width: 80%;
+        max-width: 85%;
         line-height: 1.5;
         animation: fadeIn 0.3s ease-out;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        word-wrap: break-word;
       }
       .user-message {
         background: var(--primary-color);
@@ -158,6 +264,7 @@ class AiAgentHaPanel extends LitElement {
       .input-wrapper {
         flex-grow: 1;
         position: relative;
+        border: 1px solid var(--divider-color);
       }
       textarea {
         width: 100%;
@@ -305,31 +412,58 @@ class AiAgentHaPanel extends LitElement {
       }
       .automation-suggestion {
         background: var(--secondary-background-color);
-        border: 1px solid var(--divider-color);
+        border: 2px solid var(--primary-color);
         border-radius: 12px;
         padding: 16px;
-        margin: 8px 0;
+        margin: 16px 0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        position: relative;
+        z-index: 10;
       }
       .automation-title {
-        font-weight: 500;
+        font-weight: 600;
         margin-bottom: 8px;
+        color: var(--primary-color);
+        font-size: 16px;
       }
       .automation-description {
         margin-bottom: 16px;
         color: var(--secondary-text-color);
+        line-height: 1.4;
       }
       .automation-actions {
         display: flex;
-        gap: 8px;
+        gap: 12px;
+        margin-top: 16px;
+        justify-content: flex-end;
+      }
+      .automation-actions ha-button {
+        --mdc-button-height: 40px;
+        --mdc-button-padding: 0 20px;
+        --mdc-typography-button-font-size: 14px;
+        --mdc-typography-button-font-weight: 600;
+        border-radius: 20px;
+      }
+      .automation-actions ha-button:first-child {
+        --mdc-theme-primary: var(--success-color, #4caf50);
+        --mdc-theme-on-primary: #fff;
+      }
+      .automation-actions ha-button:last-child {
+        --mdc-theme-primary: var(--error-color);
+        --mdc-theme-on-primary: #fff;
       }
       .automation-details {
-        margin-top: 8px;
-        padding: 8px;
+        margin-top: 12px;
+        padding: 12px;
         background: var(--primary-background-color);
         border-radius: 8px;
         font-family: monospace;
+        font-size: 12px;
         white-space: pre-wrap;
         overflow-x: auto;
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid var(--divider-color);
       }
       .no-providers {
         color: var(--error-color);
@@ -345,11 +479,243 @@ class AiAgentHaPanel extends LitElement {
     this._isLoading = false;
     this._error = null;
     this._pendingAutomation = null;
+    this._promptHistory = [];
+    this._promptHistoryLoaded = false;
+    this._showPredefinedPrompts = true;
+    this._showPromptHistory = true;
+    this._predefinedPrompts = [
+      "Build a new automation to turn off all lights at 10:00 PM every day",
+      "What's the current temperature inside and outside?",
+      "Turn on all the lights in the living room",
+      "Show me today's weather forecast",
+      "What devices are currently on?",
+      "Show me the energy usage for today",
+      "Are all the doors and windows locked?",
+      "Turn on movie mode in the living room",
+      "What's the status of my security system?",
+      "Show me who's currently home",
+      "Turn off all devices when I leave home"
+    ];
+    this._selectedPrompts = this._getRandomPrompts();
     this._selectedProvider = null;
     this._availableProviders = [];
     this._showProviderDropdown = false;
     this.providersLoaded = false;
     console.debug("AI Agent HA Panel constructor called");
+  }
+
+  _getRandomPrompts() {
+    // Shuffle array and take first 3 items
+    const shuffled = [...this._predefinedPrompts].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, 3);
+  }
+
+  async connectedCallback() {
+    super.connectedCallback();
+    console.debug("AI Agent HA Panel connected");
+    if (this.hass) {
+      this.hass.connection.subscribeEvents(
+        (event) => this._handleAiResponse(event),
+        'ai_agent_ha_response'
+      );
+      // Load prompt history from Home Assistant storage
+      await this._loadPromptHistory();
+    }
+  }
+
+  updated(changedProps) {
+    console.debug("Updated called with:", changedProps);
+
+    if (changedProps.has('_messages') || changedProps.has('_isLoading')) {
+      this._scrollToBottom();
+    }
+
+    // Load prompt history when hass becomes available
+    if (changedProps.has('hass') && this.hass && !this._promptHistoryLoaded) {
+      this._promptHistoryLoaded = true;
+      this._loadPromptHistory();
+    }
+  }
+
+  _renderPromptsSection() {
+    return html`
+      <div class="prompts-section">
+        <div class="prompts-header">
+          <span>Quick Actions</span>
+          <div style="display: flex; gap: 12px;">
+            <div class="prompts-toggle" @click=${() => this._togglePredefinedPrompts()}>
+              <ha-icon icon="${this._showPredefinedPrompts ? 'mdi:chevron-up' : 'mdi:chevron-down'}"></ha-icon>
+              <span>Suggestions</span>
+            </div>
+            ${this._promptHistory.length > 0 ? html`
+              <div class="prompts-toggle" @click=${() => this._togglePromptHistory()}>
+                <ha-icon icon="${this._showPromptHistory ? 'mdi:chevron-up' : 'mdi:chevron-down'}"></ha-icon>
+                <span>Recent</span>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+        
+        ${this._showPredefinedPrompts ? html`
+          <div class="prompt-bubbles">
+            ${this._selectedPrompts.map(prompt => html`
+              <div class="prompt-bubble" @click=${() => this._usePrompt(prompt)}>
+                ${prompt}
+              </div>
+            `)}
+          </div>
+        ` : ''}
+        
+        ${this._showPromptHistory && this._promptHistory.length > 0 ? html`
+          <div class="prompt-bubbles">
+            ${this._promptHistory.slice(-3).reverse().map((prompt, index) => html`
+              <div class="history-bubble" @click=${(e) => this._useHistoryPrompt(e, prompt)}>
+                <span style="flex-grow: 1; overflow: hidden; text-overflow: ellipsis;">${prompt}</span>
+                <ha-icon 
+                  class="history-delete" 
+                  icon="mdi:close" 
+                  @click=${(e) => this._deleteHistoryItem(e, prompt)}
+                ></ha-icon>
+              </div>
+            `)}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  _togglePredefinedPrompts() {
+    this._showPredefinedPrompts = !this._showPredefinedPrompts;
+    // Refresh random selection when toggling on
+    if (this._showPredefinedPrompts) {
+      this._selectedPrompts = this._getRandomPrompts();
+    }
+  }
+
+  _togglePromptHistory() {
+    this._showPromptHistory = !this._showPromptHistory;
+  }
+
+  _usePrompt(prompt) {
+    if (this._isLoading) return;
+    const promptEl = this.shadowRoot.querySelector('#prompt');
+    if (promptEl) {
+      promptEl.value = prompt;
+      promptEl.focus();
+    }
+  }
+
+  _useHistoryPrompt(event, prompt) {
+    event.stopPropagation();
+    if (this._isLoading) return;
+    const promptEl = this.shadowRoot.querySelector('#prompt');
+    if (promptEl) {
+      promptEl.value = prompt;
+      promptEl.focus();
+    }
+  }
+
+  async _deleteHistoryItem(event, prompt) {
+    event.stopPropagation();
+    this._promptHistory = this._promptHistory.filter(p => p !== prompt);
+    await this._savePromptHistory();
+    this.requestUpdate();
+  }
+
+  async _addToHistory(prompt) {
+    if (!prompt || prompt.trim().length === 0) return;
+    
+    // Remove duplicates and add to front
+    this._promptHistory = this._promptHistory.filter(p => p !== prompt);
+    this._promptHistory.push(prompt);
+    
+    // Keep only last 20 prompts
+    if (this._promptHistory.length > 20) {
+      this._promptHistory = this._promptHistory.slice(-20);
+    }
+    
+    await this._savePromptHistory();
+    this.requestUpdate();
+  }
+
+  async _loadPromptHistory() {
+    if (!this.hass) {
+      console.debug('Hass not available, skipping prompt history load');
+      return;
+    }
+    
+    console.debug('Loading prompt history...');
+    try {
+      const result = await this.hass.callService('ai_agent_ha', 'load_prompt_history', {});
+      console.debug('Prompt history service result:', result);
+      
+      if (result && result.response && result.response.history) {
+        this._promptHistory = result.response.history;
+        console.debug('Loaded prompt history from service:', this._promptHistory);
+        this.requestUpdate();
+      } else if (result && result.history) {
+        this._promptHistory = result.history;
+        console.debug('Loaded prompt history from service (direct):', this._promptHistory);
+        this.requestUpdate();
+      } else {
+        console.debug('No prompt history returned from service, checking localStorage');
+        // Fallback to localStorage if service returns no data
+        this._loadFromLocalStorage();
+      }
+    } catch (error) {
+      console.error('Error loading prompt history from service:', error);
+      // Fallback to localStorage if service fails
+      this._loadFromLocalStorage();
+    }
+  }
+
+  _loadFromLocalStorage() {
+    try {
+      const saved = localStorage.getItem('ai_agent_ha_prompt_history');
+      if (saved) {
+        this._promptHistory = JSON.parse(saved);
+        console.debug('Loaded prompt history from localStorage:', this._promptHistory);
+        this.requestUpdate();
+      } else {
+        console.debug('No prompt history in localStorage');
+        this._promptHistory = [];
+      }
+    } catch (e) {
+      console.error('Error loading from localStorage:', e);
+      this._promptHistory = [];
+    }
+  }
+
+  async _savePromptHistory() {
+    if (!this.hass) {
+      console.debug('Hass not available, saving to localStorage only');
+      this._saveToLocalStorage();
+      return;
+    }
+
+    console.debug('Saving prompt history:', this._promptHistory);
+    try {
+      const result = await this.hass.callService('ai_agent_ha', 'save_prompt_history', {
+        history: this._promptHistory
+      });
+      console.debug('Save prompt history result:', result);
+      
+      // Also save to localStorage as backup
+      this._saveToLocalStorage();
+    } catch (error) {
+      console.error('Error saving prompt history to service:', error);
+      // Fallback to localStorage if service fails
+      this._saveToLocalStorage();
+    }
+  }
+
+  _saveToLocalStorage() {
+    try {
+      localStorage.setItem('ai_agent_ha_prompt_history', JSON.stringify(this._promptHistory));
+      console.debug('Saved prompt history to localStorage');
+    } catch (e) {
+      console.error('Error saving to localStorage:', e);
+    }
   }
 
   render() {
@@ -358,6 +724,7 @@ class AiAgentHaPanel extends LitElement {
       isLoading: this._isLoading,
       error: this._error
     });
+    console.debug("Messages array:", this._messages);
 
     return html`
       <div class="header">
@@ -413,6 +780,7 @@ class AiAgentHaPanel extends LitElement {
               <div class="error">${this._error}</div>
             ` : ''}
           </div>
+          ${this._renderPromptsSection()}
           <div class="input-container">
             <div class="input-main">
               <div class="input-wrapper">
@@ -506,10 +874,6 @@ class AiAgentHaPanel extends LitElement {
       this.requestUpdate();
     }
 
-    if (changedProps.has('_messages') || changedProps.has('_isLoading')) {
-      this._scrollToBottom();
-    }
-  }
 
   _scrollToBottom() {
     const messages = this.shadowRoot.querySelector('#messages');
@@ -556,6 +920,9 @@ class AiAgentHaPanel extends LitElement {
     console.debug("Sending message:", prompt);
     console.debug("Sending message with provider:", this._selectedProvider);
 
+    // Add to history
+    await this._addToHistory(prompt);
+
     // Add user message
     this._messages = [...this._messages, { type: 'user', text: prompt }];
     promptEl.value = '';
@@ -598,6 +965,16 @@ class AiAgentHaPanel extends LitElement {
     console.debug("Received llama response:", event);
     this._isLoading = false;
     if (event.data.success) {
+      // Check if the answer is empty
+      if (!event.data.answer || event.data.answer.trim() === '') {
+        console.warn("AI agent returned empty response");
+        this._messages = [
+          ...this._messages,
+          { type: 'assistant', text: 'I received your message but I\'m not sure how to respond. Could you please try rephrasing your question?' }
+        ];
+        return;
+      }
+
       let message = { type: 'assistant', text: event.data.answer };
 
       // Check if the response contains an automation suggestion
@@ -605,15 +982,25 @@ class AiAgentHaPanel extends LitElement {
         const response = JSON.parse(event.data.answer);
         if (response.request_type === 'automation_suggestion') {
           message.automation = response.automation;
+          message.text = response.message || 'I found an automation that might help you. Would you like me to create it?';
         } else if (response.request_type === 'final_response') {
           // If it's a final response, use the response field
+          message.text = response.response || response.message || event.data.answer;
+        } else if (response.message) {
+          // If there's a message field, use it
+          message.text = response.message;
+        } else if (response.response) {
+          // If there's a response field, use it
           message.text = response.response;
         }
+        // If none of the above, keep the original event.data.answer as message.text
       } catch (e) {
         // Not a JSON response, treat as normal message
         console.debug("Response is not JSON, using as-is:", event.data.answer);
+        // message.text is already set to event.data.answer
       }
-
+      
+      console.debug("Adding message to UI:", message);
       this._messages = [...this._messages, message];
     } else {
       this._error = event.data.error || 'An error occurred';
@@ -666,12 +1053,15 @@ class AiAgentHaPanel extends LitElement {
 
   shouldUpdate(changedProps) {
     // Only update if internal state changes, not on every hass update
-    return changedProps.has('_messages')
-        || changedProps.has('_isLoading')
-        || changedProps.has('_error')
-        || changedProps.has('_availableProviders')
-        || changedProps.has('_selectedProvider')
-        || changedProps.has('_showProviderDropdown');
+    return changedProps.has('_messages') || 
+           changedProps.has('_isLoading') || 
+           changedProps.has('_error') ||
+           changedProps.has('_promptHistory') ||
+           changedProps.has('_showPredefinedPrompts') ||
+           changedProps.has('_showPromptHistory') ||
+           changedProps.has('_availableProviders') ||
+           changedProps.has('_selectedProvider') ||
+           changedProps.has('_showProviderDropdown');
   }
 
   _clearChat() {
@@ -679,6 +1069,15 @@ class AiAgentHaPanel extends LitElement {
     this._isLoading = false;
     this._error = null;
     this._pendingAutomation = null;
+    // Don't clear prompt history - users might want to keep it
+  }
+
+  _getProviderInfo(providerId) {
+    return this._availableProviders.find(p => p.value === providerId);
+  }
+
+  _hasProviders() {
+    return this._availableProviders && this._availableProviders.length > 0;
   }
 
   _getProviderInfo(providerId) {

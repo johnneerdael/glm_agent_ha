@@ -18,6 +18,9 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+# Config schema - this integration only supports config entries
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
 # Define service schema to accept a custom prompt
 SERVICE_SCHEMA = vol.Schema({
     vol.Optional('prompt'): cv.string,
@@ -72,9 +75,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         result = await agent.create_automation(call.data.get("automation", {}))
         return result
 
+    async def async_handle_save_prompt_history(call):
+        """Handle the save_prompt_history service call."""
+        agent = hass.data[DOMAIN]["agent"]
+        user_id = call.context.user_id if call.context.user_id else "default"
+        result = await agent.save_user_prompt_history(
+            user_id, 
+            call.data.get("history", [])
+        )
+        return result
+
+    async def async_handle_load_prompt_history(call):
+        """Handle the load_prompt_history service call."""
+        agent = hass.data[DOMAIN]["agent"]
+        user_id = call.context.user_id if call.context.user_id else "default"
+        result = await agent.load_user_prompt_history(user_id)
+        _LOGGER.debug("Load prompt history result: %s", result)
+        return result
+
     # Register services
     hass.services.async_register(DOMAIN, "query", async_handle_query)
     hass.services.async_register(DOMAIN, "create_automation", async_handle_create_automation)
+    hass.services.async_register(DOMAIN, "save_prompt_history", async_handle_save_prompt_history)
+    hass.services.async_register(DOMAIN, "load_prompt_history", async_handle_load_prompt_history)
 
     # Register static path for frontend
     await hass.http.async_register_static_paths([
@@ -127,11 +150,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Remove services
     hass.services.async_remove(DOMAIN, "query")
     hass.services.async_remove(DOMAIN, "create_automation")
-    
+    hass.services.async_remove(DOMAIN, "save_prompt_history")
+    hass.services.async_remove(DOMAIN, "load_prompt_history")
     # Remove data
     if DOMAIN in hass.data:
         hass.data.pop(DOMAIN)
-    
+
     return True
 
 async def _panel_exists(hass: HomeAssistant, panel_name: str) -> bool:

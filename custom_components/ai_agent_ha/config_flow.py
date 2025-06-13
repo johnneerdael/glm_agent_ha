@@ -24,6 +24,7 @@ PROVIDERS = {
     "openai": "OpenAI",
     "gemini": "Google Gemini",
     "openrouter": "OpenRouter",
+    "anthropic": "Anthropic (Claude)",
 }
 
 TOKEN_FIELD_NAMES = {
@@ -31,6 +32,7 @@ TOKEN_FIELD_NAMES = {
     "openai": "openai_token",
     "gemini": "gemini_token",
     "openrouter": "openrouter_token",
+    "anthropic": "anthropic_token",
 }
 
 TOKEN_LABELS = {
@@ -38,6 +40,7 @@ TOKEN_LABELS = {
     "openai": "OpenAI API Key",
     "gemini": "Google Gemini API Key",
     "openrouter": "OpenRouter API Key",
+    "anthropic": "Anthropic API Key",
 }
 
 DEFAULT_MODELS = {
@@ -45,6 +48,7 @@ DEFAULT_MODELS = {
     "openai": "gpt-3.5-turbo",
     "gemini": "gemini-1.5-flash",
     "openrouter": "openai/gpt-4o",
+    "anthropic": "claude-3-5-sonnet-20241022",
 }
 
 AVAILABLE_MODELS = {
@@ -75,6 +79,13 @@ AVAILABLE_MODELS = {
         "google/gemini-pro",
         "mistralai/mixtral-8x7b-instruct",
         "deepseek/deepseek-r1",
+    ],
+    "anthropic": [
+        "claude-3-5-sonnet-20241022",
+        "claude-3-5-haiku-20241022",
+        "claude-3-opus-20240229",
+        "claude-3-sonnet-20240229",
+        "claude-3-haiku-20240307",
     ],
     "llama": [
         "Llama-4-Maverick-17B-128E-Instruct-FP8",

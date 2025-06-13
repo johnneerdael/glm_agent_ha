@@ -1,6 +1,11 @@
 {
     "domain": "ai_agent_ha",
     "name": "AI Agent HA",
+    "after_dependencies": [
+        "history",
+        "logbook", 
+        "recorder"
+    ],
     "codeowners": [
         "@sbenodiz"
     ],
