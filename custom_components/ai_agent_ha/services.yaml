@@ -5,3 +5,14 @@ query:
     prompt:
       description: "The question or instruction to send to the AI model."
       example: "Turn on all the lights in the living room"
+    provider:
+      description: "The AI provider to use (openai, llama, gemini, openrouter)"
+      example: "openai"
+      default: "openai"
+      selector:
+        select:
+          options:
+            - "openai"
+            - "llama"
+            - "gemini"
+            - "openrouter"

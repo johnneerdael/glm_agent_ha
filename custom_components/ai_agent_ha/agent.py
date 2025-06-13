@@ -55,8 +55,11 @@ class LlamaClient(BaseAIClient):
             "temperature": 0.7,
             "top_p": 0.9
         }
+
+        _LOGGER.debug("Llama request payload: %s", json.dumps(payload, indent=2))
+
         async with aiohttp.ClientSession() as session:
-            async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=300)) as resp:
                 if resp.status != 200:
                     error_text = await resp.text()
                     _LOGGER.error("Llama API error %d: %s", resp.status, error_text)
@@ -95,7 +98,7 @@ class OpenAIClient(BaseAIClient):
         _LOGGER.debug("OpenAI request payload: %s", json.dumps(payload, indent=2))
         
         async with aiohttp.ClientSession() as session:
-            async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=300)) as resp:
                 response_text = await resp.text()
                 _LOGGER.debug("OpenAI API response status: %d", resp.status)
                 _LOGGER.debug("OpenAI API response: %s", response_text[:500])
@@ -185,7 +188,7 @@ class GeminiClient(BaseAIClient):
         _LOGGER.debug("Gemini request payload: %s", json.dumps(payload, indent=2))
         
         async with aiohttp.ClientSession() as session:
-            async with session.post(url_with_key, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            async with session.post(url_with_key, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=300)) as resp:
                 response_text = await resp.text()
                 _LOGGER.debug("Gemini API response status: %d", resp.status)
                 _LOGGER.debug("Gemini API response: %s", response_text[:500])
@@ -265,6 +268,8 @@ class AnthropicClient(BaseAIClient):
         if system_message:
             payload["system"] = system_message
         
+        _LOGGER.debug("Anthropic request payload: %s", json.dumps(payload, indent=2))
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                 if resp.status != 200:
@@ -302,8 +307,11 @@ class OpenRouterClient(BaseAIClient):
             "temperature": 0.7,
             "top_p": 0.9
         }
+
+        _LOGGER.debug("OpenRouter request payload: %s", json.dumps(payload, indent=2))
+
         async with aiohttp.ClientSession() as session:
-            async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            async with session.post(self.api_url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=300)) as resp:
                 if resp.status != 200:
                     error_text = await resp.text()
                     _LOGGER.error("OpenRouter API error %d: %s", resp.status, error_text)
@@ -311,6 +319,10 @@ class OpenRouterClient(BaseAIClient):
                 data = await resp.json()
                 # Extract text from OpenRouter response (OpenAI-compatible format)
                 choices = data.get('choices', [])
+                if not choices:
+                    _LOGGER.warning("OpenRouter response missing choices")
+                    _LOGGER.debug("Full OpenRouter response: %s", json.dumps(data, indent=2))
+                    return str(data)
                 if choices and 'message' in choices[0]:
                     return choices[0]['message'].get('content', str(data))
                 return str(data)
@@ -691,11 +703,13 @@ class AiAgentHaAgent:
             if not self.hass.data.get(recorder.DATA_INSTANCE):
                 return {"error": "Recorder component is not available"}
                 
-            from homeassistant.components.recorder.statistics import get_latest_short_term_statistics
-            
+            # from homeassistant.components.recorder.statistics import get_latest_short_term_statistics
+            import homeassistant.components.recorder.statistics as stats_module
+
             # Get latest statistics
             stats = await self.hass.async_add_executor_job(
-                get_latest_short_term_statistics,
+                # get_latest_short_term_statistics,
+                stats_module.get_last_short_term_statistics,
                 self.hass, 1, entity_id, True, set()
             )
             
@@ -873,13 +887,89 @@ class AiAgentHaAgent:
                 "error": f"Error creating automation: {str(e)}"
             }
 
-    async def process_query(self, user_query: str) -> Dict[str, Any]:
+    async def process_query(self, user_query: str, provider: str = None) -> Dict[str, Any]:
         """Process a user query with input validation and rate limiting."""
         try:
             if not user_query or not isinstance(user_query, str):
+                return {"success": False, "error": "Invalid query format"}
+
+            # Get the correct configuration for the requested provider
+            if provider and provider in self.hass.data[DOMAIN]["configs"]:
+                config = self.hass.data[DOMAIN]["configs"][provider]
+            else:
+                config = self.config
+
+            _LOGGER.debug(f"Processing query with provider: {provider}")
+            _LOGGER.debug(f"Using config: {json.dumps(config, default=str)}")
+
+            selected_provider = provider or config.get("ai_provider", "llama")
+            models_config = config.get("models", {})
+
+            provider_config = {
+                "openai": {
+                    "token_key": "openai_token",
+                    "model": models_config.get("openai", "gpt-3.5-turbo"),
+                    "client_class": OpenAIClient
+                },
+                "gemini": {
+                    "token_key": "gemini_token",
+                    "model": models_config.get("gemini", "gemini-1.5-flash"),
+                    "client_class": GeminiClient
+                },
+                "openrouter": {
+                    "token_key": "openrouter_token",
+                    "model": models_config.get("openrouter", "openai/gpt-4o"),
+                    "client_class": OpenRouterClient
+                },
+                "llama": {
+                    "token_key": "llama_token",
+                    "model": models_config.get("llama", "Llama-4-Maverick-17B-128E-Instruct-FP8"),
+                    "client_class": LlamaClient
+                },
+                "anthropic": {
+                    "token_key": "anthropic_token",
+                    "model": models_config.get("anthropic", "claude-3-5-sonnet-20241022"),
+                    "client_class": AnthropicClient
+                },
+            }
+
+            # Validate provider and get configuration
+            if selected_provider not in provider_config:
+                _LOGGER.warning(f"Invalid provider {selected_provider}, falling back to llama")
+                selected_provider = "llama"
+
+            provider_settings = provider_config[selected_provider]
+            token = self.config.get(provider_settings["token_key"])
+
+            # Validate token
+            if not token:
+                error_msg = f"No token configured for provider {selected_provider}"
+                _LOGGER.error(error_msg)
                 return {
                     "success": False,
-                    "error": "Invalid query format"
+                    "error": error_msg
+                }
+
+            # Initialize client
+            try:
+                self.ai_client = provider_settings["client_class"](
+                    token=token,
+                    model=provider_settings["model"]
+                )
+                _LOGGER.debug(f"Initialized {selected_provider} client with model {provider_settings['model']}")
+            except Exception as e:
+                error_msg = f"Error initializing {selected_provider} client: {str(e)}"
+                _LOGGER.error(error_msg)
+                return {
+                    "success": False,
+                    "error": error_msg
+                }
+
+            # Process the query with rate limiting and retries
+            if not self._check_rate_limit():
+                return {
+                    "success": False,
+                    "error": "Rate limit exceeded. Please wait before trying again."
                 }
 
             # Sanitize user input
@@ -1081,7 +1171,7 @@ class AiAgentHaAgent:
             }
             self._set_cached_data(cache_key, result)
             return result
-            
+
         except Exception as e:
             _LOGGER.exception("Error in process_query: %s", str(e))
             return {
