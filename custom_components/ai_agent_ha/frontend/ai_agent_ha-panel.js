@@ -518,25 +518,92 @@ class AiAgentHaPanel extends LitElement {
     console.debug("AI Agent HA Panel connected");
     if (this.hass) {
       this.hass.connection.subscribeEvents(
-        (event) => this._handleAiResponse(event),
+        (event) => this._handleLlamaResponse(event),
         'ai_agent_ha_response'
       );
       // Load prompt history from Home Assistant storage
       await this._loadPromptHistory();
     }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!this.shadowRoot.querySelector('.provider-selector')?.contains(e.target)) {
+        this._showProviderDropdown = false;
+      }
+    });
   }
 
-  updated(changedProps) {
+  async updated(changedProps) {
     console.debug("Updated called with:", changedProps);
+
+    // Load providers when hass becomes available
+    if (changedProps.has('hass') && this.hass && !this.providersLoaded) {
+      this.providersLoaded = true;
+
+      try {
+        // Uses the WebSocket API to get all entries with their complete data
+        const allEntries = await this.hass.callWS({ type: 'config_entries/get' });
+
+        const aiAgentEntries = allEntries.filter(
+          entry => entry.domain === 'ai_agent_ha'
+        );
+
+        if (aiAgentEntries.length > 0) {
+          // More robust approach: extract provider from entry data or use title mapping as fallback
+          this._availableProviders = aiAgentEntries.map(entry => {
+            let provider = "unknown";
+            
+            // First try to get provider from entry data
+            if (entry.data && entry.data.ai_provider) {
+              provider = entry.data.ai_provider;
+            } else {
+              // Fallback to title mapping
+              const titleToProviderMap = {
+                "AI Agent HA (OpenRouter)": "openrouter",
+                "AI Agent HA (Google Gemini)": "gemini",
+                "AI Agent HA (OpenAI)": "openai",
+                "AI Agent HA (Llama)": "llama",
+                "AI Agent HA (Anthropic (Claude))": "anthropic",
+              };
+              provider = titleToProviderMap[entry.title] || "unknown";
+            }
+            
+            return {
+              value: provider,
+              label: PROVIDERS[provider] || provider
+            };
+          });
+
+          console.debug("Available AI providers (mapped from data/title):", this._availableProviders);
+
+          if (!this._selectedProvider && this._availableProviders.length > 0) {
+            this._selectedProvider = this._availableProviders[0].value;
+          }
+        } else {
+          console.debug("No 'ai_agent_ha' config entries found via WebSocket.");
+          this._availableProviders = [];
+        }
+      } catch (error) {
+        console.error("Error fetching config entries via WebSocket:", error);
+        this._error = error.message || 'Failed to load AI provider configurations.';
+        this._availableProviders = [];
+      }
+      this.requestUpdate();
+    }
+
+    // Load prompt history when hass becomes available and we haven't loaded it yet
+    if (changedProps.has('hass') && this.hass && !this._promptHistoryLoaded) {
+      this._promptHistoryLoaded = true;
+      await this._loadPromptHistory();
+    }
+
+    // Load prompt history when provider changes
+    if (changedProps.has('_selectedProvider') && this._selectedProvider && this.hass) {
+      await this._loadPromptHistory();
+    }
 
     if (changedProps.has('_messages') || changedProps.has('_isLoading')) {
       this._scrollToBottom();
-    }
-
-    // Load prompt history when hass becomes available
-    if (changedProps.has('hass') && this.hass && !this._promptHistoryLoaded) {
-      this._promptHistoryLoaded = true;
-      this._loadPromptHistory();
     }
   }
 
@@ -841,67 +908,6 @@ class AiAgentHaPanel extends LitElement {
     `;
   }
 
-  async updated(changedProps) {
-    console.debug("Updated called with:", changedProps);
-    if (changedProps.has('hass') && this.hass && !this.providersLoaded) {
-      this.providersLoaded = true;
-
-      try {
-        // Uses the WebSocket API to get all entries with their complete data
-        const allEntries = await this.hass.callWS({ type: 'config_entries/get' });
-
-        const aiAgentEntries = allEntries.filter(
-          entry => entry.domain === 'ai_agent_ha'
-        );
-
-        if (aiAgentEntries.length > 0) {
-          // More robust approach: extract provider from entry data or use title mapping as fallback
-          this._availableProviders = aiAgentEntries.map(entry => {
-            let provider = "unknown";
-            
-            // First try to get provider from entry data
-            if (entry.data && entry.data.ai_provider) {
-              provider = entry.data.ai_provider;
-            } else {
-              // Fallback to title mapping
-              const titleToProviderMap = {
-                "AI Agent HA (OpenRouter)": "openrouter",
-                "AI Agent HA (Google Gemini)": "gemini",
-                "AI Agent HA (OpenAI)": "openai",
-                "AI Agent HA (Llama)": "llama",
-                "AI Agent HA (Anthropic (Claude))": "anthropic",
-              };
-              provider = titleToProviderMap[entry.title] || "unknown";
-            }
-            
-            return {
-              value: provider,
-              label: PROVIDERS[provider] || provider
-            };
-          });
-
-          console.debug("Available AI providers (mapped from data/title):", this._availableProviders);
-
-          if (!this._selectedProvider && this._availableProviders.length > 0) {
-            this._selectedProvider = this._availableProviders[0].value;
-          }
-        } else {
-          console.debug("No 'ai_agent_ha' config entries found via WebSocket.");
-          this._availableProviders = [];
-        }
-      } catch (error) {
-        console.error("Error fetching config entries via WebSocket:", error);
-        this._error = error.message || 'Failed to load AI provider configurations.';
-        this._availableProviders = [];
-      }
-      this.requestUpdate();
-    }
-
-    if (changedProps.has('_messages') || changedProps.has('_isLoading')) {
-      this._scrollToBottom();
-    }
-  }
-
   _scrollToBottom() {
     const messages = this.shadowRoot.querySelector('#messages');
     if (messages) {
@@ -969,24 +975,6 @@ class AiAgentHaPanel extends LitElement {
       this._error = error.message || 'An error occurred while processing your request';
       this._isLoading = false;
     }
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    console.debug("AI Agent HA Panel connected");
-    if (this.hass) {
-      this.hass.connection.subscribeEvents(
-        (event) => this._handleLlamaResponse(event),
-        'ai_agent_ha_response'
-      );
-    }
-
-    // Cerrar dropdown al hacer clic fuera
-    document.addEventListener('click', (e) => {
-      if (!this.shadowRoot.querySelector('.provider-selector')?.contains(e.target)) {
-        this._showProviderDropdown = false;
-      }
-    });
   }
 
   _handleLlamaResponse(event) {
@@ -1098,14 +1086,6 @@ class AiAgentHaPanel extends LitElement {
     this._error = null;
     this._pendingAutomation = null;
     // Don't clear prompt history - users might want to keep it
-  }
-
-  _getProviderInfo(providerId) {
-    return this._availableProviders.find(p => p.value === providerId);
-  }
-
-  _hasProviders() {
-    return this._availableProviders && this._availableProviders.length > 0;
   }
 
   _getProviderInfo(providerId) {
