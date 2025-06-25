@@ -89,6 +89,16 @@ class OpenAIClient(BaseAIClient):
             return "max_completion_tokens"
         return "max_tokens"
     
+    def _is_restricted_model(self):
+        """Check if the model has restricted parameters (no temperature, top_p, etc.)."""
+        # Models that don't support temperature, top_p and other parameters
+        restricted_models = [
+            "o3-mini", "o3", "o1-mini", "o1-preview", "o1"
+        ]
+        
+        model_lower = self.model.lower()
+        return any(model_id in model_lower for model_id in restricted_models)
+    
     async def get_response(self, messages, **kwargs):
         _LOGGER.debug("Making request to OpenAI API with model: %s", self.model)
         
@@ -103,15 +113,23 @@ class OpenAIClient(BaseAIClient):
         
         # Determine which token parameter to use
         token_param = self._get_token_parameter()
-        _LOGGER.debug("Using token parameter '%s' for model: %s", token_param, self.model)
+        is_restricted = self._is_restricted_model()
+        _LOGGER.debug("Using token parameter '%s' for model: %s (restricted: %s)", 
+                     token_param, self.model, is_restricted)
         
+        # Build payload with model-appropriate parameters
         payload = {
             "model": self.model,
             "messages": messages,
-            token_param: 2048,
-            "temperature": 0.7,
-            "top_p": 0.9
+            token_param: 2048
         }
+        
+        # Only add temperature and top_p for models that support them
+        if not is_restricted:
+            payload.update({
+                "temperature": 0.7,
+                "top_p": 0.9
+            })
         
         _LOGGER.debug("OpenAI request payload: %s", json.dumps(payload, indent=2))
         
