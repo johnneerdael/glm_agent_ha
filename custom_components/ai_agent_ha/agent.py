@@ -397,6 +397,7 @@ class AiAgentHaAgent:
         models_config = config.get("models", {})
         
         _LOGGER.debug("Initializing AiAgentHaAgent with provider: %s", provider)
+        _LOGGER.debug("Models config loaded: %s", models_config)
         
         # Initialize the appropriate AI client with model selection
         if provider == "openai":

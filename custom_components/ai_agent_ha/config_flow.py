@@ -151,16 +151,21 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 selected_model = user_input.get("model")
                 custom_model = user_input.get("custom_model")
                 
-                if custom_model:
-                    # Use custom model if provided
-                    self.config_data["models"] = {
-                        provider: custom_model
-                    }
+                _LOGGER.debug(f"Config flow - Provider: {provider}, Selected model: {selected_model}, Custom model: {custom_model}")
+                
+                # Initialize models dict if it doesn't exist
+                if "models" not in self.config_data:
+                    self.config_data["models"] = {}
+                
+                if custom_model and custom_model.strip():
+                    # Use custom model if provided and not empty
+                    self.config_data["models"][provider] = custom_model.strip()
                 elif selected_model and selected_model != "Custom...":
                     # Use selected model if it's not the "Custom..." option
-                    self.config_data["models"] = {
-                        provider: selected_model
-                    }
+                    self.config_data["models"][provider] = selected_model
+                else:
+                    # Fallback to default model if no valid selection
+                    self.config_data["models"][provider] = default_model
                 
                 return self.async_create_entry(
                     title=f"AI Agent HA ({PROVIDERS[provider]})",
@@ -273,16 +278,22 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
                     selected_model = user_input.get("model")
                     custom_model = user_input.get("custom_model")
                     
-                    if custom_model:
-                        # Use custom model if provided
-                        if "models" not in updated_data:
-                            updated_data["models"] = {}
-                        updated_data["models"][provider] = custom_model
+                    # Initialize models dict if it doesn't exist
+                    if "models" not in updated_data:
+                        updated_data["models"] = {}
+                    
+                    if custom_model and custom_model.strip():
+                        # Use custom model if provided and not empty
+                        updated_data["models"][provider] = custom_model.strip()
                     elif selected_model and selected_model != "Custom...":
                         # Use selected model if it's not the "Custom..." option
-                        if "models" not in updated_data:
-                            updated_data["models"] = {}
                         updated_data["models"][provider] = selected_model
+                    else:
+                        # Ensure we keep the current model or use default
+                        if provider not in updated_data["models"]:
+                            updated_data["models"][provider] = DEFAULT_MODELS[provider]
+                    
+                    _LOGGER.debug(f"Options flow - Final model config for {provider}: {updated_data['models'].get(provider)}")
                     
                     # Update the config entry
                     self.hass.config_entries.async_update_entry(
