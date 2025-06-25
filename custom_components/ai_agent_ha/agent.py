@@ -386,6 +386,7 @@ class AiAgentHaAgent:
             "- get_statistics(entity_id): Get sensor statistics\n"
             "- get_scenes(): Get scene configurations\n"
             "- set_entity_state(entity_id, state, attributes?): Set state of an entity (e.g., turn on/off lights, open/close covers)\n"
+            "- call_service(domain, service, target?, service_data?): Call any Home Assistant service directly\n"
             "- create_automation(automation): Create a new automation with the provided configuration\n\n"
             "You can also create automations when users ask for them. When you detect that a user wants to create an automation. make sure to request first entities so you know the entities ids to trigger on. pay attention that if you want to set specfic days in the autoamtion you should use those days: ['fri', 'mon', 'sat', 'sun', 'thu', 'tue', 'wed'] \n"
             "respond with a JSON object in this format:\n"
@@ -399,11 +400,19 @@ class AiAgentHaAgent:
             "    \"action\": [...]     // Array of actions to perform\n"
             "  }\n"
             "}\n\n"
-            "For all other responses, use this exact JSON format:\n"
+            "For data requests, use this exact JSON format:\n"
             "{\n"
             "  \"request_type\": \"data_request\",\n"
             "  \"request\": \"command_name\",\n"
             "  \"parameters\": {...}\n"
+            "}\n\n"
+            "For service calls, use this exact JSON format:\n"
+            "{\n"
+            "  \"request_type\": \"call_service\",\n"
+            "  \"domain\": \"light\",\n"
+            "  \"service\": \"turn_on\",\n"
+            "  \"target\": {\"entity_id\": [\"entity1\", \"entity2\"]},\n"
+            "  \"service_data\": {\"brightness\": 255}\n"
             "}\n\n"
             "When you have all the data you need, respond with this exact JSON format:\n"
             "{\n"
@@ -1176,6 +1185,56 @@ class AiAgentHaAgent:
                             }
                             self._set_cached_data(cache_key, result)
                             return result
+                        elif response_data.get("request_type") == "call_service":
+                            # Handle service call request
+                            domain = response_data.get("domain")
+                            service = response_data.get("service")
+                            target = response_data.get("target", {})
+                            service_data = response_data.get("service_data", {})
+                            
+                            # Handle backward compatibility with old format
+                            if not domain or not service:
+                                request = response_data.get("request")
+                                parameters = response_data.get("parameters", {})
+                                
+                                if request and "entity_id" in parameters:
+                                    entity_id = parameters["entity_id"]
+                                    # Infer domain from entity_id
+                                    if "." in entity_id:
+                                        domain = entity_id.split(".")[0]
+                                        service = request
+                                        target = {"entity_id": entity_id}
+                                        # Remove entity_id from parameters to avoid duplication
+                                        service_data = {k: v for k, v in parameters.items() if k != "entity_id"}
+                                        _LOGGER.debug("Converted old format: domain=%s, service=%s", domain, service)
+                            
+                            _LOGGER.debug("Processing service call: %s.%s with target: %s and data: %s", 
+                                        domain, service, json.dumps(target), json.dumps(service_data))
+                            
+                            # Add AI's response to conversation history
+                            self.conversation_history.append({
+                                "role": "assistant",
+                                "content": json.dumps(response_data)  # Store clean JSON
+                            })
+                            
+                            # Call the service
+                            data = await self.call_service(domain, service, target, service_data)
+                            
+                            # Check if service call resulted in an error
+                            if isinstance(data, dict) and "error" in data:
+                                return {
+                                    "success": False,
+                                    "error": data["error"]
+                                }
+                            
+                            _LOGGER.debug("Service call completed: %s", json.dumps(data, default=str))
+                            
+                            # Add data to conversation as a system message
+                            self.conversation_history.append({
+                                "role": "system",
+                                "content": json.dumps({"data": data}, default=str)
+                            })
+                            continue
                         else:
                             _LOGGER.warning("Unknown response type: %s", response_data.get("request_type"))
                             return {
@@ -1338,6 +1397,63 @@ class AiAgentHaAgent:
             _LOGGER.exception("Error setting entity state: %s", str(e))
             return {
                 "error": f"Error setting entity state: {str(e)}"
+            }
+
+    async def call_service(self, domain: str, service: str, target: Dict[str, Any] = None, service_data: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Call a Home Assistant service."""
+        try:
+            _LOGGER.debug("Calling service %s.%s with target: %s and data: %s", 
+                        domain, service, json.dumps(target or {}), json.dumps(service_data or {}))
+            
+            # Prepare the service call data
+            call_data = {}
+            
+            # Add target entities if provided
+            if target:
+                if "entity_id" in target:
+                    entity_ids = target["entity_id"]
+                    if isinstance(entity_ids, list):
+                        call_data["entity_id"] = entity_ids
+                    else:
+                        call_data["entity_id"] = [entity_ids]
+                
+                # Add other target properties
+                for key, value in target.items():
+                    if key != "entity_id":
+                        call_data[key] = value
+            
+            # Add service data if provided
+            if service_data:
+                call_data.update(service_data)
+            
+            _LOGGER.debug("Final service call data: %s", json.dumps(call_data))
+            
+            # Call the service
+            await self.hass.services.async_call(domain, service, call_data)
+            
+            # Get the updated states of affected entities
+            result_entities = []
+            if "entity_id" in call_data:
+                for entity_id in call_data["entity_id"]:
+                    state = self.hass.states.get(entity_id)
+                    if state:
+                        result_entities.append({
+                            "entity_id": entity_id,
+                            "state": state.state,
+                            "attributes": dict(state.attributes)
+                        })
+            
+            return {
+                "success": True,
+                "service": f"{domain}.{service}",
+                "entities_affected": result_entities,
+                "message": f"Successfully called {domain}.{service}"
+            }
+            
+        except Exception as e:
+            _LOGGER.exception("Error calling service %s.%s: %s", domain, service, str(e))
+            return {
+                "error": f"Error calling service {domain}.{service}: {str(e)}"
             }
 
     async def save_user_prompt_history(self, user_id: str, history: List[str]) -> Dict[str, Any]:
