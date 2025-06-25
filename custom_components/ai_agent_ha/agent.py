@@ -76,6 +76,19 @@ class OpenAIClient(BaseAIClient):
         self.model = model
         self.api_url = "https://api.openai.com/v1/chat/completions"
     
+    def _get_token_parameter(self):
+        """Determine which token parameter to use based on the model."""
+        # Models that require max_completion_tokens instead of max_tokens
+        completion_token_models = [
+            "o3-mini", "o3", "o1-mini", "o1-preview", "o1"
+        ]
+        
+        # Check if the model name contains any of the newer model identifiers
+        model_lower = self.model.lower()
+        if any(model_id in model_lower for model_id in completion_token_models):
+            return "max_completion_tokens"
+        return "max_tokens"
+    
     async def get_response(self, messages, **kwargs):
         _LOGGER.debug("Making request to OpenAI API with model: %s", self.model)
         
@@ -87,10 +100,15 @@ class OpenAIClient(BaseAIClient):
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
         }
+        
+        # Determine which token parameter to use
+        token_param = self._get_token_parameter()
+        _LOGGER.debug("Using token parameter '%s' for model: %s", token_param, self.model)
+        
         payload = {
             "model": self.model,
             "messages": messages,
-            "max_tokens": 2048,
+            token_param: 2048,
             "temperature": 0.7,
             "top_p": 0.9
         }
