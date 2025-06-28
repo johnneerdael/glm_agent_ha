@@ -30,6 +30,7 @@ AI Agent HA now supports creating and managing Home Assistant dashboards through
 3. **Smart Organization**: Entities are organized by room, functionality, or domain
 4. **Dashboard Generation**: Complete dashboard with proper cards and layout is created
 5. **Integration**: Dashboard is automatically added to your Home Assistant sidebar
+6. **Restart Required**: You'll need to restart Home Assistant to see the new dashboard in your sidebar
 
 ### Dashboard Creation Examples
 
