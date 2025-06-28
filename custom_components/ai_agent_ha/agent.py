@@ -1628,16 +1628,58 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                         # First, try to extract JSON from response if it contains extra text
                         response_clean = response.strip()
                         
-                        # Look for JSON patterns (starting with { and ending with })
-                        json_start = response_clean.find('{')
-                        json_end = response_clean.rfind('}')
+                        # Try multiple strategies to extract valid JSON
+                        response_data = None
+                        parsing_strategies = []
                         
-                        if json_start != -1 and json_end != -1 and json_end > json_start:
-                            json_part = response_clean[json_start:json_end + 1]
-                            response_data = json.loads(json_part)
-                        else:
-                            # If no clear JSON pattern, try to parse the whole response
+                        # Strategy 1: Parse the whole response
+                        try:
                             response_data = json.loads(response_clean)
+                            parsing_strategies.append("whole_response")
+                        except json.JSONDecodeError:
+                            pass
+                        
+                        # Strategy 2: Extract JSON by finding balanced braces
+                        if response_data is None:
+                            json_start = response_clean.find('{')
+                            if json_start != -1:
+                                brace_count = 0
+                                json_end = -1
+                                for i, char in enumerate(response_clean[json_start:], json_start):
+                                    if char == '{':
+                                        brace_count += 1
+                                    elif char == '}':
+                                        brace_count -= 1
+                                        if brace_count == 0:
+                                            json_end = i
+                                            break
+                                
+                                if json_end != -1:
+                                    json_part = response_clean[json_start:json_end + 1]
+                                    try:
+                                        response_data = json.loads(json_part)
+                                        parsing_strategies.append("balanced_braces")
+                                    except json.JSONDecodeError:
+                                        pass
+                        
+                        # Strategy 3: Try to extract JSON using regex
+                        if response_data is None:
+                            import re
+                            json_pattern = r'\{.*\}'
+                            match = re.search(json_pattern, response_clean, re.DOTALL)
+                            if match:
+                                json_part = match.group(0)
+                                try:
+                                    response_data = json.loads(json_part)
+                                    parsing_strategies.append("regex_extraction")
+                                except json.JSONDecodeError:
+                                    pass
+                        
+                        # If all strategies failed, raise the original error
+                        if response_data is None:
+                            raise json.JSONDecodeError("Failed to extract valid JSON from response", response_clean, 0)
+                        
+                        _LOGGER.debug("Successfully parsed JSON using strategy: %s", parsing_strategies[-1])
                             
                         _LOGGER.debug("Parsed response data: %s", json.dumps(response_data))
                         
@@ -1877,7 +1919,32 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                             }
                             
                     except json.JSONDecodeError as e:
-                        _LOGGER.warning("Failed to parse response as JSON: %s. Response: %s", str(e), response[:200])
+                        # Log more of the response to help with debugging
+                        response_preview = response[:1000] if len(response) > 1000 else response
+                        _LOGGER.warning("Failed to parse response as JSON: %s. Response length: %d. Response preview: %s", 
+                                      str(e), len(response), response_preview)
+                        
+                        # Also log the response to a separate debug file for detailed analysis
+                        try:
+                            import os
+                            debug_dir = "/config/ai_agent_ha_debug"
+                            if not os.path.exists(debug_dir):
+                                os.makedirs(debug_dir)
+                            
+                            import datetime
+                            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                            debug_file = os.path.join(debug_dir, f"failed_response_{timestamp}.txt")
+                            
+                            with open(debug_file, 'w', encoding='utf-8') as f:
+                                f.write(f"Timestamp: {timestamp}\n")
+                                f.write(f"Error: {str(e)}\n")
+                                f.write(f"Response length: {len(response)}\n")
+                                f.write(f"Full response:\n{response}\n")
+                            
+                            _LOGGER.info("Failed response saved to debug file: %s", debug_file)
+                        except Exception as debug_error:
+                            _LOGGER.debug("Could not save debug file: %s", str(debug_error))
+                        
                         # If response is not valid JSON, return it as final response
                         result = {
                             "success": True,
