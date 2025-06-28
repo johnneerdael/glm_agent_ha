@@ -44,7 +44,7 @@ The AI will find all living room light entities and create a dashboard with appr
 ```
 "Create a security dashboard with all door sensors, cameras, and alarm controls"
 ```
-The AI will create a comprehensive security monitoring dashboard with sensor states, camera feeds, and alarm controls.
+The AI will create a comprehensive security monitoring dashboard with sensor states, camera feeds, and alarm controls. After creation, restart Home Assistant to see the new dashboard in your sidebar.
 
 #### Energy Monitoring Dashboard
 ```
@@ -211,6 +211,7 @@ The AI can create custom dashboards through conversation:
 2. AI discovers relevant entities and asks clarifying questions
 3. Dashboard is generated with appropriate cards and layout
 4. Dashboard is automatically added to your Home Assistant sidebar
+5. Restart Home Assistant to see the new dashboard
 
 ### Data Access
 The AI can access comprehensive Home Assistant data:
