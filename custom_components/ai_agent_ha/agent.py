@@ -374,6 +374,9 @@ class AiAgentHaAgent:
             "You can request specific data by using only these commands:\n"
             "- get_entity_state(entity_id): Get state of a specific entity\n"
             "- get_entities_by_domain(domain): Get all entities in a domain\n"
+            "- get_entities_by_area(area_id): Get all entities in a specific area\n"
+            "- get_entities(area_id or area_ids): Get entities by area(s) - supports single area_id or list of area_ids\n"
+            "  Use as: get_entities(area_ids=['area1', 'area2']) for multiple areas or get_entities(area_id='single_area')\n"
             "- get_calendar_events(entity_id?): Get calendar events\n"
             "- get_automations(): Get all automations\n"
             "- get_weather_data(): Get current weather and forecast data\n"
@@ -385,13 +388,32 @@ class AiAgentHaAgent:
             "- get_person_data(): Get person tracking information\n"
             "- get_statistics(entity_id): Get sensor statistics\n"
             "- get_scenes(): Get scene configurations\n"
+            "- get_dashboards(): Get list of all dashboards\n"
+            "- get_dashboard_config(dashboard_url): Get configuration of a specific dashboard\n"
             "- set_entity_state(entity_id, state, attributes?): Set state of an entity (e.g., turn on/off lights, open/close covers)\n"
             "- call_service(domain, service, target?, service_data?): Call any Home Assistant service directly\n"
-            "- create_automation(automation): Create a new automation with the provided configuration\n\n"
+            "- create_automation(automation): Create a new automation with the provided configuration\n"
+            "- create_dashboard(dashboard_config): Create a new dashboard with the provided configuration\n"
+            "- update_dashboard(dashboard_url, dashboard_config): Update an existing dashboard configuration\n\n"
+            "You can also create dashboards when users ask for them. When creating dashboards:\n"
+            "1. First gather information about available entities, areas, and devices\n"
+            "2. Ask follow-up questions if the user's requirements are unclear\n"
+            "3. Create a dashboard configuration with appropriate cards and views\n"
+            "4. Use common card types like: entities, glance, picture-entity, weather-forecast, thermostat, media-control, etc.\n"
+            "5. Organize cards logically by rooms, device types, or functionality\n"
+            "6. Include relevant entities based on the user's request\n\n"
+            "IMPORTANT AREA/FLOOR GUIDANCE:\n"
+            "- When users ask for entities from a specific floor, use get_area_registry() first\n"
+            "- Areas have both 'area_id' and 'floor_id' - these are different concepts\n"
+            "- Filter areas by their floor_id to find all areas on a specific floor\n"
+            "- Use get_entities() with area_ids parameter to get entities from multiple areas efficiently\n"
+            "- Example: get_entities(area_ids=['area1', 'area2', 'area3']) for multiple areas at once\n"
+            "- This is more efficient than calling get_entities_by_area() multiple times\n\n"
             "You can also create automations when users ask for them. When you detect that a user wants to create an automation. make sure to request first entities so you know the entities ids to trigger on. pay attention that if you want to set specfic days in the autoamtion you should use those days: ['fri', 'mon', 'sat', 'sun', 'thu', 'tue', 'wed'] \n"
             "respond with a JSON object in this format:\n"
             "{\n"
             "  \"request_type\": \"automation_suggestion\",\n"
+            "  \"message\": \"I've created an automation that might help you. Would you like me to create it?\",\n"
             "  \"automation\": {\n"
             "    \"alias\": \"Name of the automation\",\n"
             "    \"description\": \"Description of what the automation does\",\n"
@@ -400,12 +422,29 @@ class AiAgentHaAgent:
             "    \"action\": [...]     // Array of actions to perform\n"
             "  }\n"
             "}\n\n"
+            "For dashboard creation requests, use this exact JSON format:\n"
+            "{\n"
+            "  \"request_type\": \"dashboard_suggestion\",\n"
+            "  \"message\": \"I've created a dashboard configuration for you. Would you like me to create it?\",\n"
+            "  \"dashboard\": {\n"
+            "    \"title\": \"Dashboard Title\",\n"
+            "    \"url_path\": \"dashboard-url-path\",\n"
+            "    \"icon\": \"mdi:icon-name\",\n"
+            "    \"show_in_sidebar\": true,\n"
+            "    \"views\": [{\n"
+            "      \"title\": \"View Title\",\n"
+            "      \"cards\": [...] // Array of card configurations\n"
+            "    }]\n"
+            "  }\n"
+            "}\n\n"
             "For data requests, use this exact JSON format:\n"
             "{\n"
             "  \"request_type\": \"data_request\",\n"
             "  \"request\": \"command_name\",\n"
             "  \"parameters\": {...}\n"
-            "}\n\n"
+            "}\n"
+            "For get_entities with multiple areas: {\"request_type\": \"get_entities\", \"parameters\": {\"area_ids\": [\"area1\", \"area2\"]}}\n"
+            "For get_entities with single area: {\"request_type\": \"get_entities\", \"parameters\": {\"area_id\": \"single_area\"}}\n\n"
             "For service calls, use this exact JSON format:\n"
             "{\n"
             "  \"request_type\": \"call_service\",\n"
@@ -419,8 +458,16 @@ class AiAgentHaAgent:
             "  \"request_type\": \"final_response\",\n"
             "  \"response\": \"your answer to the user\"\n"
             "}\n\n"
-            "IMPORTANT: You must ALWAYS respond with a valid JSON object. Do not include any text before or after the JSON. use only the commands above.\n"
-            "DO NOT include any special characters or formatting in your response."
+            "CRITICAL FORMATTING RULES:\n"
+            "- You must ALWAYS respond with ONLY a valid JSON object\n"
+            "- DO NOT include any text before the JSON\n"
+            "- DO NOT include any text after the JSON\n"
+            "- DO NOT include explanations or descriptions outside the JSON\n"
+            "- Your entire response must be parseable as JSON\n"
+            "- Use the 'message' field inside the JSON for user-facing text\n"
+            "- NEVER mix regular text with JSON in your response\n\n"
+            "WRONG: 'I'll create this for you. {\"request_type\": ...}'\n"
+            "CORRECT: '{\"request_type\": \"dashboard_suggestion\", \"message\": \"I'll create this for you.\", ...}'"
         )
     }
 
@@ -431,7 +478,7 @@ class AiAgentHaAgent:
         self.conversation_history = []
         self._cache = {}
         self._cache_timeout = 300  # 5 minutes
-        self._max_retries = 3
+        self._max_retries = 10
         self._retry_delay = 1  # seconds
         self._rate_limit = 60  # requests per minute
         self._last_request_time = 0
@@ -560,6 +607,92 @@ class AiAgentHaAgent:
         except Exception as e:
             _LOGGER.exception("Error getting entities by domain: %s", str(e))
             return [{"error": f"Error getting entities for domain {domain}: {str(e)}"}]
+
+    async def get_entities_by_area(self, area_id: str) -> List[Dict[str, Any]]:
+        """Get all entities for a specific area."""
+        try:
+            _LOGGER.debug("Requesting all entities for area: %s", area_id)
+            
+            # Get entity registry to find entities assigned to the area
+            from homeassistant.helpers import entity_registry as er
+            from homeassistant.helpers import device_registry as dr
+            
+            entity_registry = er.async_get(self.hass)
+            device_registry = dr.async_get(self.hass)
+            
+            entities_in_area = []
+            
+            # Find entities assigned to the area (directly or through their device)
+            for entity in entity_registry.entities.values():
+                # Check if entity is directly assigned to the area
+                if entity.area_id == area_id:
+                    entities_in_area.append(entity.entity_id)
+                # Check if entity's device is assigned to the area
+                elif entity.device_id:
+                    device = device_registry.devices.get(entity.device_id)
+                    if device and device.area_id == area_id:
+                        entities_in_area.append(entity.entity_id)
+            
+            _LOGGER.debug("Found %d entities in area %s", len(entities_in_area), area_id)
+            
+            # Get state information for each entity
+            result = []
+            for entity_id in entities_in_area:
+                state_info = await self.get_entity_state(entity_id)
+                if not state_info.get("error"):  # Only include entities that exist
+                    result.append(state_info)
+            
+            return result
+            
+        except Exception as e:
+            _LOGGER.exception("Error getting entities by area: %s", str(e))
+            return [{"error": f"Error getting entities for area {area_id}: {str(e)}"}]
+
+    async def get_entities(self, area_id=None, area_ids=None) -> List[Dict[str, Any]]:
+        """Get entities by area(s) - flexible method that supports single area or multiple areas."""
+        try:
+            # Handle different parameter formats
+            areas_to_process = []
+            
+            if area_ids:
+                # Multiple areas provided
+                if isinstance(area_ids, list):
+                    areas_to_process = area_ids
+                else:
+                    areas_to_process = [area_ids]
+            elif area_id:
+                # Single area provided
+                if isinstance(area_id, list):
+                    areas_to_process = area_id
+                else:
+                    areas_to_process = [area_id]
+            else:
+                return [{"error": "No area_id or area_ids provided"}]
+            
+            _LOGGER.debug("Requesting entities for areas: %s", areas_to_process)
+            
+            all_entities = []
+            for area in areas_to_process:
+                entities_in_area = await self.get_entities_by_area(area)
+                all_entities.extend(entities_in_area)
+            
+            # Remove duplicates based on entity_id
+            seen_entities = set()
+            unique_entities = []
+            for entity in all_entities:
+                if isinstance(entity, dict) and "entity_id" in entity:
+                    if entity["entity_id"] not in seen_entities:
+                        seen_entities.add(entity["entity_id"])
+                        unique_entities.append(entity)
+                else:
+                    unique_entities.append(entity)  # Keep error messages
+            
+            _LOGGER.debug("Found %d unique entities across %d areas", len(unique_entities), len(areas_to_process))
+            return unique_entities
+            
+        except Exception as e:
+            _LOGGER.exception("Error getting entities: %s", str(e))
+            return [{"error": f"Error getting entities: {str(e)}"}]
 
     async def get_calendar_events(self, entity_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get calendar events, optionally filtered by entity_id."""
@@ -933,6 +1066,442 @@ class AiAgentHaAgent:
                 "error": f"Error creating automation: {str(e)}"
             }
 
+    async def get_dashboards(self) -> List[Dict[str, Any]]:
+        """Get list of all dashboards."""
+        try:
+            _LOGGER.debug("Requesting all dashboards")
+            
+            # Get dashboards via WebSocket API
+            ws_api = self.hass.data.get("websocket_api")
+            if not ws_api:
+                return {"error": "WebSocket API not available"}
+            
+            # Use the lovelace service to get dashboards
+            try:
+                from homeassistant.components.lovelace import DOMAIN as LOVELACE_DOMAIN
+                from homeassistant.components.lovelace import CONF_DASHBOARDS
+                
+                # Get lovelace config
+                lovelace_config = self.hass.data.get(LOVELACE_DOMAIN, {})
+                dashboards = lovelace_config.get(CONF_DASHBOARDS, {})
+                
+                dashboard_list = []
+                
+                # Add default dashboard
+                dashboard_list.append({
+                    "url_path": None,
+                    "title": "Overview",
+                    "icon": "mdi:home",
+                    "show_in_sidebar": True,
+                    "require_admin": False
+                })
+                
+                # Add custom dashboards
+                for url_path, config in dashboards.items():
+                    dashboard_list.append({
+                        "url_path": url_path,
+                        "title": config.get("title", url_path),
+                        "icon": config.get("icon", "mdi:view-dashboard"),
+                        "show_in_sidebar": config.get("show_in_sidebar", True),
+                        "require_admin": config.get("require_admin", False)
+                    })
+                
+                _LOGGER.debug("Found %d dashboards", len(dashboard_list))
+                return dashboard_list
+                
+            except Exception as e:
+                _LOGGER.warning("Could not get dashboards via lovelace: %s", str(e))
+                return [{"error": f"Could not retrieve dashboards: {str(e)}"}]
+                
+        except Exception as e:
+            _LOGGER.exception("Error getting dashboards: %s", str(e))
+            return [{"error": f"Error getting dashboards: {str(e)}"}]
+
+    async def get_dashboard_config(self, dashboard_url: Optional[str] = None) -> Dict[str, Any]:
+        """Get configuration of a specific dashboard."""
+        try:
+            _LOGGER.debug("Requesting dashboard config for: %s", dashboard_url or "default")
+            
+            # Import the websocket handler
+            from homeassistant.components.websocket_api import require_admin
+            from homeassistant.components.lovelace import websocket_api as lovelace_ws
+            
+            # Create a mock websocket connection for internal use
+            class MockConnection:
+                def __init__(self, hass):
+                    self.hass = hass
+                    self.user = None
+                    
+                def send_message(self, message):
+                    pass
+            
+            # Get dashboard configuration
+            try:
+                from homeassistant.components.lovelace import DOMAIN as LOVELACE_DOMAIN
+                from homeassistant.components.lovelace.dashboard import LovelaceDashboard
+                
+                # Get the dashboard
+                lovelace_config = self.hass.data.get(LOVELACE_DOMAIN, {})
+                
+                if dashboard_url is None:
+                    # Get default dashboard
+                    dashboard = lovelace_config.get("default_dashboard")
+                    if dashboard:
+                        config = await dashboard.async_get_info()
+                        return config
+                    else:
+                        return {"error": "Default dashboard not found"}
+                else:
+                    # Get custom dashboard
+                    dashboards = lovelace_config.get("dashboards", {})
+                    if dashboard_url in dashboards:
+                        dashboard = dashboards[dashboard_url]
+                        config = await dashboard.async_get_info()
+                        return config
+                    else:
+                        return {"error": f"Dashboard '{dashboard_url}' not found"}
+                
+            except Exception as e:
+                _LOGGER.warning("Could not get dashboard config: %s", str(e))
+                return {"error": f"Could not retrieve dashboard config: {str(e)}"}
+                
+        except Exception as e:
+            _LOGGER.exception("Error getting dashboard config: %s", str(e))
+            return {"error": f"Error getting dashboard config: {str(e)}"}
+
+    async def create_dashboard(self, dashboard_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new dashboard using Home Assistant's Lovelace WebSocket API."""
+        try:
+            _LOGGER.debug("Creating dashboard with config: %s", json.dumps(dashboard_config, default=str))
+            
+            # Validate required fields
+            if not dashboard_config.get("title"):
+                return {"error": "Dashboard title is required"}
+            
+            if not dashboard_config.get("url_path"):
+                return {"error": "Dashboard URL path is required"}
+            
+            # Sanitize the URL path
+            url_path = dashboard_config["url_path"].lower().replace(" ", "-").replace("_", "-")
+            
+            # Prepare dashboard configuration for Lovelace
+            dashboard_data = {
+                "title": dashboard_config["title"],
+                "icon": dashboard_config.get("icon", "mdi:view-dashboard"),
+                "show_in_sidebar": dashboard_config.get("show_in_sidebar", True),
+                "require_admin": dashboard_config.get("require_admin", False),
+                "views": dashboard_config.get("views", [])
+            }
+            
+            try:
+                # Create dashboard file directly - this is the most reliable method
+                import os
+                import yaml
+                
+                # Create the dashboard YAML file
+                lovelace_config_file = self.hass.config.path(f"ui-lovelace-{url_path}.yaml")
+                
+                # Use async_add_executor_job to perform file I/O asynchronously
+                def write_dashboard_file():
+                    with open(lovelace_config_file, 'w') as f:
+                        yaml.dump(dashboard_data, f, default_flow_style=False, allow_unicode=True)
+                
+                await self.hass.async_add_executor_job(write_dashboard_file)
+                
+                _LOGGER.info("Successfully created dashboard file: %s", lovelace_config_file)
+                
+                # Now update configuration.yaml
+                try:
+                    config_file = self.hass.config.path('configuration.yaml')
+                    dashboard_config_entry = {
+                        url_path: {
+                            'mode': 'yaml',
+                            'title': dashboard_config['title'],
+                            'icon': dashboard_config.get('icon', 'mdi:view-dashboard'),
+                            'show_in_sidebar': dashboard_config.get('show_in_sidebar', True),
+                            'filename': f'ui-lovelace-{url_path}.yaml'
+                        }
+                    }
+                    
+                    def update_config_file():
+                        try:
+                            with open(config_file, 'r') as f:
+                                content = f.read()
+                            
+                            # Dashboard configuration to add
+                            dashboard_yaml = f"""    {url_path}:
+      mode: yaml
+      title: {dashboard_config['title']}
+      icon: {dashboard_config.get('icon', 'mdi:view-dashboard')}
+      show_in_sidebar: {str(dashboard_config.get('show_in_sidebar', True)).lower()}
+      filename: ui-lovelace-{url_path}.yaml"""
+                            
+                            # Check if lovelace section exists
+                            if 'lovelace:' not in content:
+                                # Add complete lovelace section at the end
+                                lovelace_section = f"""
+# Lovelace dashboards configuration added by AI Agent
+lovelace:
+  dashboards:
+{dashboard_yaml}
+"""
+                                with open(config_file, 'a') as f:
+                                    f.write(lovelace_section)
+                                return True
+                            
+                            # If lovelace exists, check for dashboards section
+                            lines = content.split('\n')
+                            new_lines = []
+                            dashboard_added = False
+                            in_lovelace = False
+                            lovelace_indent = 0
+                            
+                            for i, line in enumerate(lines):
+                                new_lines.append(line)
+                                
+                                # Detect lovelace section
+                                if line.strip() == 'lovelace:' or line.strip().startswith('lovelace:'):
+                                    in_lovelace = True
+                                    lovelace_indent = len(line) - len(line.lstrip())
+                                    continue
+                                
+                                # If we're in lovelace section
+                                if in_lovelace:
+                                    current_indent = len(line) - len(line.lstrip()) if line.strip() else 0
+                                    
+                                    # If we hit another top-level section, we're out of lovelace
+                                    if line.strip() and current_indent <= lovelace_indent and not line.startswith(' '):
+                                        if line.strip() != 'lovelace:':
+                                            in_lovelace = False
+                                    
+                                    # Look for dashboards section
+                                    if in_lovelace and 'dashboards:' in line:
+                                        # Add our dashboard after the dashboards: line
+                                        new_lines.append(dashboard_yaml)
+                                        dashboard_added = True
+                                        in_lovelace = False  # We're done
+                                        break
+                            
+                            # If we found lovelace but no dashboards section, add it
+                            if not dashboard_added and 'lovelace:' in content:
+                                # Find lovelace section and add dashboards
+                                new_lines = []
+                                for line in lines:
+                                    new_lines.append(line)
+                                    if line.strip() == 'lovelace:' or line.strip().startswith('lovelace:'):
+                                        # Add dashboards section right after lovelace
+                                        new_lines.append('  dashboards:')
+                                        new_lines.append(dashboard_yaml)
+                                        dashboard_added = True
+                                        break
+                            
+                            if dashboard_added:
+                                with open(config_file, 'w') as f:
+                                    f.write('\n'.join(new_lines))
+                                return True
+                            else:
+                                # Last resort: append to end of file
+                                with open(config_file, 'a') as f:
+                                    f.write(f'\n  dashboards:\n{dashboard_yaml}\n')
+                                return True
+                            
+                        except Exception as e:
+                            _LOGGER.error("Failed to update configuration.yaml: %s", str(e))
+                            # Fallback to simple append method
+                            try:
+                                with open(config_file, 'r') as f:
+                                    content = f.read()
+                                
+                                # Check if lovelace section exists
+                                if 'lovelace:' not in content:
+                                    # Add lovelace section
+                                    lovelace_config = f"""
+# Lovelace dashboards
+lovelace:
+  dashboards:
+    {url_path}:
+      mode: yaml
+      title: {dashboard_config['title']}
+      icon: {dashboard_config.get('icon', 'mdi:view-dashboard')}
+      show_in_sidebar: {str(dashboard_config.get('show_in_sidebar', True)).lower()}
+      filename: ui-lovelace-{url_path}.yaml
+"""
+                                    with open(config_file, 'a') as f:
+                                        f.write(lovelace_config)
+                                else:
+                                    # Add to existing lovelace section (simple approach)
+                                    dashboard_entry = f"""    {url_path}:
+      mode: yaml
+      title: {dashboard_config['title']}
+      icon: {dashboard_config.get('icon', 'mdi:view-dashboard')}
+      show_in_sidebar: {str(dashboard_config.get('show_in_sidebar', True)).lower()}
+      filename: ui-lovelace-{url_path}.yaml
+"""
+                                    # Find the dashboards section and add to it
+                                    lines = content.split('\n')
+                                    new_lines = []
+                                    in_dashboards = False
+                                    dashboards_indented = False
+                                    
+                                    for line in lines:
+                                        new_lines.append(line)
+                                        if 'dashboards:' in line and 'lovelace' in content[:content.find(line)]:
+                                            in_dashboards = True
+                                            # Add our dashboard entry after dashboards:
+                                            new_lines.append(dashboard_entry.rstrip())
+                                            in_dashboards = False
+                                    
+                                    # If we couldn't find dashboards section, add it under lovelace
+                                    if not any('dashboards:' in line for line in lines):
+                                        for i, line in enumerate(new_lines):
+                                            if line.strip() == 'lovelace:':
+                                                new_lines.insert(i + 1, '  dashboards:')
+                                                new_lines.insert(i + 2, dashboard_entry.rstrip())
+                                                break
+                                    
+                                    with open(config_file, 'w') as f:
+                                        f.write('\n'.join(new_lines))
+                                
+                                return True
+                            except Exception as fallback_error:
+                                _LOGGER.error("Fallback config update also failed: %s", str(fallback_error))
+                                return False
+                    
+                    config_updated = await self.hass.async_add_executor_job(update_config_file)
+                    
+                    if config_updated:
+                        success_message = f"""Dashboard '{dashboard_config['title']}' created successfully!
+
+✅ Dashboard file created: ui-lovelace-{url_path}.yaml
+✅ Configuration.yaml updated automatically
+
+🔄 Please restart Home Assistant to see your new dashboard in the sidebar."""
+                        
+                        return {
+                            "success": True,
+                            "message": success_message,
+                            "url_path": url_path,
+                            "restart_required": True
+                        }
+                    else:
+                        # Config update failed, provide manual instructions
+                        config_instructions = f"""Dashboard '{dashboard_config['title']}' created successfully!
+
+✅ Dashboard file created: ui-lovelace-{url_path}.yaml
+⚠️  Could not automatically update configuration.yaml
+
+Please manually add this to your configuration.yaml:
+
+lovelace:
+  dashboards:
+    {url_path}:
+      mode: yaml
+      title: {dashboard_config['title']}
+      icon: {dashboard_config.get('icon', 'mdi:view-dashboard')}
+      show_in_sidebar: {str(dashboard_config.get('show_in_sidebar', True)).lower()}
+      filename: ui-lovelace-{url_path}.yaml
+
+Then restart Home Assistant to see your new dashboard in the sidebar."""
+                        
+                        return {
+                            "success": True,
+                            "message": config_instructions,
+                            "url_path": url_path,
+                            "restart_required": True
+                        }
+                        
+                except Exception as config_error:
+                    _LOGGER.error("Error updating configuration.yaml: %s", str(config_error))
+                    # Provide manual instructions as fallback
+                    config_instructions = f"""Dashboard '{dashboard_config['title']}' created successfully!
+
+✅ Dashboard file created: ui-lovelace-{url_path}.yaml
+⚠️  Could not automatically update configuration.yaml
+
+Please manually add this to your configuration.yaml:
+
+lovelace:
+  dashboards:
+    {url_path}:
+      mode: yaml
+      title: {dashboard_config['title']}
+      icon: {dashboard_config.get('icon', 'mdi:view-dashboard')}
+      show_in_sidebar: {str(dashboard_config.get('show_in_sidebar', True)).lower()}
+      filename: ui-lovelace-{url_path}.yaml
+
+Then restart Home Assistant to see your new dashboard in the sidebar."""
+                    
+                    return {
+                        "success": True,
+                        "message": config_instructions,
+                        "url_path": url_path,
+                        "restart_required": True
+                    }
+                
+            except Exception as e:
+                _LOGGER.error("Failed to create dashboard file: %s", str(e))
+                return {"error": f"Failed to create dashboard file: {str(e)}"}
+                
+        except Exception as e:
+            _LOGGER.exception("Error creating dashboard: %s", str(e))
+            return {"error": f"Error creating dashboard: {str(e)}"}
+
+    async def update_dashboard(self, dashboard_url: str, dashboard_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Update an existing dashboard using Home Assistant's Lovelace WebSocket API."""
+        try:
+            _LOGGER.debug("Updating dashboard %s with config: %s", dashboard_url, json.dumps(dashboard_config, default=str))
+            
+            # Prepare updated dashboard configuration
+            dashboard_data = {
+                "title": dashboard_config.get("title", "Updated Dashboard"),
+                "icon": dashboard_config.get("icon", "mdi:view-dashboard"),
+                "show_in_sidebar": dashboard_config.get("show_in_sidebar", True),
+                "require_admin": dashboard_config.get("require_admin", False),
+                "views": dashboard_config.get("views", [])
+            }
+            
+            try:
+                # Update dashboard file directly
+                import yaml
+                import os
+                
+                # Try updating the YAML file
+                dashboard_file = self.hass.config.path(f"ui-lovelace-{dashboard_url}.yaml")
+                
+                # Check if file exists asynchronously
+                def check_file_exists():
+                    return os.path.exists(dashboard_file)
+                
+                file_exists = await self.hass.async_add_executor_job(check_file_exists)
+                
+                if not file_exists:
+                    dashboard_file = self.hass.config.path(f"dashboards/{dashboard_url}.yaml")
+                    file_exists = await self.hass.async_add_executor_job(lambda: os.path.exists(dashboard_file))
+                
+                if file_exists:
+                    # Use async_add_executor_job to perform file I/O asynchronously
+                    def update_dashboard_file():
+                        with open(dashboard_file, 'w') as f:
+                            yaml.dump(dashboard_data, f, default_flow_style=False, allow_unicode=True)
+                    
+                    await self.hass.async_add_executor_job(update_dashboard_file)
+                    
+                    _LOGGER.info("Successfully updated dashboard file: %s", dashboard_file)
+                    return {
+                        "success": True,
+                        "message": f"Dashboard '{dashboard_url}' updated successfully!"
+                    }
+                else:
+                    return {"error": f"Dashboard file for '{dashboard_url}' not found"}
+                
+            except Exception as e:
+                _LOGGER.error("Failed to update dashboard file: %s", str(e))
+                return {"error": f"Failed to update dashboard file: {str(e)}"}
+                
+        except Exception as e:
+            _LOGGER.exception("Error updating dashboard: %s", str(e))
+            return {"error": f"Error updating dashboard: {str(e)}"}
+
     async def process_query(self, user_query: str, provider: str = None) -> Dict[str, Any]:
         """Process a user query with input validation and rate limiting."""
         try:
@@ -1090,6 +1659,13 @@ class AiAgentHaAgent:
                                 data = await self.get_entity_state(parameters.get("entity_id"))
                             elif request_type == "get_entities_by_domain":
                                 data = await self.get_entities_by_domain(parameters.get("domain"))
+                            elif request_type == "get_entities_by_area":
+                                data = await self.get_entities_by_area(parameters.get("area_id"))
+                            elif request_type == "get_entities":
+                                data = await self.get_entities(
+                                    area_id=parameters.get("area_id"),
+                                    area_ids=parameters.get("area_ids")
+                                )
                             elif request_type == "get_calendar_events":
                                 data = await self.get_calendar_events(parameters.get("entity_id"))
                             elif request_type == "get_automations":
@@ -1119,6 +1695,12 @@ class AiAgentHaAgent:
                                 )
                             elif request_type == "get_scenes":
                                 data = await self.get_scenes()
+                            elif request_type == "get_dashboards":
+                                data = await self.get_dashboards()
+                            elif request_type == "get_dashboard_config":
+                                data = await self.get_dashboard_config(
+                                    parameters.get("dashboard_url")
+                                )
                             elif request_type == "set_entity_state":
                                 data = await self.set_entity_state(
                                     parameters.get("entity_id"),
@@ -1128,6 +1710,15 @@ class AiAgentHaAgent:
                             elif request_type == "create_automation":
                                 data = await self.create_automation(
                                     parameters.get("automation")
+                                )
+                            elif request_type == "create_dashboard":
+                                data = await self.create_dashboard(
+                                    parameters.get("dashboard_config")
+                                )
+                            elif request_type == "update_dashboard":
+                                data = await self.update_dashboard(
+                                    parameters.get("dashboard_url"),
+                                    parameters.get("dashboard_config")
                                 )
                             else:
                                 data = {"error": f"Unknown request type: {request_type}"}
@@ -1185,6 +1776,49 @@ class AiAgentHaAgent:
                             }
                             self._set_cached_data(cache_key, result)
                             return result
+                        elif response_data.get("request_type") == "dashboard_suggestion":
+                            # Add dashboard suggestion to conversation history
+                            self.conversation_history.append({
+                                "role": "assistant",
+                                "content": json.dumps(response_data)  # Store clean JSON
+                            })
+                            
+                            # Return dashboard suggestion
+                            _LOGGER.debug("Received dashboard suggestion: %s", json.dumps(response_data.get("dashboard")))
+                            result = {
+                                "success": True,
+                                "answer": json.dumps(response_data)
+                            }
+                            self._set_cached_data(cache_key, result)
+                            return result
+                        elif response_data.get("request_type") in ["get_entities", "get_entities_by_area"]:
+                            # Handle direct get_entities request (for backward compatibility)
+                            parameters = response_data.get("parameters", {})
+                            _LOGGER.debug("Processing direct get_entities request with parameters: %s", json.dumps(parameters))
+                            
+                            # Add AI's response to conversation history
+                            self.conversation_history.append({
+                                "role": "assistant",
+                                "content": json.dumps(response_data)  # Store clean JSON
+                            })
+                            
+                            # Get entities data
+                            if response_data.get("request_type") == "get_entities":
+                                data = await self.get_entities(
+                                    area_id=parameters.get("area_id"),
+                                    area_ids=parameters.get("area_ids")
+                                )
+                            else:  # get_entities_by_area
+                                data = await self.get_entities_by_area(parameters.get("area_id"))
+                            
+                            _LOGGER.debug("Retrieved %d entities", len(data) if isinstance(data, list) else 1)
+                            
+                            # Add data to conversation as a system message
+                            self.conversation_history.append({
+                                "role": "system",
+                                "content": json.dumps({"data": data}, default=str)
+                            })
+                            continue
                         elif response_data.get("request_type") == "call_service":
                             # Handle service call request
                             domain = response_data.get("domain")

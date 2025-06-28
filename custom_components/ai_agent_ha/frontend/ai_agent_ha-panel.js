@@ -468,6 +468,61 @@ class AiAgentHaPanel extends LitElement {
         overflow-y: auto;
         border: 1px solid var(--divider-color);
       }
+      .dashboard-suggestion {
+        background: var(--secondary-background-color);
+        border: 1px solid var(--info-color, #2196f3);
+        border-radius: 12px;
+        padding: 16px;
+        margin: 8px 0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        position: relative;
+        z-index: 10;
+      }
+      .dashboard-title {
+        font-weight: 500;
+        margin-bottom: 8px;
+        color: var(--info-color, #2196f3);
+        font-size: 16px;
+      }
+      .dashboard-description {
+        margin-bottom: 16px;
+        color: var(--secondary-text-color);
+        line-height: 1.4;
+      }
+      .dashboard-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+        justify-content: flex-end;
+      }
+      .dashboard-actions ha-button {
+        --mdc-button-height: 40px;
+        --mdc-button-padding: 0 20px;
+        --mdc-typography-button-font-size: 14px;
+        --mdc-typography-button-font-weight: 600;
+        border-radius: 20px;
+      }
+      .dashboard-actions ha-button:first-child {
+        --mdc-theme-primary: var(--info-color, #2196f3);
+        --mdc-theme-on-primary: #fff;
+      }
+      .dashboard-actions ha-button:last-child {
+        --mdc-theme-primary: var(--error-color);
+        --mdc-theme-on-primary: #fff;
+      }
+      .dashboard-details {
+        margin-top: 8px;
+        padding: 8px;
+        background: var(--primary-background-color);
+        border-radius: 8px;
+        font-family: monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+        overflow-x: auto;
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid var(--divider-color);
+      }
       .no-providers {
         color: var(--error-color);
         font-size: 14px;
@@ -845,6 +900,25 @@ class AiAgentHaPanel extends LitElement {
                     </div>
                   </div>
                 ` : ''}
+                ${msg.dashboard ? html`
+                  <div class="dashboard-suggestion">
+                    <div class="dashboard-title">${msg.dashboard.title}</div>
+                    <div class="dashboard-description">Dashboard with ${msg.dashboard.views ? msg.dashboard.views.length : 0} view(s)</div>
+                    <div class="dashboard-details">
+                      ${JSON.stringify(msg.dashboard, null, 2)}
+                    </div>
+                    <div class="dashboard-actions">
+                      <ha-button
+                        @click=${() => this._approveDashboard(msg.dashboard)}
+                        .disabled=${this._isLoading}
+                      >Create Dashboard</ha-button>
+                      <ha-button
+                        @click=${() => this._rejectDashboard()}
+                        .disabled=${this._isLoading}
+                      >Cancel</ha-button>
+                    </div>
+                  </div>
+                ` : ''}
               </div>
             `)}
             ${this._isLoading ? html`
@@ -993,12 +1067,29 @@ class AiAgentHaPanel extends LitElement {
 
       let message = { type: 'assistant', text: event.data.answer };
 
-      // Check if the response contains an automation suggestion
+      // Check if the response contains an automation or dashboard suggestion
       try {
-        const response = JSON.parse(event.data.answer);
+        console.debug("Attempting to parse response as JSON:", event.data.answer);
+        let jsonText = event.data.answer;
+        
+        // Try to extract JSON from mixed text+JSON responses
+        const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+        if (jsonMatch && jsonMatch[0] !== jsonText.trim()) {
+          console.debug("Found JSON within mixed response, extracting:", jsonMatch[0]);
+          jsonText = jsonMatch[0];
+        }
+        
+        const response = JSON.parse(jsonText);
+        console.debug("Parsed JSON response:", response);
+        
         if (response.request_type === 'automation_suggestion') {
+          console.debug("Found automation suggestion");
           message.automation = response.automation;
           message.text = response.message || 'I found an automation that might help you. Would you like me to create it?';
+        } else if (response.request_type === 'dashboard_suggestion') {
+          console.debug("Found dashboard suggestion:", response.dashboard);
+          message.dashboard = response.dashboard;
+          message.text = response.message || 'I created a dashboard configuration for you. Would you like me to create it?';
         } else if (response.request_type === 'final_response') {
           // If it's a final response, use the response field
           message.text = response.response || response.message || event.data.answer;
@@ -1013,6 +1104,7 @@ class AiAgentHaPanel extends LitElement {
       } catch (e) {
         // Not a JSON response, treat as normal message
         console.debug("Response is not JSON, using as-is:", event.data.answer);
+        console.debug("JSON parse error:", e);
         // message.text is already set to event.data.answer
       }
 
@@ -1064,6 +1156,46 @@ class AiAgentHaPanel extends LitElement {
     this._messages = [...this._messages, {
       type: 'assistant',
       text: 'Automation creation cancelled. Would you like to try something else?'
+    }];
+  }
+
+  async _approveDashboard(dashboard) {
+    this._isLoading = true;
+    try {
+      const result = await this.hass.callService('ai_agent_ha', 'create_dashboard', {
+        dashboard_config: dashboard
+      });
+
+      console.debug("Dashboard creation result:", result);
+
+      // The result should be an object with a message property
+      if (result && result.message) {
+        this._messages = [...this._messages, {
+          type: 'assistant',
+          text: result.message
+        }];
+      } else {
+        // Fallback success message if no message is provided
+        this._messages = [...this._messages, {
+          type: 'assistant',
+          text: `Dashboard "${dashboard.title}" has been created successfully!`
+        }];
+      }
+    } catch (error) {
+      console.error("Error creating dashboard:", error);
+      this._error = error.message || 'An error occurred while creating the dashboard';
+      this._messages = [...this._messages, {
+        type: 'assistant',
+        text: `Error: ${this._error}`
+      }];
+    }
+    this._isLoading = false;
+  }
+
+  _rejectDashboard() {
+    this._messages = [...this._messages, {
+      type: 'assistant',
+      text: 'Dashboard creation cancelled. Would you like me to create a different dashboard?'
     }];
   }
 

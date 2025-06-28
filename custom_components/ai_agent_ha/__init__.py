@@ -170,11 +170,89 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.error(f"Error loading prompt history: {e}")
             return {"error": str(e)}
 
+    async def async_handle_create_dashboard(call):
+        """Handle the create_dashboard service call."""
+        try:
+            # Check if agents are available
+            if DOMAIN not in hass.data or not hass.data[DOMAIN].get("agents"):
+                _LOGGER.error("No AI agents available. Please configure the integration first.")
+                return {"error": "No AI agents configured"}
+            
+            provider = call.data.get("provider")
+            if provider not in hass.data[DOMAIN]["agents"]:
+                # Get the first available provider
+                available_providers = list(hass.data[DOMAIN]["agents"].keys())
+                if not available_providers:
+                    _LOGGER.error("No AI agents available")
+                    return {"error": "No AI agents configured"}
+                provider = available_providers[0]
+                _LOGGER.debug(f"Using fallback provider: {provider}")
+            
+            agent = hass.data[DOMAIN]["agents"][provider]
+            
+            # Parse dashboard config if it's a string
+            dashboard_config = call.data.get("dashboard_config", {})
+            if isinstance(dashboard_config, str):
+                try:
+                    import json
+                    dashboard_config = json.loads(dashboard_config)
+                except json.JSONDecodeError as e:
+                    _LOGGER.error(f"Invalid JSON in dashboard_config: {e}")
+                    return {"error": f"Invalid JSON in dashboard_config: {e}"}
+            
+            result = await agent.create_dashboard(dashboard_config)
+            return result
+        except Exception as e:
+            _LOGGER.error(f"Error creating dashboard: {e}")
+            return {"error": str(e)}
+
+    async def async_handle_update_dashboard(call):
+        """Handle the update_dashboard service call."""
+        try:
+            # Check if agents are available
+            if DOMAIN not in hass.data or not hass.data[DOMAIN].get("agents"):
+                _LOGGER.error("No AI agents available. Please configure the integration first.")
+                return {"error": "No AI agents configured"}
+            
+            provider = call.data.get("provider")
+            if provider not in hass.data[DOMAIN]["agents"]:
+                # Get the first available provider
+                available_providers = list(hass.data[DOMAIN]["agents"].keys())
+                if not available_providers:
+                    _LOGGER.error("No AI agents available")
+                    return {"error": "No AI agents configured"}
+                provider = available_providers[0]
+                _LOGGER.debug(f"Using fallback provider: {provider}")
+            
+            agent = hass.data[DOMAIN]["agents"][provider]
+            
+            # Parse dashboard config if it's a string
+            dashboard_config = call.data.get("dashboard_config", {})
+            if isinstance(dashboard_config, str):
+                try:
+                    import json
+                    dashboard_config = json.loads(dashboard_config)
+                except json.JSONDecodeError as e:
+                    _LOGGER.error(f"Invalid JSON in dashboard_config: {e}")
+                    return {"error": f"Invalid JSON in dashboard_config: {e}"}
+            
+            dashboard_url = call.data.get("dashboard_url", "")
+            if not dashboard_url:
+                return {"error": "Dashboard URL is required"}
+            
+            result = await agent.update_dashboard(dashboard_url, dashboard_config)
+            return result
+        except Exception as e:
+            _LOGGER.error(f"Error updating dashboard: {e}")
+            return {"error": str(e)}
+
     # Register services
     hass.services.async_register(DOMAIN, "query", async_handle_query)
     hass.services.async_register(DOMAIN, "create_automation", async_handle_create_automation)
     hass.services.async_register(DOMAIN, "save_prompt_history", async_handle_save_prompt_history)
     hass.services.async_register(DOMAIN, "load_prompt_history", async_handle_load_prompt_history)
+    hass.services.async_register(DOMAIN, "create_dashboard", async_handle_create_dashboard)
+    hass.services.async_register(DOMAIN, "update_dashboard", async_handle_update_dashboard)
 
     # Register static path for frontend
     await hass.http.async_register_static_paths([
@@ -229,6 +307,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_remove(DOMAIN, "create_automation")
     hass.services.async_remove(DOMAIN, "save_prompt_history")
     hass.services.async_remove(DOMAIN, "load_prompt_history")
+    hass.services.async_remove(DOMAIN, "create_dashboard")
+    hass.services.async_remove(DOMAIN, "update_dashboard")
     # Remove data
     if DOMAIN in hass.data:
         hass.data.pop(DOMAIN)

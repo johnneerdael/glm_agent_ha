@@ -16,3 +16,44 @@ query:
             - "llama"
             - "gemini"
             - "openrouter"
+
+create_dashboard:
+  name: "Create Dashboard via AI Agent"
+  description: "Create a new Home Assistant dashboard using AI assistance."
+  fields:
+    dashboard_config:
+      description: "The dashboard configuration as a JSON object."
+      example: '{"title": "My Dashboard", "url_path": "my-dashboard", "views": []}'
+    provider:
+      description: "The AI provider to use (openai, llama, gemini, openrouter)"
+      example: "openai"
+      default: "openai"
+      selector:
+        select:
+          options:
+            - "openai"
+            - "llama"
+            - "gemini"
+            - "openrouter"
+
+update_dashboard:
+  name: "Update Dashboard via AI Agent"
+  description: "Update an existing Home Assistant dashboard using AI assistance."
+  fields:
+    dashboard_url:
+      description: "The URL path of the dashboard to update."
+      example: "my-dashboard"
+    dashboard_config:
+      description: "The updated dashboard configuration as a JSON object."
+      example: '{"title": "Updated Dashboard", "views": []}'
+    provider:
+      description: "The AI provider to use (openai, llama, gemini, openrouter)"
+      example: "openai"
+      default: "openai"
+      selector:
+        select:
+          options:
+            - "openai"
+            - "llama"
+            - "gemini"
+            - "openrouter"
