@@ -8,6 +8,7 @@ A powerful Home Assistant custom integration that connects your Home Assistant i
 - 🎯 **Model Selection**: Choose from predefined models or use custom model names
 - 🏠 **Smart Home Control**: Turn lights on/off, control climate, and manage devices
 - ⚡ **Automation Creation**: Automatically create automations based on natural language
+- 📋 **Dashboard Creation**: Create and customize Home Assistant dashboards through natural language
 - 📊 **Data Access**: Get entity states, history, weather, and more
 - 🔒 **Secure**: API keys stored securely in Home Assistant
 - 🎨 **Beautiful UI**: Clean, modern chat interface
@@ -17,6 +18,63 @@ A powerful Home Assistant custom integration that connects your Home Assistant i
 
 ### Automation Creation
 ![AI Agent HA Automation Creation](image/Screenshot2.png)
+
+## 📋 Dashboard Creation
+
+AI Agent HA now supports creating and managing Home Assistant dashboards through natural language conversations! Simply describe what you want, and the AI will create a complete dashboard for you.
+
+### How Dashboard Creation Works
+
+1. **Natural Language Request**: Ask the AI to create a dashboard for any purpose
+2. **Entity Discovery**: The AI automatically finds relevant entities in your Home Assistant
+3. **Smart Organization**: Entities are organized by room, functionality, or domain
+4. **Dashboard Generation**: Complete dashboard with proper cards and layout is created
+5. **Integration**: Dashboard is automatically added to your Home Assistant sidebar
+
+### Dashboard Creation Examples
+
+#### Simple Room Dashboard
+```
+"Create a dashboard for my living room lights"
+```
+The AI will find all living room light entities and create a dashboard with appropriate light control cards.
+
+#### Security Dashboard
+```
+"Create a security dashboard with all door sensors, cameras, and alarm controls"
+```
+The AI will create a comprehensive security monitoring dashboard with sensor states, camera feeds, and alarm controls.
+
+#### Energy Monitoring Dashboard
+```
+"I want an energy dashboard showing power consumption and usage graphs"
+```
+The AI will create an energy monitoring dashboard with real-time power gauges, usage graphs, and cost tracking.
+
+#### Climate Control Dashboard
+```
+"Create a climate dashboard for temperature control throughout the house"
+```
+The AI will organize thermostats, temperature sensors, and HVAC controls in a logical layout.
+
+### Supported Dashboard Features
+
+- **Smart Card Selection**: Appropriate card types for each entity (lights, sensors, media players, etc.)
+- **Room-Based Organization**: Entities automatically grouped by area when possible
+- **Interactive Clarification**: AI asks follow-up questions to refine your requirements
+- **Template-Based Creation**: Built-in templates for common dashboard types (security, energy, climate, etc.)
+- **Dynamic Layout**: Optimized card arrangements and view organization
+- **Icon Integration**: Automatic Material Design icon selection
+
+### Dashboard Types the AI Can Create
+
+- **Room-Specific**: Living room, bedroom, kitchen, etc.
+- **Functional**: Security, energy, climate, media, lighting
+- **Device-Specific**: All lights, all sensors, all switches
+- **Scenario-Based**: Morning routine, evening security, vacation mode
+- **Custom**: Any combination based on your specific needs
+
+For detailed dashboard creation documentation, see: [Dashboard Creation Guide](docs/DASHBOARD_CREATION.md)
 
 ## 🚀 Supported AI Providers
 
@@ -116,6 +174,8 @@ Ask natural language questions like:
 - "Turn on all the lights in the living room"
 - "What's the temperature in the bedroom?" 
 - "Create an automation to turn off lights at 11 PM"
+- "Create a dashboard for my security cameras and door sensors"
+- "Make a living room dashboard with lights and climate control"
 - "Show me the weather forecast"
 - "Which doors are open?"
 
@@ -143,6 +203,13 @@ The AI can create automations automatically:
 2. Review the generated automation
 3. Approve or reject the suggestion
 4. Automation is added to your Home Assistant
+
+### Dashboard Creation
+The AI can create custom dashboards through conversation:
+1. Ask: "Create a security dashboard with cameras and sensors"
+2. AI discovers relevant entities and asks clarifying questions
+3. Dashboard is generated with appropriate cards and layout
+4. Dashboard is automatically added to your Home Assistant sidebar
 
 ### Data Access
 The AI can access comprehensive Home Assistant data:
