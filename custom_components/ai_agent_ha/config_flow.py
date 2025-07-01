@@ -15,7 +15,7 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
 )
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_LOCAL_URL, CONF_LOCAL_MODEL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ PROVIDERS = {
     "gemini": "Google Gemini",
     "openrouter": "OpenRouter",
     "anthropic": "Anthropic (Claude)",
+    "local": "Local Model",
 }
 
 TOKEN_FIELD_NAMES = {
@@ -33,6 +34,7 @@ TOKEN_FIELD_NAMES = {
     "gemini": "gemini_token",
     "openrouter": "openrouter_token",
     "anthropic": "anthropic_token",
+    "local": CONF_LOCAL_URL,  # For local models, we use URL instead of token
 }
 
 TOKEN_LABELS = {
@@ -41,6 +43,7 @@ TOKEN_LABELS = {
     "gemini": "Google Gemini API Key",
     "openrouter": "OpenRouter API Key",
     "anthropic": "Anthropic API Key",
+    "local": "Local API URL (e.g., http://localhost:11434/api/generate)",
 }
 
 DEFAULT_MODELS = {
@@ -49,6 +52,7 @@ DEFAULT_MODELS = {
     "gemini": "gemini-1.5-flash",
     "openrouter": "openai/gpt-4o",
     "anthropic": "claude-3-5-sonnet-20241022",
+    "local": "llama3.2",  # Updated to use llama3.2 as default
 }
 
 AVAILABLE_MODELS = {
@@ -92,6 +96,16 @@ AVAILABLE_MODELS = {
         "Llama-3.1-70B-Instruct",
         "Llama-3.1-8B-Instruct",
         "Llama-3.2-90B-Instruct",
+    ],
+    # For local models, provide common Ollama models with llama3.2 as the default
+    "local": [
+        "llama3.2",
+        "llama3",
+        "llama3.1",
+        "mistral",
+        "mixtral",
+        "deepseek-coder",
+        "Custom...",
     ],
 }
 
@@ -164,8 +178,12 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     # Use selected model if it's not the "Custom..." option
                     self.config_data["models"][provider] = selected_model
                 else:
-                    # Fallback to default model if no valid selection
-                    self.config_data["models"][provider] = default_model
+                    # For local provider, allow empty model name
+                    if provider == "local":
+                        self.config_data["models"][provider] = ""
+                    else:
+                        # Fallback to default model for other providers
+                        self.config_data["models"][provider] = default_model
                 
                 return self.async_create_entry(
                     title=f"AI Agent HA ({PROVIDERS[provider]})",
@@ -177,7 +195,34 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
 
-        # Build schema for the selected provider
+        if provider == "local":
+            # For local provider, we need both URL and optional model name
+            schema_dict = {
+                vol.Required(CONF_LOCAL_URL): TextSelector(
+                    TextSelectorConfig(type="text")
+                ),
+            }
+            
+            # Add model selection
+            model_options = AVAILABLE_MODELS.get("local", ["Custom..."])
+            schema_dict[vol.Optional("model", default="Custom...")] = SelectSelector(
+                SelectSelectorConfig(options=model_options)
+            )
+            schema_dict[vol.Optional("custom_model")] = TextSelector(
+                TextSelectorConfig(type="text")
+            )
+            
+            return self.async_show_form(
+                step_id="configure",
+                data_schema=vol.Schema(schema_dict),
+                errors=errors,
+                description_placeholders={
+                    "token_label": "Local API URL",
+                    "provider": PROVIDERS[provider],
+                }
+            )
+            
+        # Build schema for other providers
         schema_dict = {
             vol.Required(token_field): TextSelector(
                 TextSelectorConfig(type="password")
@@ -289,9 +334,13 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
                         # Use selected model if it's not the "Custom..." option
                         updated_data["models"][provider] = selected_model
                     else:
-                        # Ensure we keep the current model or use default
-                        if provider not in updated_data["models"]:
-                            updated_data["models"][provider] = DEFAULT_MODELS[provider]
+                        # For local provider, allow empty model name
+                        if provider == "local":
+                            updated_data["models"][provider] = ""
+                        else:
+                            # Ensure we keep the current model or use default for other providers
+                            if provider not in updated_data["models"]:
+                                updated_data["models"][provider] = DEFAULT_MODELS[provider]
                     
                     _LOGGER.debug(f"Options flow - Final model config for {provider}: {updated_data['models'].get(provider)}")
                     
@@ -305,7 +354,37 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
                 _LOGGER.exception("Unexpected exception in options flow")
                 errors["base"] = "unknown"
 
-        # Build schema for the selected provider
+        # Build schema for the selected provider in options
+        if provider == "local":
+            # For local provider, we need both URL and optional model name
+            current_url = self.config_entry.data.get(CONF_LOCAL_URL, "")
+            
+            schema_dict = {
+                vol.Required(CONF_LOCAL_URL, default=current_url): TextSelector(
+                    TextSelectorConfig(type="text")
+                ),
+            }
+            
+            # Add model selection
+            model_options = AVAILABLE_MODELS.get("local", ["Custom..."])
+            schema_dict[vol.Optional("model", default=current_model if current_model else "Custom...")] = SelectSelector(
+                SelectSelectorConfig(options=model_options)
+            )
+            schema_dict[vol.Optional("custom_model")] = TextSelector(
+                TextSelectorConfig(type="text")
+            )
+            
+            return self.async_show_form(
+                step_id="configure_options",
+                data_schema=vol.Schema(schema_dict),
+                errors=errors,
+                description_placeholders={
+                    "token_label": "Local API URL",
+                    "provider": PROVIDERS[provider],
+                }
+            )
+            
+        # Build schema for other providers
         schema_dict = {
             vol.Required(token_field, default=display_token): TextSelector(
                 TextSelectorConfig(type="password")

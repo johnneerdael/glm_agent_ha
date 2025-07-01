@@ -1,12 +1,13 @@
 """
 Example config:
 ai_agent_ha:
-  ai_provider: openai  # or 'llama', 'gemini', 'openrouter', 'anthropic'
+  ai_provider: openai  # or 'llama', 'gemini', 'openrouter', 'anthropic', 'local'
   llama_token: "..."
   openai_token: "..."
   gemini_token: "..."
   openrouter_token: "..."
   anthropic_token: "..."
+  local_url: "http://localhost:11434/api/generate"  # Required for local models
   # Model configuration (optional, defaults will be used if not specified)
   models:
     openai: "gpt-3.5-turbo"  # or "gpt-4", "gpt-4-turbo", etc.
@@ -14,6 +15,7 @@ ai_agent_ha:
     gemini: "gemini-1.5-flash"  # or "gemini-1.5-pro", "gemini-1.0-pro", etc.
     openrouter: "openai/gpt-4o"  # or any model available on OpenRouter
     anthropic: "claude-3-5-sonnet-20241022"  # or "claude-3-opus-20240229", etc.
+    local: "llama3.2"  # model name for local API (optional if your API doesn't require it)
 """
 """The AI Agent implementation with multiple provider support."""
 import logging
@@ -35,6 +37,131 @@ _LOGGER = logging.getLogger(__name__)
 class BaseAIClient:
     async def get_response(self, messages, **kwargs):
         raise NotImplementedError
+
+class LocalClient(BaseAIClient):
+    def __init__(self, url, model=""):
+        self.url = url
+        self.model = model
+    
+    async def get_response(self, messages, **kwargs):
+        _LOGGER.debug("Making request to local API with model: %s at URL: %s", self.model, self.url)
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        # Format user prompt from messages
+        prompt = ""
+        for message in messages:
+            role = message.get("role", "")
+            content = message.get("content", "")
+            
+            # Simple formatting: prefixing each message with its role
+            if role == "system":
+                prompt += f"System: {content}\n\n"
+            elif role == "user":
+                prompt += f"User: {content}\n\n"
+            elif role == "assistant":
+                prompt += f"Assistant: {content}\n\n"
+        
+        # Add final prompt prefix for the assistant's response
+        prompt += "Assistant: "
+        
+        # Build a generic payload that works with most local API servers
+        payload = {
+            "prompt": prompt,
+            "stream": False  # Disable streaming to get a single complete response
+        }
+        
+        # Add model if specified
+        if self.model:
+            payload["model"] = self.model
+        
+        _LOGGER.debug("Local API request payload: %s", json.dumps(payload, indent=2))
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(self.url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=300)) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    _LOGGER.error("Local API error %d: %s", resp.status, error_text)
+                    raise Exception(f"Local API error {resp.status}")
+                
+                try:
+                    response_text = await resp.text()
+                    _LOGGER.debug("Local API response (first 200 chars): %s", response_text[:200])
+                    
+                    # Try to parse as JSON
+                    try:
+                        data = json.loads(response_text)
+                        
+                        # Try common response formats
+                        # Ollama format - return only the response text
+                        if "response" in data:
+                            response_content = data["response"]
+                            _LOGGER.debug("Extracted response content: %s", response_content[:100])
+                            
+                            # Check if the response looks like JSON
+                            response_content = response_content.strip()
+                            if response_content.startswith('{') and response_content.endswith('}'):
+                                try:
+                                    # Validate that it's actually JSON
+                                    json.loads(response_content)
+                                    return response_content
+                                except json.JSONDecodeError:
+                                    pass
+                            
+                            # If it's plain text, wrap it in the expected JSON format
+                            wrapped_response = {
+                                "request_type": "final_response",
+                                "response": response_content
+                            }
+                            _LOGGER.debug("Wrapped plain text response in JSON format")
+                            return json.dumps(wrapped_response)
+                        
+                        # OpenAI-like format
+                        elif "choices" in data and len(data["choices"]) > 0:
+                            choice = data["choices"][0]
+                            if "message" in choice and "content" in choice["message"]:
+                                content = choice["message"]["content"]
+                            elif "text" in choice:
+                                content = choice["text"]
+                            else:
+                                content = str(data)
+                            
+                            # Wrap in expected format if plain text
+                            if not (content.strip().startswith('{') and content.strip().endswith('}')):
+                                wrapped_response = {
+                                    "request_type": "final_response",
+                                    "response": content
+                                }
+                                return json.dumps(wrapped_response)
+                            return content
+                        
+                        # Generic content field
+                        elif "content" in data:
+                            content = data["content"]
+                            if not (content.strip().startswith('{') and content.strip().endswith('}')):
+                                wrapped_response = {
+                                    "request_type": "final_response",
+                                    "response": content
+                                }
+                                return json.dumps(wrapped_response)
+                            return content
+                        
+                        # Return the whole data as string if we can't find a specific field
+                        return str(data)
+                        
+                    except json.JSONDecodeError:
+                        # If not JSON, wrap the raw text in expected format
+                        _LOGGER.debug("Response is not JSON, wrapping plain text")
+                        wrapped_response = {
+                            "request_type": "final_response", 
+                            "response": response_text.strip()
+                        }
+                        return json.dumps(wrapped_response)
+                        
+                except Exception as e:
+                    _LOGGER.error("Failed to parse local API response: %s", str(e))
+                    raise Exception(f"Failed to parse local API response: {str(e)}")
 
 class LlamaClient(BaseAIClient):
     def __init__(self, token, model="Llama-4-Maverick-17B-128E-Instruct-FP8"):
@@ -471,6 +598,30 @@ class AiAgentHaAgent:
         )
     }
 
+    SYSTEM_PROMPT_LOCAL = {
+        "role": "system",
+        "content": (
+            "You are an AI assistant integrated with Home Assistant.\n\n"
+            "You can answer questions about home automation, control devices, and help users. "
+            "When users ask questions that require specific data from Home Assistant, "
+            "you can request that data using these commands:\n\n"
+            "Available commands:\n"
+            "- get_entities_by_domain(domain): Get all lights, switches, sensors, etc.\n"
+            "- get_entities_by_area(area_id): Get all devices in a room\n"
+            "- get_entity_state(entity_id): Get current state of a device\n"
+            "- get_weather_data(): Get current weather\n"
+            "- get_automations(): Get all automations\n"
+            "- set_entity_state(entity_id, state): Control devices (turn on/off, etc.)\n"
+            "- call_service(domain, service, target, data): Call any Home Assistant service\n\n"
+            "When you need data, respond with JSON like this:\n"
+            "{\"request_type\": \"data_request\", \"request\": \"get_entities_by_domain\", \"parameters\": {\"domain\": \"light\"}}\n\n"
+            "When you want to answer the user, respond with JSON like this:\n"
+            "{\"request_type\": \"final_response\", \"response\": \"Here is your answer...\"}\n\n"
+            "If you cannot understand or need clarification, just respond naturally with helpful text. "
+            "The system will handle converting your response appropriately."
+        )
+    }
+
     def __init__(self, hass: HomeAssistant, config: Dict[str, Any]):
         """Initialize the agent with provider selection."""
         self.hass = hass
@@ -491,6 +642,14 @@ class AiAgentHaAgent:
         _LOGGER.debug("Initializing AiAgentHaAgent with provider: %s", provider)
         _LOGGER.debug("Models config loaded: %s", models_config)
         
+        # Set the appropriate system prompt based on provider
+        if provider == "local":
+            self.system_prompt = self.SYSTEM_PROMPT_LOCAL
+            _LOGGER.debug("Using local-optimized system prompt")
+        else:
+            self.system_prompt = self.SYSTEM_PROMPT
+            _LOGGER.debug("Using standard system prompt")
+        
         # Initialize the appropriate AI client with model selection
         if provider == "openai":
             model = models_config.get("openai", "gpt-3.5-turbo")
@@ -504,6 +663,13 @@ class AiAgentHaAgent:
         elif provider == "anthropic":
             model = models_config.get("anthropic", "claude-3-5-sonnet-20241022")
             self.ai_client = AnthropicClient(config.get("anthropic_token"), model)
+        elif provider == "local":
+            model = models_config.get("local", "")
+            url = config.get("local_url")
+            if not url:
+                _LOGGER.error("Missing local_url for local provider")
+                raise Exception("Missing local_url configuration for local provider")
+            self.ai_client = LocalClient(url, model)
         else:  # default to llama if somehow specified
             model = models_config.get("llama", "Llama-4-Maverick-17B-128E-Instruct-FP8")
             self.ai_client = LlamaClient(config.get("llama_token"), model)
@@ -522,11 +688,18 @@ class AiAgentHaAgent:
             token = self.config.get("openrouter_token")
         elif provider == "anthropic":
             token = self.config.get("anthropic_token")
+        elif provider == "local":
+            token = self.config.get("local_url")
         else:
             token = self.config.get("llama_token")
         
         if not token or not isinstance(token, str):
             return False
+        
+        # For local provider, validate URL format
+        if provider == "local":
+            return token.startswith(("http://", "https://"))
+        
         # Add more specific validation based on your API key format
         return len(token) >= 32
 
@@ -1546,6 +1719,11 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                     "model": models_config.get("anthropic", "claude-3-5-sonnet-20241022"),
                     "client_class": AnthropicClient
                 },
+                "local": {
+                    "token_key": "local_url",
+                    "model": models_config.get("local", ""),
+                    "client_class": LocalClient
+                },
             }
 
             # Validate provider and get configuration
@@ -1556,9 +1734,9 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
             provider_settings = provider_config[selected_provider]
             token = self.config.get(provider_settings["token_key"])
 
-            # Validate token
+            # Validate token/URL
             if not token:
-                error_msg = f"No token configured for provider {selected_provider}"
+                error_msg = f"No {'URL' if selected_provider == 'local' else 'token'} configured for provider {selected_provider}"
                 _LOGGER.error(error_msg)
                 return {
                     "success": False,
@@ -1567,10 +1745,18 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
 
             # Initialize client
             try:
-                self.ai_client = provider_settings["client_class"](
-                    token=token,
-                    model=provider_settings["model"]
-                )
+                if selected_provider == "local":
+                    # LocalClient takes (url, model)
+                    self.ai_client = provider_settings["client_class"](
+                        url=token,
+                        model=provider_settings["model"]
+                    )
+                else:
+                    # Other clients take (token, model)
+                    self.ai_client = provider_settings["client_class"](
+                        token=token,
+                        model=provider_settings["model"]
+                    )
                 _LOGGER.debug(f"Initialized {selected_provider} client with model {provider_settings['model']}")
             except Exception as e:
                 error_msg = f"Error initializing {selected_provider} client: {str(e)}"
@@ -1601,7 +1787,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
             # Add system message to conversation if it's the first message
             if not self.conversation_history:
                 _LOGGER.debug("Adding system message to new conversation")
-                self.conversation_history.append(self.SYSTEM_PROMPT)
+                self.conversation_history.append(self.system_prompt)
 
             # Add user query to conversation
             self.conversation_history.append({
@@ -1919,31 +2105,38 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                             }
                             
                     except json.JSONDecodeError as e:
-                        # Log more of the response to help with debugging
-                        response_preview = response[:1000] if len(response) > 1000 else response
-                        _LOGGER.warning("Failed to parse response as JSON: %s. Response length: %d. Response preview: %s", 
-                                      str(e), len(response), response_preview)
+                        # Check if this is a local provider that might have already wrapped the response
+                        provider = self.config.get("ai_provider", "unknown")
+                        if provider == "local":
+                            _LOGGER.debug("Local provider returned non-JSON response (this is normal and handled): %s", response[:200])
+                        else:
+                            # Log more of the response to help with debugging for non-local providers
+                            response_preview = response[:1000] if len(response) > 1000 else response
+                            _LOGGER.warning("Failed to parse response as JSON: %s. Response length: %d. Response preview: %s", 
+                                          str(e), len(response), response_preview)
                         
-                        # Also log the response to a separate debug file for detailed analysis
-                        try:
-                            import os
-                            debug_dir = "/config/ai_agent_ha_debug"
-                            if not os.path.exists(debug_dir):
-                                os.makedirs(debug_dir)
-                            
-                            import datetime
-                            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                            debug_file = os.path.join(debug_dir, f"failed_response_{timestamp}.txt")
-                            
-                            with open(debug_file, 'w', encoding='utf-8') as f:
-                                f.write(f"Timestamp: {timestamp}\n")
-                                f.write(f"Error: {str(e)}\n")
-                                f.write(f"Response length: {len(response)}\n")
-                                f.write(f"Full response:\n{response}\n")
-                            
-                            _LOGGER.info("Failed response saved to debug file: %s", debug_file)
-                        except Exception as debug_error:
-                            _LOGGER.debug("Could not save debug file: %s", str(debug_error))
+                        # Also log the response to a separate debug file for detailed analysis (non-local providers only)
+                        if provider != "local":
+                            try:
+                                import os
+                                debug_dir = "/config/ai_agent_ha_debug"
+                                if not os.path.exists(debug_dir):
+                                    os.makedirs(debug_dir)
+                                
+                                import datetime
+                                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                                debug_file = os.path.join(debug_dir, f"failed_response_{timestamp}.txt")
+                                
+                                with open(debug_file, 'w', encoding='utf-8') as f:
+                                    f.write(f"Timestamp: {timestamp}\n")
+                                    f.write(f"Provider: {provider}\n")
+                                    f.write(f"Error: {str(e)}\n")
+                                    f.write(f"Response length: {len(response)}\n")
+                                    f.write(f"Full response:\n{response}\n")
+                                
+                                _LOGGER.info("Failed response saved to debug file: %s", debug_file)
+                            except Exception as debug_error:
+                                _LOGGER.debug("Could not save debug file: %s", str(debug_error))
                         
                         # If response is not valid JSON, return it as final response
                         result = {
@@ -1986,7 +2179,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
         recent_messages = self.conversation_history[-10:] if len(self.conversation_history) > 10 else self.conversation_history
         # Ensure system prompt is always the first message
         if not recent_messages or recent_messages[0].get("role") != "system":
-            recent_messages = [self.SYSTEM_PROMPT] + recent_messages
+            recent_messages = [self.system_prompt] + recent_messages
             
         _LOGGER.debug("Sending %d messages to AI provider", len(recent_messages))
         _LOGGER.debug("AI provider: %s", self.config.get("ai_provider", "unknown"))
