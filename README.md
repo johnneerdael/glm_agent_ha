@@ -2,6 +2,12 @@
 
 A powerful Home Assistant custom integration that connects your Home Assistant instance with multiple AI providers (OpenAI, Google Gemini, Anthropic (Claude), OpenRouter, and Llama) to translate user requests into valid Home Assistant operations, including creating automations automatically!
 
+## 🚀 Quick Install
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=sbenodiz&repository=ai_agent_ha&category=integration)
+
+Click the button above to install AI Agent HA directly through HACS, or see the [detailed installation instructions](#-installation) below.
+
 ## ✨ Features
 
 - 🤖 **Multiple AI Provider Support**: OpenAI, Google Gemini, Anthropic (Claude), OpenRouter, and Llama
@@ -110,6 +116,8 @@ For detailed dashboard creation documentation, see: [Dashboard Creation Guide](d
 ## 📦 Installation
 
 ### HACS Installation (Recommended)
+
+Use the [Quick Install button](#-quick-install) at the top of this README for the easiest installation, or manually add the repository:
 
 1. Open HACS in your Home Assistant instance
 2. Click on "Integrations"
