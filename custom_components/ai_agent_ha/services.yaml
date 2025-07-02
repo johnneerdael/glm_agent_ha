@@ -36,6 +36,25 @@ create_dashboard:
             - "gemini"
             - "openrouter"
 
+create_automation:
+  name: "Create Automation via AI Agent"
+  description: "Create a new Home Assistant automation using AI assistance."
+  fields:
+    automation:
+      description: "The automation configuration as a JSON object."
+      example: '{"alias": "Turn off lights at 9 PM", "trigger": [{"platform": "time", "at": "21:00:00"}], "action": [{"service": "light.turn_off", "target": {"entity_id": "light.living_room"}}]}'
+    provider:
+      description: "The AI provider to use (openai, llama, gemini, openrouter)"
+      example: "openai"
+      default: "openai"
+      selector:
+        select:
+          options:
+            - "openai"
+            - "llama"
+            - "gemini"
+            - "openrouter"
+
 update_dashboard:
   name: "Update Dashboard via AI Agent"
   description: "Update an existing Home Assistant dashboard using AI assistance."

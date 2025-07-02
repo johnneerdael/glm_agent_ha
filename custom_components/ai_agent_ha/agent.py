@@ -1929,64 +1929,60 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                     _LOGGER.debug("Received response from AI provider: %s", response)
                     
                     try:
-                        # Try to parse the response as JSON
-                        # First, try to extract JSON from response if it contains extra text
+                        # Try to parse the response as JSON with simplified approach
                         response_clean = response.strip()
                         
-                        # Try multiple strategies to extract valid JSON
+                        # Remove potential BOM and other invisible characters
+                        import codecs
+                        if response_clean.startswith(codecs.BOM_UTF8.decode('utf-8')):
+                            response_clean = response_clean[1:]
+                        
+                        # Remove other common invisible characters
+                        invisible_chars = ['\ufeff', '\u200b', '\u200c', '\u200d', '\u2060']
+                        for char in invisible_chars:
+                            response_clean = response_clean.replace(char, '')
+                        
+                        _LOGGER.debug("Cleaned response length: %d", len(response_clean))
+                        _LOGGER.debug("Cleaned response first 100 chars: %s", response_clean[:100])
+                        _LOGGER.debug("Cleaned response last 100 chars: %s", response_clean[-100:])
+                        
+                        # Simple strategy: try to parse the cleaned response directly
                         response_data = None
-                        parsing_strategies = []
-                        
-                        # Strategy 1: Parse the whole response
                         try:
+                            _LOGGER.debug("Attempting basic JSON parse...")
                             response_data = json.loads(response_clean)
-                            parsing_strategies.append("whole_response")
-                        except json.JSONDecodeError:
-                            pass
-                        
-                        # Strategy 2: Extract JSON by finding balanced braces
-                        if response_data is None:
+                            _LOGGER.debug("Basic JSON parse succeeded!")
+                        except json.JSONDecodeError as e:
+                            _LOGGER.warning("Basic JSON parse failed: %s", str(e))
+                            _LOGGER.debug("JSON error position: %d", e.pos)
+                            if e.pos < len(response_clean):
+                                _LOGGER.debug("Character at error position: %s (ord: %d)", repr(response_clean[e.pos]), ord(response_clean[e.pos]))
+                                _LOGGER.debug("Context around error: %s", repr(response_clean[max(0, e.pos-10):e.pos+10]))
+                            
+                            # Fallback: try to extract JSON by finding the first { and last }
                             json_start = response_clean.find('{')
-                            if json_start != -1:
-                                brace_count = 0
-                                json_end = -1
-                                for i, char in enumerate(response_clean[json_start:], json_start):
-                                    if char == '{':
-                                        brace_count += 1
-                                    elif char == '}':
-                                        brace_count -= 1
-                                        if brace_count == 0:
-                                            json_end = i
-                                            break
+                            json_end = response_clean.rfind('}')
+                            
+                            if json_start != -1 and json_end != -1 and json_end > json_start:
+                                json_part = response_clean[json_start:json_end + 1]
+                                _LOGGER.debug("Trying fallback extraction from pos %d to %d", json_start, json_end)
+                                _LOGGER.debug("Extracted JSON: %s", json_part[:200])
                                 
-                                if json_end != -1:
-                                    json_part = response_clean[json_start:json_end + 1]
-                                    try:
-                                        response_data = json.loads(json_part)
-                                        parsing_strategies.append("balanced_braces")
-                                    except json.JSONDecodeError:
-                                        pass
-                        
-                        # Strategy 3: Try to extract JSON using regex
-                        if response_data is None:
-                            import re
-                            json_pattern = r'\{.*\}'
-                            match = re.search(json_pattern, response_clean, re.DOTALL)
-                            if match:
-                                json_part = match.group(0)
                                 try:
                                     response_data = json.loads(json_part)
-                                    parsing_strategies.append("regex_extraction")
-                                except json.JSONDecodeError:
-                                    pass
+                                    _LOGGER.debug("Fallback JSON extraction succeeded!")
+                                except json.JSONDecodeError as e2:
+                                    _LOGGER.warning("Fallback JSON extraction also failed: %s", str(e2))
+                                    raise e  # Re-raise the original error
+                            else:
+                                _LOGGER.warning("Could not find JSON boundaries in response")
+                                raise e  # Re-raise the original error
                         
-                        # If all strategies failed, raise the original error
                         if response_data is None:
-                            raise json.JSONDecodeError("Failed to extract valid JSON from response", response_clean, 0)
+                            raise json.JSONDecodeError("All parsing strategies failed", response_clean, 0)
                         
-                        _LOGGER.debug("Successfully parsed JSON using strategy: %s", parsing_strategies[-1])
-                            
-                        _LOGGER.debug("Parsed response data: %s", json.dumps(response_data))
+                        _LOGGER.debug("Successfully parsed JSON response")
+                        _LOGGER.debug("Parsed response type: %s", response_data.get("request_type", "unknown"))
                         
                         if response_data.get("request_type") == "data_request":
                             # Handle data request
@@ -2233,35 +2229,60 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                             response_preview = response[:1000] if len(response) > 1000 else response
                             _LOGGER.warning("Failed to parse response as JSON: %s. Response length: %d. Response preview: %s", 
                                           str(e), len(response), response_preview)
+                            
+                            # Log additional debugging information
+                            _LOGGER.debug("First 50 characters as bytes: %s", response[:50].encode('utf-8') if response else b'')
+                            _LOGGER.debug("Response starts with: %s", repr(response[:10]) if response else 'None')
                         
                         # Also log the response to a separate debug file for detailed analysis (non-local providers only)
                         if provider != "local":
                             try:
                                 import os
                                 debug_dir = "/config/ai_agent_ha_debug"
-                                if not os.path.exists(debug_dir):
-                                    os.makedirs(debug_dir)
                                 
-                                import datetime
-                                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                                debug_file = os.path.join(debug_dir, f"failed_response_{timestamp}.txt")
+                                def write_debug_file():
+                                    if not os.path.exists(debug_dir):
+                                        os.makedirs(debug_dir)
+                                    
+                                    import datetime
+                                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    debug_file = os.path.join(debug_dir, f"failed_response_{timestamp}.txt")
+                                    
+                                    with open(debug_file, 'w', encoding='utf-8') as f:
+                                        f.write(f"Timestamp: {timestamp}\n")
+                                        f.write(f"Provider: {provider}\n")
+                                        f.write(f"Error: {str(e)}\n")
+                                        f.write(f"Response length: {len(response)}\n")
+                                        f.write(f"Response bytes: {response.encode('utf-8') if response else b''}\n")
+                                        f.write(f"Response repr: {repr(response)}\n")
+                                        f.write(f"Full response:\n{response}\n")
+                                    
+                                    return debug_file
                                 
-                                with open(debug_file, 'w', encoding='utf-8') as f:
-                                    f.write(f"Timestamp: {timestamp}\n")
-                                    f.write(f"Provider: {provider}\n")
-                                    f.write(f"Error: {str(e)}\n")
-                                    f.write(f"Response length: {len(response)}\n")
-                                    f.write(f"Full response:\n{response}\n")
-                                
+                                # Run file operations in executor to avoid blocking
+                                debug_file = await self.hass.async_add_executor_job(write_debug_file)
                                 _LOGGER.info("Failed response saved to debug file: %s", debug_file)
                             except Exception as debug_error:
                                 _LOGGER.debug("Could not save debug file: %s", str(debug_error))
                         
-                        # If response is not valid JSON, return it as final response
-                        result = {
-                            "success": True,
-                            "answer": response
-                        }
+                        # If response is not valid JSON, try to wrap it as a final response
+                        try:
+                            wrapped_response = {
+                                "request_type": "final_response",
+                                "response": response
+                            }
+                            result = {
+                                "success": True,
+                                "answer": json.dumps(wrapped_response)
+                            }
+                            _LOGGER.debug("Wrapped non-JSON response as final_response")
+                        except Exception as wrap_error:
+                            _LOGGER.error("Failed to wrap response: %s", str(wrap_error))
+                            result = {
+                                "success": False,
+                                "error": f"Invalid response format: {str(e)}"
+                            }
+                        
                         self._set_cached_data(cache_key, result)
                         return result
                         
