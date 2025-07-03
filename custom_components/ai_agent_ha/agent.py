@@ -24,7 +24,7 @@ import json
 import logging
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import aiohttp
 import yaml
@@ -823,8 +823,9 @@ class AiAgentHaAgent:
         """Initialize the agent with provider selection."""
         self.hass = hass
         self.config = config
-        self.conversation_history = []
-        self._cache = {}
+        self.conversation_history: List[Dict[str, Any]] = []
+        self._cache: Dict[str, Any] = {}
+        self.ai_client: BaseAIClient
         self._cache_timeout = 300  # 5 minutes
         self._max_retries = 10
         self._retry_delay = 1  # seconds
@@ -899,7 +900,7 @@ class AiAgentHaAgent:
 
         # For local provider, validate URL format
         if provider == "local":
-            return token.startswith(("http://", "https://"))
+            return bool(token.startswith(("http://", "https://")))
 
         # Add more specific validation based on your API key format
         return len(token) >= 32
@@ -932,7 +933,7 @@ class AiAgentHaAgent:
 
     def _sanitize_automation_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Sanitize automation configuration to prevent injection attacks."""
-        sanitized = {}
+        sanitized: Dict[str, Any] = {}
         for key, value in config.items():
             if key in ["alias", "description"]:
                 # Sanitize strings
@@ -1232,7 +1233,7 @@ class AiAgentHaAgent:
             _LOGGER.exception("Error getting logbook entries: %s", str(e))
             return [{"error": f"Error getting logbook entries: {str(e)}"}]
 
-    async def get_area_registry(self) -> Dict[str, Dict]:
+    async def get_area_registry(self) -> Dict[str, Any]:
         """Get area registry information"""
         _LOGGER.debug("Get area registry information")
         try:
@@ -1505,7 +1506,7 @@ class AiAgentHaAgent:
             # Get dashboards via WebSocket API
             ws_api = self.hass.data.get("websocket_api")
             if not ws_api:
-                return {"error": "WebSocket API not available"}
+                return [{"error": "WebSocket API not available"}]
 
             # Use the lovelace service to get dashboards
             try:
@@ -1589,7 +1590,7 @@ class AiAgentHaAgent:
                     dashboard = lovelace_config.get("default_dashboard")
                     if dashboard:
                         config = await dashboard.async_get_info()
-                        return config
+                        return dict(config) if config else {"error": "No dashboard config"}
                     else:
                         return {"error": "Default dashboard not found"}
                 else:
@@ -1598,7 +1599,7 @@ class AiAgentHaAgent:
                     if dashboard_url in dashboards:
                         dashboard = dashboards[dashboard_url]
                         config = await dashboard.async_get_info()
-                        return config
+                        return dict(config) if config else {"error": "No dashboard config"}
                     else:
                         return {"error": f"Dashboard '{dashboard_url}' not found"}
 
@@ -2012,7 +2013,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
             return {"error": f"Error updating dashboard: {str(e)}"}
 
     async def process_query(
-        self, user_query: str, provider: str = None
+        self, user_query: str, provider: Optional[str] = None
     ) -> Dict[str, Any]:
         """Process a user query with input validation and rate limiting."""
         try:
@@ -2120,7 +2121,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
             cache_key = f"query_{hash(user_query)}"
             cached_result = self._get_cached_data(cache_key)
             if cached_result:
-                return cached_result
+                return dict(cached_result) if isinstance(cached_result, dict) else {"error": "Invalid cached result"}
 
             # Add system message to conversation if it's the first message
             if not self.conversation_history:
@@ -2261,6 +2262,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                             )
 
                             # Get requested data
+                            data: Union[Dict[str, Any], List[Dict[str, Any]]]
                             if request_type == "get_entity_state":
                                 data = await self.get_entity_state(
                                     parameters.get("entity_id")
@@ -2733,7 +2735,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                         await asyncio.sleep(self._retry_delay * retry_count)
                         continue
 
-                return response
+                return str(response)
             except Exception as e:
                 _LOGGER.error(
                     "AI client error on attempt %d: %s", retry_count + 1, str(e)
@@ -2754,7 +2756,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
         _LOGGER.debug("Conversation history and cache cleared")
 
     async def set_entity_state(
-        self, entity_id: str, state: str, attributes: Dict[str, Any] = None
+        self, entity_id: str, state: str, attributes: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Set the state of an entity."""
         try:
@@ -2845,8 +2847,8 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
         self,
         domain: str,
         service: str,
-        target: Dict[str, Any] = None,
-        service_data: Dict[str, Any] = None,
+        target: Optional[Dict[str, Any]] = None,
+        service_data: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Call a Home Assistant service."""
         try:

@@ -112,11 +112,22 @@ AVAILABLE_MODELS = {
 DEFAULT_PROVIDER = "openai"
 
 
-class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     """Handle a config flow for AI Agent HA."""
 
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
+    
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        """Get the options flow for this handler."""
+        try:
+            return AiAgentHaOptionsFlowHandler(config_entry)
+        except Exception as e:
+            _LOGGER.error("Error creating options flow: %s", e)
+            return None
+    
 
     async def async_step_user(self, user_input=None):
         """Handle the initial step."""
@@ -257,10 +268,6 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
-    @staticmethod
-    @callback
-    def async_get_options_flow(config_entry):
-        return AiAgentHaOptionsFlowHandler()
 
 
 class InvalidApiKey(HomeAssistantError):
@@ -270,8 +277,9 @@ class InvalidApiKey(HomeAssistantError):
 class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for AI Agent HA."""
 
-    def __init__(self):
+    def __init__(self, config_entry):
         """Initialize options flow."""
+        self.config_entry = config_entry
         self.options_data = {}
 
     async def async_step_init(self, user_input=None):
