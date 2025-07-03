@@ -117,7 +117,7 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
 
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
-    
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
@@ -127,7 +127,6 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
         except Exception as e:
             _LOGGER.error("Error creating options flow: %s", e)
             return None
-    
 
     async def async_step_user(self, user_input=None):
         """Handle the initial step."""
@@ -267,7 +266,6 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
                 "provider": PROVIDERS[provider],
             },
         )
-
 
 
 class InvalidApiKey(HomeAssistantError):

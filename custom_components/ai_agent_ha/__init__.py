@@ -37,18 +37,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate old config entries to new version."""
     _LOGGER.debug("Migrating config entry from version %s", entry.version)
-    
+
     if entry.version == 1:
         # No migration needed for version 1
         return True
-    
+
     # Future migrations would go here
     # if entry.version < 2:
     #     # Migrate from version 1 to 2
     #     new_data = dict(entry.data)
     #     # Add migration logic here
     #     hass.config_entries.async_update_entry(entry, data=new_data, version=2)
-    
+
     _LOGGER.info("Migration to version %s successful", entry.version)
     return True
 
@@ -57,24 +57,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up AI Agent HA from a config entry."""
     try:
         # Handle version compatibility
-        if not hasattr(entry, 'version') or entry.version != 1:
-            _LOGGER.warning("Config entry has version %s, expected 1. Attempting compatibility mode.", getattr(entry, 'version', 'unknown'))
-        
+        if not hasattr(entry, "version") or entry.version != 1:
+            _LOGGER.warning(
+                "Config entry has version %s, expected 1. Attempting compatibility mode.",
+                getattr(entry, "version", "unknown"),
+            )
+
         # Convert ConfigEntry to dict and ensure all required keys exist
         config_data = dict(entry.data)
-        
+
         # Ensure backward compatibility - check for required keys
         if "ai_provider" not in config_data:
-            _LOGGER.error("Config entry missing required 'ai_provider' key. Entry data: %s", config_data)
+            _LOGGER.error(
+                "Config entry missing required 'ai_provider' key. Entry data: %s",
+                config_data,
+            )
             raise ConfigEntryNotReady("Config entry missing required 'ai_provider' key")
 
         if DOMAIN not in hass.data:
             hass.data[DOMAIN] = {"agents": {}, "configs": {}}
 
         provider = config_data["ai_provider"]
-        
+
         # Validate provider
-        if provider not in ["llama", "openai", "gemini", "openrouter", "anthropic", "local"]:
+        if provider not in [
+            "llama",
+            "openai",
+            "gemini",
+            "openrouter",
+            "anthropic",
+            "local",
+        ]:
             _LOGGER.error("Unknown AI provider: %s", provider)
             raise ConfigEntryNotReady(f"Unknown AI provider: {provider}")
 
@@ -82,7 +95,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN]["configs"][provider] = config_data
 
         # Create agent for this provider
-        _LOGGER.debug("Creating AI agent for provider %s with config: %s", provider, {k: v for k, v in config_data.items() if k not in ['llama_token', 'openai_token', 'gemini_token', 'openrouter_token', 'anthropic_token']})
+        _LOGGER.debug(
+            "Creating AI agent for provider %s with config: %s",
+            provider,
+            {
+                k: v
+                for k, v in config_data.items()
+                if k
+                not in [
+                    "llama_token",
+                    "openai_token",
+                    "gemini_token",
+                    "openrouter_token",
+                    "anthropic_token",
+                ]
+            },
+        )
         hass.data[DOMAIN]["agents"][provider] = AiAgentHaAgent(hass, config_data)
 
         _LOGGER.info("Successfully set up AI Agent HA for provider: %s", provider)

@@ -1590,7 +1590,9 @@ class AiAgentHaAgent:
                     dashboard = lovelace_config.get("default_dashboard")
                     if dashboard:
                         config = await dashboard.async_get_info()
-                        return dict(config) if config else {"error": "No dashboard config"}
+                        return (
+                            dict(config) if config else {"error": "No dashboard config"}
+                        )
                     else:
                         return {"error": "Default dashboard not found"}
                 else:
@@ -1599,7 +1601,9 @@ class AiAgentHaAgent:
                     if dashboard_url in dashboards:
                         dashboard = dashboards[dashboard_url]
                         config = await dashboard.async_get_info()
-                        return dict(config) if config else {"error": "No dashboard config"}
+                        return (
+                            dict(config) if config else {"error": "No dashboard config"}
+                        )
                     else:
                         return {"error": f"Dashboard '{dashboard_url}' not found"}
 
@@ -2121,7 +2125,11 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
             cache_key = f"query_{hash(user_query)}"
             cached_result = self._get_cached_data(cache_key)
             if cached_result:
-                return dict(cached_result) if isinstance(cached_result, dict) else {"error": "Invalid cached result"}
+                return (
+                    dict(cached_result)
+                    if isinstance(cached_result, dict)
+                    else {"error": "Invalid cached result"}
+                )
 
             # Add system message to conversation if it's the first message
             if not self.conversation_history:
