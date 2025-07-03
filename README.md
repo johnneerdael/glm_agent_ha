@@ -246,6 +246,20 @@ Please check out our [contribution guidelines](CONTRIBUTING.md) for detailed inf
 
 For security issues, please review our [security policy](SECURITY.md).
 
+### CI/CD Workflows
+
+This project uses GitHub Actions to ensure code quality and reliability:
+
+- **Quality Checks**: Runs all checks in a single workflow
+- **Python Linting**: Checks code style with flake8, black, and isort
+- **Python Type Checking**: Verifies typing with mypy
+- **Python Tests**: Runs tests with pytest
+- **Security Scan**: Checks for security vulnerabilities with Bandit
+- **Home Assistant Validation**: Validates the integration with hassfest
+- **HACS Validation**: Ensures compatibility with HACS
+
+All workflows run automatically on push and pull requests. You can also run them manually via the "Actions" tab in the GitHub repository.
+
 ### API Structure
 The integration provides these main components:
 - **AI Clients**: Modular providers (OpenAI, Gemini, Claude, OpenRouter, Llama)
