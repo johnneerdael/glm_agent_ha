@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: GitHub Discussions
+    url: https://github.com/sbenodiz/ai_agent_ha/discussions
+    about: Ask questions, share ideas, and discuss the project with the community
+  - name: Home Assistant Community
+    url: https://community.home-assistant.io/
+    about: Get help with Home Assistant specific questions from the HA community
+  - name: Documentation
+    url: https://github.com/sbenodiz/ai_agent_ha/wiki
+    about: Check the project documentation and guides 

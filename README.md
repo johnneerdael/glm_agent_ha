@@ -233,18 +233,26 @@ The AI can access comprehensive Home Assistant data:
 ## 🛠️ Development
 
 ### Contributing
+We welcome contributions from the community! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.
+
+Please check out our [contribution guidelines](CONTRIBUTING.md) for detailed information on how to contribute to this project.
+
+#### Quick Start
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
 4. Test thoroughly
 5. Submit a pull request
 
+For security issues, please review our [security policy](SECURITY.md).
+
 ### API Structure
 The integration provides these main components:
-- **AI Clients**: Modular providers (OpenAI, Gemini, OpenRouter, Llama)
+- **AI Clients**: Modular providers (OpenAI, Gemini, Claude, OpenRouter, Llama)
 - **Agent**: Core logic for processing requests
 - **Config Flow**: Setup and options management
 - **Frontend**: Chat interface
+- **Dashboard Templates**: Templates for dashboard creation
 
 ## 📋 Requirements
 
