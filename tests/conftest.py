@@ -9,20 +9,18 @@ from homeassistant.setup import async_setup_component
 
 
 @pytest.fixture
-def hass(event_loop):
+async def hass():
     """Return a Home Assistant instance for testing."""
     hass = HomeAssistant()
     hass.config.components.add("persistent_notification")
-
-    async def async_start_ha():
-        await hass.async_start()
-        return hass
-
-    hass = event_loop.run_until_complete(async_start_ha())
-
+    
+    # Start Home Assistant
+    await hass.async_start()
+    
     yield hass
-
-    event_loop.run_until_complete(hass.async_stop())
+    
+    # Stop Home Assistant
+    await hass.async_stop()
 
 
 @pytest.fixture

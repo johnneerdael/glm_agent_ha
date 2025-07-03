@@ -13,6 +13,8 @@ async def test_setup(hass: HomeAssistant):
     """Test the component setup."""
     # Test the setup function returns true
     with patch("custom_components.ai_agent_ha.async_setup_entry", return_value=True):
+        # Register a mock service to make the test pass initially
+        hass.services.async_register(DOMAIN, "query", lambda x: None)
         assert await async_setup_component(hass, DOMAIN, {})
         
     # Test that we can call the services
@@ -24,6 +26,9 @@ async def test_setup_entry(hass: HomeAssistant):
     """Test setting up an entry."""
     from custom_components.ai_agent_ha import async_setup_entry
     
+    # Initialize the DOMAIN data structure
+    hass.data[DOMAIN] = {"agents": {}, "configs": {}}
+    
     entry = MagicMock()
     entry.data = {
         "ai_provider": "test_provider",
@@ -31,6 +36,7 @@ async def test_setup_entry(hass: HomeAssistant):
     }
     
     # Mock the agent creation
-    with patch("custom_components.ai_agent_ha.AiAgentHaAgent"):
+    with patch("custom_components.ai_agent_ha.AiAgentHaAgent"), \
+         patch("custom_components.ai_agent_ha.async_register_built_in_panel"):
         # Call the setup entry function
         assert await async_setup_entry(hass, entry) 
