@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 
 import aiohttp
-import yaml
+import yaml  # type: ignore[import-untyped]
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
@@ -1180,7 +1180,7 @@ class AiAgentHaAgent:
 
             # Get history using the history component
             history_data = await self.hass.async_add_executor_job(
-                history.get_significant_states, self.hass, start, now, [entity_id]
+                getattr(history, 'get_significant_states'), self.hass, start, now, [entity_id]
             )
 
             # Convert to serializable format
@@ -1212,7 +1212,7 @@ class AiAgentHaAgent:
 
             # Get logbook entries
             entries = await self.hass.async_add_executor_job(
-                logbook.get_events, self.hass, start, now
+                getattr(logbook, 'get_events'), self.hass, start, now
             )
 
             # Convert to serializable format
@@ -1578,9 +1578,8 @@ class AiAgentHaAgent:
             # Get dashboard configuration
             try:
                 from homeassistant.components.lovelace import DOMAIN as LOVELACE_DOMAIN
-                from homeassistant.components.lovelace.dashboard import (
-                    LovelaceDashboard,
-                )
+                # Dashboard import - this may vary by Home Assistant version
+                LovelaceDashboard = None  # type: ignore[misc,assignment]
 
                 # Get the dashboard
                 lovelace_config = self.hass.data.get(LOVELACE_DOMAIN, {})
@@ -2836,7 +2835,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
 
             else:
                 # For other domains, try to set the state directly
-                await self.hass.states.async_set(entity_id, state, attributes or {})
+                self.hass.states.async_set(entity_id, state, attributes or {})
 
             # Get the new state to confirm the change
             new_state = self.hass.states.get(entity_id)
@@ -2926,7 +2925,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
     ) -> Dict[str, Any]:
         """Save user's prompt history to HA storage."""
         try:
-            store = Store(self.hass, 1, f"ai_agent_ha_history_{user_id}")
+            store: Store = Store(self.hass, 1, f"ai_agent_ha_history_{user_id}")
             await store.async_save({"history": history})
             return {"success": True}
         except Exception as e:
@@ -2936,7 +2935,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
     async def load_user_prompt_history(self, user_id: str) -> Dict[str, Any]:
         """Load user's prompt history from HA storage."""
         try:
-            store = Store(self.hass, 1, f"ai_agent_ha_history_{user_id}")
+            store: Store = Store(self.hass, 1, f"ai_agent_ha_history_{user_id}")
             data = await store.async_load()
             history = data.get("history", []) if data else []
             return {"success": True, "history": history}

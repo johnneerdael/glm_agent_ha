@@ -390,7 +390,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         try:
             from homeassistant.components.frontend import async_remove_panel
 
-            await async_remove_panel(hass, "ai_agent_ha")
+            async_remove_panel(hass, "ai_agent_ha")
             _LOGGER.debug("AI Agent HA panel removed successfully")
         except Exception as e:
             _LOGGER.debug("Error removing panel: %s", str(e))
