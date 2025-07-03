@@ -1,4 +1,5 @@
 """Constants for the AI Agent HA integration."""
+
 DOMAIN = "ai_agent_ha"
 CONF_API_KEY = "api_key"
 CONF_WEATHER_ENTITY = "weather_entity"
@@ -19,4 +20,4 @@ AI_PROVIDERS = ["llama", "openai", "gemini", "openrouter", "anthropic", "local"]
 CONF_MODELS = "models"
 
 # Supported AI providers
-DEFAULT_AI_PROVIDER = "openai" 
+DEFAULT_AI_PROVIDER = "openai"
