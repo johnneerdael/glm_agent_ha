@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
@@ -16,7 +15,7 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
 )
 
-from .const import DOMAIN, CONF_LOCAL_URL, CONF_LOCAL_MODEL
+from .const import CONF_LOCAL_MODEL, CONF_LOCAL_URL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 

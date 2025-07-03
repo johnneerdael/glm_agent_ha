@@ -19,18 +19,20 @@ ai_agent_ha:
 """
 
 """The AI Agent implementation with multiple provider support."""
-import logging
-import json
-import aiohttp
-import time
-import yaml
 import asyncio
-from typing import Dict, Any, List, Optional
+import json
+import logging
+import time
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+import aiohttp
+import yaml
 from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util
 from homeassistant.helpers.storage import Store
-from .const import DOMAIN, CONF_WEATHER_ENTITY
+from homeassistant.util import dt as dt_util
+
+from .const import CONF_WEATHER_ENTITY, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -993,8 +995,8 @@ class AiAgentHaAgent:
             _LOGGER.debug("Requesting all entities for area: %s", area_id)
 
             # Get entity registry to find entities assigned to the area
-            from homeassistant.helpers import entity_registry as er
             from homeassistant.helpers import device_registry as dr
+            from homeassistant.helpers import entity_registry as er
 
             entity_registry = er.async_get(self.hass)
             device_registry = dr.async_get(self.hass)
@@ -1507,8 +1509,8 @@ class AiAgentHaAgent:
 
             # Use the lovelace service to get dashboards
             try:
-                from homeassistant.components.lovelace import DOMAIN as LOVELACE_DOMAIN
                 from homeassistant.components.lovelace import CONF_DASHBOARDS
+                from homeassistant.components.lovelace import DOMAIN as LOVELACE_DOMAIN
 
                 # Get lovelace config
                 lovelace_config = self.hass.data.get(LOVELACE_DOMAIN, {})
@@ -1560,8 +1562,8 @@ class AiAgentHaAgent:
             )
 
             # Import the websocket handler
-            from homeassistant.components.websocket_api import require_admin
             from homeassistant.components.lovelace import websocket_api as lovelace_ws
+            from homeassistant.components.websocket_api import require_admin
 
             # Create a mock websocket connection for internal use
             class MockConnection:
@@ -1642,6 +1644,7 @@ class AiAgentHaAgent:
             try:
                 # Create dashboard file directly - this is the most reliable method
                 import os
+
                 import yaml
 
                 # Create the dashboard YAML file
@@ -1954,8 +1957,9 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
 
             try:
                 # Update dashboard file directly
-                import yaml
                 import os
+
+                import yaml
 
                 # Try updating the YAML file
                 dashboard_file = self.hass.config.path(
