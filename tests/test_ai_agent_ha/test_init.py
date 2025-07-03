@@ -30,34 +30,38 @@ except ImportError:
 @pytest.mark.skipif(not HOMEASSISTANT_AVAILABLE, reason="Home Assistant not available")
 async def test_async_setup():
     """Test the basic async_setup function."""
-    # This is a very basic test that just checks if the function exists and returns True
-    if HOMEASSISTANT_AVAILABLE:
-        # Mock the required modules properly
-        with patch('homeassistant.components.frontend.async_register_built_in_panel'), \
-             patch('homeassistant.components.http.StaticPathConfig'), \
-             patch('homeassistant.helpers.config_validation.config_entry_only_config_schema'), \
-             patch('voluptuous.Schema'):
-            
-            from custom_components.ai_agent_ha import async_setup
-            
-            mock_hass = MagicMock()
-            mock_config = MagicMock()
-            
-            result = await async_setup(mock_hass, mock_config)
-            assert result is True
+    # Mock all imports to avoid any import issues
+    with patch.dict('sys.modules', {
+        'homeassistant.components.frontend': MagicMock(),
+        'homeassistant.components.http': MagicMock(),
+        'homeassistant.helpers.config_validation': MagicMock(),
+        'voluptuous': MagicMock(),
+        'homeassistant.exceptions': MagicMock(),
+        'homeassistant.helpers.storage': MagicMock(),
+    }):
+        from custom_components.ai_agent_ha import async_setup
+        
+        mock_hass = MagicMock()
+        mock_config = MagicMock()
+        
+        result = await async_setup(mock_hass, mock_config)
+        assert result is True
 
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(not HOMEASSISTANT_AVAILABLE, reason="Home Assistant not available")
 async def test_setup_entry():
     """Test setting up an entry.""" 
-    # Mock all the imports at the module level
-    with patch('homeassistant.components.frontend.async_register_built_in_panel'), \
-         patch('homeassistant.components.http.StaticPathConfig'), \
-         patch('homeassistant.helpers.config_validation.config_entry_only_config_schema'), \
-         patch('homeassistant.exceptions.ConfigEntryNotReady'), \
-         patch('voluptuous.Schema'), \
-         patch('custom_components.ai_agent_ha.agent.AiAgentHaAgent') as mock_agent:
+    # Mock all imports comprehensively
+    with patch.dict('sys.modules', {
+        'homeassistant.components.frontend': MagicMock(),
+        'homeassistant.components.http': MagicMock(), 
+        'homeassistant.helpers.config_validation': MagicMock(),
+        'homeassistant.exceptions': MagicMock(),
+        'homeassistant.helpers.storage': MagicMock(),
+        'voluptuous': MagicMock(),
+    }), \
+    patch('custom_components.ai_agent_ha.agent.AiAgentHaAgent') as mock_agent:
         
         from custom_components.ai_agent_ha import async_setup_entry
         
@@ -69,6 +73,7 @@ async def test_setup_entry():
         mock_hass.http.async_register_static_paths = AsyncMock()
         mock_hass.config = MagicMock()
         mock_hass.config.path = MagicMock(return_value="/mock/path")
+        mock_hass.bus = MagicMock()
         
         mock_entry = MagicMock()
         mock_entry.version = 1

@@ -112,7 +112,7 @@ AVAILABLE_MODELS = {
 DEFAULT_PROVIDER = "openai"
 
 
-class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
+class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg,misc]
     """Handle a config flow for AI Agent HA."""
 
     VERSION = 1
