@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.99.3] - 2025-07-04
+### Changed
+- **Breaking**: Now requires Python 3.12+ for Home Assistant compatibility
+- Updated all GitHub Actions workflows to use Python 3.12
+- Updated mypy configuration for Python 3.12 compatibility
+- Improved type annotations throughout codebase
+
+### Fixed
+- Fixed mypy type checking errors with Home Assistant 2025.1.x
+- Fixed code formatting issues with black formatter
+- Fixed test compatibility with Python 3.12
+- Resolved CI/CD pipeline failures
+
+### Added
+- Comprehensive documentation updates for Python 3.12 requirement
+- Enhanced development environment setup instructions
+- Better error handling for AI provider imports
+
+## [0.99.2] - Previous Release
 ### Added
 - Contribution guidelines for the project
 - Issue and pull request templates

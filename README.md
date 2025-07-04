@@ -250,15 +250,15 @@ For security issues, please review our [security policy](SECURITY.md).
 
 This project uses GitHub Actions to ensure code quality and reliability:
 
-- **Quality Checks**: Runs all checks in a single workflow
+- **Quality Checks**: Runs all checks in a single workflow (Python 3.12)
 - **Python Linting**: Checks code style with flake8, black, and isort
-- **Python Type Checking**: Verifies typing with mypy
-- **Python Tests**: Runs tests with pytest
+- **Python Type Checking**: Verifies typing with mypy (Python 3.12 compatibility)
+- **Python Tests**: Runs tests with pytest (Python 3.12)
 - **Security Scan**: Checks for security vulnerabilities with Bandit
 - **Home Assistant Validation**: Validates the integration with hassfest
 - **HACS Validation**: Ensures compatibility with HACS
 
-All workflows run automatically on push and pull requests. You can also run them manually via the "Actions" tab in the GitHub repository.
+All workflows run automatically on push and pull requests using Python 3.12 to ensure compatibility with the latest Home Assistant versions. You can also run them manually via the "Actions" tab in the GitHub repository.
 
 ### API Structure
 The integration provides these main components:
@@ -271,8 +271,14 @@ The integration provides these main components:
 ## 📋 Requirements
 
 - Home Assistant 2023.3+
-- Python 3.11+
+- **Python 3.12+** (required for compatibility with Home Assistant 2025.1.x+)
 - One of the supported AI provider API keys
+
+### Python Version Note
+
+**Important**: Starting with version 0.99.3, this integration requires Python 3.12 or later. This change was made to ensure compatibility with Home Assistant 2025.1.x and later versions, which use syntax features only available in Python 3.12+.
+
+If you're running an older Home Assistant version with Python 3.11, please use version 0.99.2 or earlier of this integration.
 
 ## 🔒 Security
 

@@ -1,4 +1,5 @@
 # Development dependencies for AI Agent HA
+# Requires Python 3.12+ for Home Assistant compatibility
 flake8>=6.0.0
 black>=23.1.0
 isort>=5.12.0
