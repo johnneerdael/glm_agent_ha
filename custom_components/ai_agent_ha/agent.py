@@ -1180,7 +1180,11 @@ class AiAgentHaAgent:
 
             # Get history using the history component
             history_data = await self.hass.async_add_executor_job(
-                getattr(history, 'get_significant_states'), self.hass, start, now, [entity_id]
+                getattr(history, "get_significant_states"),
+                self.hass,
+                start,
+                now,
+                [entity_id],
             )
 
             # Convert to serializable format
@@ -1212,7 +1216,7 @@ class AiAgentHaAgent:
 
             # Get logbook entries
             entries = await self.hass.async_add_executor_job(
-                getattr(logbook, 'get_events'), self.hass, start, now
+                getattr(logbook, "get_events"), self.hass, start, now
             )
 
             # Convert to serializable format
@@ -1578,6 +1582,7 @@ class AiAgentHaAgent:
             # Get dashboard configuration
             try:
                 from homeassistant.components.lovelace import DOMAIN as LOVELACE_DOMAIN
+
                 # Dashboard import - this may vary by Home Assistant version
                 LovelaceDashboard = None  # type: ignore[misc,assignment]
 
