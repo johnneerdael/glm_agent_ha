@@ -2990,10 +2990,9 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                         _LOGGER.error(
                             "Detected corrupted repetitive response, aborting this iteration"
                         )
-                        return {
-                            "success": False,
-                            "error": "AI generated corrupted response with repetitive text. Please try again with a clearer request.",
-                        }
+                        raise Exception(
+                            "AI generated corrupted response with repetitive text. Please try again with a clearer request."
+                        )
 
                 # Check if response is empty
                 if not response or response.strip() == "":
