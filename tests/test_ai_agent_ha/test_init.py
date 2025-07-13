@@ -1,16 +1,18 @@
 """Test for AI Agent HA setup."""
+
 from unittest.mock import patch, MagicMock, AsyncMock
 import pytest
 import sys
 import os
 
 # Add the parent directory to the path for direct imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 try:
     from homeassistant.core import HomeAssistant
     from homeassistant.setup import async_setup_component
     from homeassistant.config_entries import ConfigEntry
+
     HOMEASSISTANT_AVAILABLE = True
 except ImportError:
     HOMEASSISTANT_AVAILABLE = False
@@ -31,19 +33,22 @@ except ImportError:
 async def test_async_setup():
     """Test the basic async_setup function."""
     # Mock all imports to avoid any import issues
-    with patch.dict('sys.modules', {
-        'homeassistant.components.frontend': MagicMock(),
-        'homeassistant.components.http': MagicMock(),
-        'homeassistant.helpers.config_validation': MagicMock(),
-        'voluptuous': MagicMock(),
-        'homeassistant.exceptions': MagicMock(),
-        'homeassistant.helpers.storage': MagicMock(),
-    }):
+    with patch.dict(
+        "sys.modules",
+        {
+            "homeassistant.components.frontend": MagicMock(),
+            "homeassistant.components.http": MagicMock(),
+            "homeassistant.helpers.config_validation": MagicMock(),
+            "voluptuous": MagicMock(),
+            "homeassistant.exceptions": MagicMock(),
+            "homeassistant.helpers.storage": MagicMock(),
+        },
+    ):
         from custom_components.ai_agent_ha import async_setup
-        
+
         mock_hass = MagicMock()
         mock_config = MagicMock()
-        
+
         result = await async_setup(mock_hass, mock_config)
         assert result is True
 
@@ -51,20 +56,22 @@ async def test_async_setup():
 @pytest.mark.asyncio
 @pytest.mark.skipif(not HOMEASSISTANT_AVAILABLE, reason="Home Assistant not available")
 async def test_setup_entry():
-    """Test setting up an entry.""" 
+    """Test setting up an entry."""
     # Mock all imports comprehensively
-    with patch.dict('sys.modules', {
-        'homeassistant.components.frontend': MagicMock(),
-        'homeassistant.components.http': MagicMock(), 
-        'homeassistant.helpers.config_validation': MagicMock(),
-        'homeassistant.exceptions': MagicMock(),
-        'homeassistant.helpers.storage': MagicMock(),
-        'voluptuous': MagicMock(),
-    }), \
-    patch('custom_components.ai_agent_ha.agent.AiAgentHaAgent') as mock_agent:
-        
+    with patch.dict(
+        "sys.modules",
+        {
+            "homeassistant.components.frontend": MagicMock(),
+            "homeassistant.components.http": MagicMock(),
+            "homeassistant.helpers.config_validation": MagicMock(),
+            "homeassistant.exceptions": MagicMock(),
+            "homeassistant.helpers.storage": MagicMock(),
+            "voluptuous": MagicMock(),
+        },
+    ), patch("custom_components.ai_agent_ha.agent.AiAgentHaAgent") as mock_agent:
+
         from custom_components.ai_agent_ha import async_setup_entry
-        
+
         # Create mock hass and entry
         mock_hass = MagicMock()
         mock_hass.data = {}
@@ -74,18 +81,15 @@ async def test_setup_entry():
         mock_hass.config = MagicMock()
         mock_hass.config.path = MagicMock(return_value="/mock/path")
         mock_hass.bus = MagicMock()
-        
+
         mock_entry = MagicMock()
         mock_entry.version = 1
-        mock_entry.data = {
-            "ai_provider": "openai",
-            "openai_token": "fake_token"
-        }
-        
+        mock_entry.data = {"ai_provider": "openai", "openai_token": "fake_token"}
+
         # The function should return True
         result = await async_setup_entry(mock_hass, mock_entry)
         assert result is True
-        
+
         # Just verify the function completes successfully
         # The agent creation depends on complex Home Assistant internals
-        # that are difficult to mock completely in unit tests 
+        # that are difficult to mock completely in unit tests

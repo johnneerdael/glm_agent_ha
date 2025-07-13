@@ -1,4 +1,5 @@
 """Fixtures for AI Agent HA tests."""
+
 import asyncio
 from unittest.mock import patch, MagicMock
 
@@ -7,6 +8,7 @@ import pytest
 try:
     from homeassistant.core import HomeAssistant
     from homeassistant.setup import async_setup_component
+
     HOMEASSISTANT_AVAILABLE = True
 except ImportError:
     HOMEASSISTANT_AVAILABLE = False
@@ -27,15 +29,15 @@ async def hass():
         mock_hass.config.components = set()
         yield mock_hass
         return
-    
+
     hass = HomeAssistant()
     hass.config.components.add("persistent_notification")
-    
+
     # Start Home Assistant
     await hass.async_start()
-    
+
     yield hass
-    
+
     # Stop Home Assistant
     await hass.async_stop()
 
@@ -44,4 +46,4 @@ async def hass():
 def mock_agent():
     """Mock the AI Agent."""
     with patch("custom_components.ai_agent_ha.agent.AiAgentHaAgent") as mock:
-        yield mock 
+        yield mock
