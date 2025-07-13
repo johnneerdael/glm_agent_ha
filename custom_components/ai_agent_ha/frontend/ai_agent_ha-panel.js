@@ -560,6 +560,8 @@ class AiAgentHaPanel extends LitElement {
     this._availableProviders = [];
     this._showProviderDropdown = false;
     this.providersLoaded = false;
+    this._eventSubscriptionSetup = false;
+    this._serviceCallTimeout = null;
     console.debug("AI Agent HA Panel constructor called");
   }
 
@@ -572,11 +574,13 @@ class AiAgentHaPanel extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
     console.debug("AI Agent HA Panel connected");
-    if (this.hass) {
+    if (this.hass && !this._eventSubscriptionSetup) {
+      this._eventSubscriptionSetup = true;
       this.hass.connection.subscribeEvents(
         (event) => this._handleLlamaResponse(event),
         'ai_agent_ha_response'
       );
+      console.debug("Event subscription set up in connectedCallback()");
       // Load prompt history from Home Assistant storage
       await this._loadPromptHistory();
     }
@@ -591,6 +595,16 @@ class AiAgentHaPanel extends LitElement {
 
   async updated(changedProps) {
     console.debug("Updated called with:", changedProps);
+
+    // Set up event subscription when hass becomes available
+    if (changedProps.has('hass') && this.hass && !this._eventSubscriptionSetup) {
+      this._eventSubscriptionSetup = true;
+      this.hass.connection.subscribeEvents(
+        (event) => this._handleLlamaResponse(event),
+        'ai_agent_ha_response'
+      );
+      console.debug("Event subscription set up in updated()");
+    }
 
     // Load providers when hass becomes available
     if (changedProps.has('hass') && this.hass && !this.providersLoaded) {
@@ -1040,6 +1054,25 @@ class AiAgentHaPanel extends LitElement {
     this._isLoading = true;
     this._error = null;
 
+    // Clear any existing timeout
+    if (this._serviceCallTimeout) {
+      clearTimeout(this._serviceCallTimeout);
+    }
+
+    // Set timeout to clear loading state after 60 seconds
+    this._serviceCallTimeout = setTimeout(() => {
+      if (this._isLoading) {
+        console.warn("Service call timeout - clearing loading state");
+        this._isLoading = false;
+        this._error = 'Request timed out. Please try again.';
+        this._messages = [...this._messages, {
+          type: 'assistant',
+          text: 'Sorry, the request timed out. Please try again.'
+        }];
+        this.requestUpdate();
+      }
+    }, 60000); // 60 second timeout
+
     try {
       console.debug("Calling ai_agent_ha service");
       await this.hass.callService('ai_agent_ha', 'query', {
@@ -1048,14 +1081,28 @@ class AiAgentHaPanel extends LitElement {
       });
     } catch (error) {
       console.error("Error calling service:", error);
+      this._clearLoadingState();
       this._error = error.message || 'An error occurred while processing your request';
-      this._isLoading = false;
+      this._messages = [...this._messages, {
+        type: 'assistant',
+        text: `Error: ${this._error}`
+      }];
+    }
+  }
+
+  _clearLoadingState() {
+    this._isLoading = false;
+    if (this._serviceCallTimeout) {
+      clearTimeout(this._serviceCallTimeout);
+      this._serviceCallTimeout = null;
     }
   }
 
   _handleLlamaResponse(event) {
     console.debug("Received llama response:", event);
-    this._isLoading = false;
+    
+    try {
+      this._clearLoadingState();
     if (event.data.success) {
       // Check if the answer is empty
       if (!event.data.answer || event.data.answer.trim() === '') {
@@ -1119,9 +1166,20 @@ class AiAgentHaPanel extends LitElement {
         { type: 'assistant', text: `Error: ${this._error}` }
       ];
     }
+    } catch (error) {
+      console.error("Error in _handleLlamaResponse:", error);
+      this._clearLoadingState();
+      this._error = 'An error occurred while processing the response';
+      this._messages = [...this._messages, {
+        type: 'assistant',
+        text: 'Sorry, an error occurred while processing the response. Please try again.'
+      }];
+      this.requestUpdate();
+    }
   }
 
   async _approveAutomation(automation) {
+    if (this._isLoading) return;
     this._isLoading = true;
     try {
       const result = await this.hass.callService('ai_agent_ha', 'create_automation', {
@@ -1150,8 +1208,9 @@ class AiAgentHaPanel extends LitElement {
         type: 'assistant',
         text: `Error: ${this._error}`
       }];
+    } finally {
+      this._clearLoadingState();
     }
-    this._isLoading = false;
   }
 
   _rejectAutomation() {
@@ -1162,6 +1221,7 @@ class AiAgentHaPanel extends LitElement {
   }
 
   async _approveDashboard(dashboard) {
+    if (this._isLoading) return;
     this._isLoading = true;
     try {
       const result = await this.hass.callService('ai_agent_ha', 'create_dashboard', {
@@ -1190,8 +1250,9 @@ class AiAgentHaPanel extends LitElement {
         type: 'assistant',
         text: `Error: ${this._error}`
       }];
+    } finally {
+      this._clearLoadingState();
     }
-    this._isLoading = false;
   }
 
   _rejectDashboard() {
@@ -1216,7 +1277,7 @@ class AiAgentHaPanel extends LitElement {
 
   _clearChat() {
     this._messages = [];
-    this._isLoading = false;
+    this._clearLoadingState();
     this._error = null;
     this._pendingAutomation = null;
     // Don't clear prompt history - users might want to keep it
