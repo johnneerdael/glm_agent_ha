@@ -653,8 +653,9 @@ class AiAgentHaAgent:
             "- Use get_entities() with area_ids parameter to get entities from multiple areas efficiently\n"
             "- Example: get_entities(area_ids=['area1', 'area2', 'area3']) for multiple areas at once\n"
             "- This is more efficient than calling get_entities_by_area() multiple times\n\n"
-            "You can also create automations when users ask for them. When you detect that a user wants to create an automation. make sure to request first entities so you know the entities ids to trigger on. pay attention that if you want to set specfic days in the autoamtion you should use those days: ['fri', 'mon', 'sat', 'sun', 'thu', 'tue', 'wed'] \n"
-            "respond with a JSON object in this format:\n"
+            "You can also create automations when users ask for them. When you detect that a user wants to create an automation, make sure to request first entities so you know the entity IDs to trigger on. Pay attention that if you want to set specific days in the automation you should use those days: ['fri', 'mon', 'sat', 'sun', 'thu', 'tue', 'wed']\n"
+            "IMPORTANT: Keep your response concise and focused. Do NOT repeat text or add unnecessary explanations.\n"
+            "Respond with a JSON object in this EXACT format:\n"
             "{\n"
             '  "request_type": "automation_suggestion",\n'
             '  "message": "I\'ve created an automation that might help you. Would you like me to create it?",\n'
@@ -757,8 +758,9 @@ class AiAgentHaAgent:
             "- Use get_entities() with area_ids parameter to get entities from multiple areas efficiently\n"
             "- Example: get_entities(area_ids=['area1', 'area2', 'area3']) for multiple areas at once\n"
             "- This is more efficient than calling get_entities_by_area() multiple times\n\n"
-            "You can also create automations when users ask for them. When you detect that a user wants to create an automation, make sure to request first entities so you know the entities ids to trigger on. pay attention that if you want to set specific days in the automation you should use those days: ['fri', 'mon', 'sat', 'sun', 'thu', 'tue', 'wed'] \n"
-            "respond with a JSON object in this format:\n"
+            "You can also create automations when users ask for them. When you detect that a user wants to create an automation, make sure to request first entities so you know the entity IDs to trigger on. Pay attention that if you want to set specific days in the automation you should use those days: ['fri', 'mon', 'sat', 'sun', 'thu', 'tue', 'wed']\n"
+            "IMPORTANT: Keep your response concise and focused. Do NOT repeat text or add unnecessary explanations.\n"
+            "Respond with a JSON object in this EXACT format:\n"
             "{\n"
             '  "request_type": "automation_suggestion",\n'
             '  "message": "I\'ve created an automation that might help you. Would you like me to create it?",\n'
@@ -2253,9 +2255,40 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                             response_data.get("request_type", "unknown"),
                         )
 
-                        if response_data.get("request_type") == "data_request":
-                            # Handle data request
-                            request_type = response_data.get("request")
+                        # Check if this is a data request (either format)
+                        data_request_types = [
+                            "get_entity_state",
+                            "get_entities_by_domain",
+                            "get_entities_by_area",
+                            "get_entities",
+                            "get_calendar_events",
+                            "get_automations",
+                            "get_entity_registry",
+                            "get_device_registry",
+                            "get_weather_data",
+                            "get_area_registry",
+                            "get_history",
+                            "get_logbook_entries",
+                            "get_person_data",
+                            "get_statistics",
+                            "get_scenes",
+                            "get_dashboards",
+                            "get_dashboard_config",
+                            "set_entity_state",
+                            "create_automation",
+                            "create_dashboard",
+                            "update_dashboard",
+                        ]
+
+                        if (
+                            response_data.get("request_type") == "data_request"
+                            or response_data.get("request_type") in data_request_types
+                        ):
+                            # Handle data request (both standard format and direct request type)
+                            if response_data.get("request_type") == "data_request":
+                                request_type = response_data.get("request")
+                            else:
+                                request_type = response_data.get("request_type")
                             parameters = response_data.get("parameters", {})
                             _LOGGER.debug(
                                 "Processing data request: %s with parameters: %s",
@@ -2507,6 +2540,76 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                             target = response_data.get("target", {})
                             service_data = response_data.get("service_data", {})
 
+                            # Resolve nested requests in target
+                            if target and "entity_id" in target:
+                                entity_id_value = target["entity_id"]
+                                if (
+                                    isinstance(entity_id_value, dict)
+                                    and "request_type" in entity_id_value
+                                ):
+                                    # This is a nested request, resolve it
+                                    nested_request_type = entity_id_value.get(
+                                        "request_type"
+                                    )
+                                    nested_parameters = entity_id_value.get(
+                                        "parameters", {}
+                                    )
+
+                                    _LOGGER.debug(
+                                        "Resolving nested request: %s with parameters: %s",
+                                        nested_request_type,
+                                        json.dumps(nested_parameters),
+                                    )
+
+                                    # Resolve the nested request
+                                    if nested_request_type == "get_entities":
+                                        entities_data = await self.get_entities(
+                                            area_id=nested_parameters.get("area_id"),
+                                            area_ids=nested_parameters.get("area_ids"),
+                                        )
+                                    elif nested_request_type == "get_entities_by_area":
+                                        entities_data = await self.get_entities_by_area(
+                                            nested_parameters.get("area_id")
+                                        )
+                                    elif (
+                                        nested_request_type == "get_entities_by_domain"
+                                    ):
+                                        entities_data = (
+                                            await self.get_entities_by_domain(
+                                                nested_parameters.get("domain")
+                                            )
+                                        )
+                                    else:
+                                        _LOGGER.error(
+                                            "Unsupported nested request type: %s",
+                                            nested_request_type,
+                                        )
+                                        return {
+                                            "success": False,
+                                            "error": f"Unsupported nested request type: {nested_request_type}",
+                                        }
+
+                                    # Extract entity IDs from the resolved data
+                                    if isinstance(entities_data, list):
+                                        entity_ids = [
+                                            entity.get("entity_id")
+                                            for entity in entities_data
+                                            if entity.get("entity_id")
+                                        ]
+                                        target["entity_id"] = entity_ids
+                                        _LOGGER.debug(
+                                            "Resolved nested request to entity IDs: %s",
+                                            entity_ids,
+                                        )
+                                    else:
+                                        _LOGGER.error(
+                                            "Nested request returned unexpected data format"
+                                        )
+                                        return {
+                                            "success": False,
+                                            "error": "Nested request returned unexpected data format",
+                                        }
+
                             # Handle backward compatibility with old format
                             if not domain or not service:
                                 request = response_data.get("request")
@@ -2657,11 +2760,41 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                                     "Could not save debug file: %s", str(debug_error)
                                 )
 
+                        # Check if this looks like a corrupted automation suggestion
+                        if (
+                            response.strip().startswith(
+                                '{"request_type": "automation_suggestion'
+                            )
+                            and len(response) > 10000
+                            and response.count("for its use in various fields") > 50
+                        ):
+                            _LOGGER.warning(
+                                "Detected corrupted automation suggestion response with repetitive text"
+                            )
+                            result = {
+                                "success": False,
+                                "error": "AI generated corrupted automation response. Please try again with a more specific automation request.",
+                            }
+                            self._set_cached_data(cache_key, result)
+                            return result
+
                         # If response is not valid JSON, try to wrap it as a final response
                         try:
+                            # Truncate extremely long responses to prevent memory issues
+                            response_to_wrap = response
+                            if len(response) > 50000:
+                                response_to_wrap = (
+                                    response[:5000]
+                                    + "... [Response truncated due to excessive length]"
+                                )
+                                _LOGGER.warning(
+                                    "Truncated extremely long response from %d to 5000 characters",
+                                    len(response),
+                                )
+
                             wrapped_response = {
                                 "request_type": "final_response",
-                                "response": response,
+                                "response": response_to_wrap,
                             }
                             result = {
                                 "success": True,
@@ -2731,6 +2864,22 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                     "AI client returned response of length: %d", len(response or "")
                 )
                 _LOGGER.debug("AI response preview: %s", (response or "")[:200])
+
+                # Check for extremely long responses that might indicate model issues
+                if response and len(response) > 50000:
+                    _LOGGER.warning(
+                        "AI returned extremely long response (%d characters), this may indicate a model issue",
+                        len(response),
+                    )
+                    # Check for repetitive patterns that indicate a corrupted response
+                    if response.count("for its use in various fields") > 50:
+                        _LOGGER.error(
+                            "Detected corrupted repetitive response, aborting this iteration"
+                        )
+                        return {
+                            "success": False,
+                            "error": "AI generated corrupted response with repetitive text. Please try again with a clearer request.",
+                        }
 
                 # Check if response is empty
                 if not response or response.strip() == "":
