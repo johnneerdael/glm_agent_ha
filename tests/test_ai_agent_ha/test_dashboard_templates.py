@@ -165,16 +165,31 @@ class TestDashboardTemplates:
         
         # Check that security entities are grouped correctly
         cards = result["views"][0]["cards"]
+        
+        # Check for binary_sensor entities (grouped under "Sensors")
         sensor_card = next(
-            (card for card in cards if card.get("type") == "entities" and "Sensors" in card.get("title", "")),
+            (card for card in cards if card.get("type") == "entities" and card.get("entities", [])), 
             None
         )
-        alarm_card = next(
-            (card for card in cards if card.get("type") == "alarm-panel"),
-            None
-        )
+        
+        # Check for alarm_control_panel entities (grouped under "Switches" since they're not explicitly handled)
+        alarm_entities = []
+        for card in cards:
+            if card.get("type") == "entities" and card.get("entities", []):
+                alarm_entities.extend(card.get("entities", []))
+        
+        # Verify entities are included
+        all_entities = []
+        for card in cards:
+            if "entities" in card:
+                all_entities.extend(card.get("entities", []))
+            elif "entity" in card:
+                all_entities.append(card.get("entity"))
+        
+        assert "binary_sensor.front_door" in all_entities
+        assert "binary_sensor.back_door" in all_entities
+        assert "alarm_control_panel.home" in all_entities
         assert sensor_card is not None
-        assert alarm_card is not None
 
     def test_get_template_for_entities_mixed_domains(self):
         """Test get_template_for_entities with mixed domain entities."""

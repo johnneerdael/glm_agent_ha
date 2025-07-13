@@ -267,6 +267,20 @@ def get_template_for_entities(entities, dashboard_type="general"):
         for media_entity in entity_groups["media_player"]:
             view_cards.append({"type": "media-control", "entity": media_entity})
 
+    # Security entities
+    if "binary_sensor" in entity_groups:
+        view_cards.append(
+            {
+                "type": "entities",
+                "title": "Sensors",
+                "entities": entity_groups["binary_sensor"],
+            }
+        )
+
+    if "alarm_control_panel" in entity_groups:
+        for alarm_entity in entity_groups["alarm_control_panel"]:
+            view_cards.append({"type": "alarm-panel", "entity": alarm_entity})
+
     # Sensors
     if "sensor" in entity_groups:
         view_cards.append(
