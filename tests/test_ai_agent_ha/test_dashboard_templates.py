@@ -20,6 +20,7 @@ except ImportError:
     DASHBOARD_TEMPLATES = {}
     CARD_EXAMPLES = {}
     COMMON_ICONS = {}
+    
     def get_template_for_entities(entities, dashboard_type="general"):
         return {}
 
