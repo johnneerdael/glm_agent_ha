@@ -18,6 +18,7 @@ ai_agent_ha:
     anthropic: "claude-3-5-sonnet-20241022"  # or "claude-3-opus-20240229", etc.
     local: "llama3.2"  # model name for local API (optional if your API doesn't require it)
 """
+
 import asyncio
 import json
 import logging
