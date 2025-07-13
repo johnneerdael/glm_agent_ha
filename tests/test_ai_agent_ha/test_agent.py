@@ -110,20 +110,20 @@ class TestAIAgent:
             from custom_components.ai_agent_ha.const import AI_PROVIDERS
         except ImportError:
             AI_PROVIDERS = [
-                "openai",
-                "anthropic",
-                "google",
-                "openrouter",
                 "llama",
+                "openai",
+                "gemini",
+                "openrouter",
+                "anthropic",
                 "local",
             ]
 
         expected_providers = [
-            "openai",
-            "anthropic",
-            "google",
-            "openrouter",
             "llama",
+            "openai", 
+            "gemini",
+            "openrouter",
+            "anthropic",
             "local",
         ]
         assert all(provider in AI_PROVIDERS for provider in expected_providers)

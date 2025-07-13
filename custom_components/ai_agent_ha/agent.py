@@ -1,4 +1,5 @@
-"""
+"""The AI Agent implementation with multiple provider support.
+
 Example config:
 ai_agent_ha:
   ai_provider: openai  # or 'llama', 'gemini', 'openrouter', 'anthropic', 'local'
@@ -17,8 +18,6 @@ ai_agent_ha:
     anthropic: "claude-3-5-sonnet-20241022"  # or "claude-3-opus-20240229", etc.
     local: "llama3.2"  # model name for local API (optional if your API doesn't require it)
 """
-
-"""The AI Agent implementation with multiple provider support."""
 import asyncio
 import json
 import logging
