@@ -178,15 +178,6 @@ Access the beautiful chat interface at:
 - **Sidebar**: AI Agent HA panel
 - **URL**: `http://your-ha-instance:8123/ai_agent_ha`
 
-### Voice Commands
-Ask natural language questions like:
-- "Turn on all the lights in the living room"
-- "What's the temperature in the bedroom?" 
-- "Create an automation to turn off lights at 11 PM"
-- "Create a dashboard for my security cameras and door sensors"
-- "Make a living room dashboard with lights and climate control"
-- "Show me the weather forecast"
-- "Which doors are open?"
 
 ### Service Calls
 Use the `ai_agent_ha.query` service in automations:
