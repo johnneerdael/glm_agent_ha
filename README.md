@@ -179,14 +179,6 @@ Access the beautiful chat interface at:
 - **URL**: `http://your-ha-instance:8123/ai_agent_ha`
 
 
-### Service Calls
-Use the `ai_agent_ha.query` service in automations:
-
-```yaml
-service: ai_agent_ha.query
-data:
-  prompt: "Turn on the porch light when motion is detected"
-```
 
 ## 🔧 Advanced Features
 
