@@ -418,7 +418,14 @@ class OpenAIClient(BaseAIClient):
     def _get_token_parameter(self):
         """Determine which token parameter to use based on the model."""
         # Models that require max_completion_tokens instead of max_tokens
-        completion_token_models = ["o3-mini", "o3", "o1-mini", "o1-preview", "o1", "gpt-5"]
+        completion_token_models = [
+            "o3-mini",
+            "o3",
+            "o1-mini",
+            "o1-preview",
+            "o1",
+            "gpt-5",
+        ]
 
         # Check if the model name contains any of the newer model identifiers
         model_lower = self.model.lower()
