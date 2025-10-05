@@ -418,7 +418,7 @@ class OpenAIClient(BaseAIClient):
     def _get_token_parameter(self):
         """Determine which token parameter to use based on the model."""
         # Models that require max_completion_tokens instead of max_tokens
-        completion_token_models = ["o3-mini", "o3", "o1-mini", "o1-preview", "o1"]
+        completion_token_models = ["o3-mini", "o3", "o1-mini", "o1-preview", "o1", "gpt-5"]
 
         # Check if the model name contains any of the newer model identifiers
         model_lower = self.model.lower()
@@ -429,7 +429,7 @@ class OpenAIClient(BaseAIClient):
     def _is_restricted_model(self):
         """Check if the model has restricted parameters (no temperature, top_p, etc.)."""
         # Models that don't support temperature, top_p and other parameters
-        restricted_models = ["o3-mini", "o3", "o1-mini", "o1-preview", "o1"]
+        restricted_models = ["o3-mini", "o3", "o1-mini", "o1-preview", "o1", "gpt-5"]
 
         model_lower = self.model.lower()
         return any(model_id in model_lower for model_id in restricted_models)
