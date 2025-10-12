@@ -30,7 +30,7 @@ SERVICE_SCHEMA = vol.Schema(
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the AI Agent HA component."""
+    """Set up the GLM Coding Plan Agent HA component."""
     return True
 
 
@@ -54,7 +54,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up AI Agent HA from a config entry."""
+    """Set up GLM Coding Plan Agent HA from a config entry."""
     try:
         # Handle version compatibility
         if not hasattr(entry, "version") or entry.version != 1:
@@ -81,12 +81,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Validate provider
         if provider not in [
-            "llama",
             "openai",
-            "gemini",
-            "openrouter",
-            "anthropic",
-            "local",
+            "anthropic"
         ]:
             _LOGGER.error("Unknown AI provider: %s", provider)
             raise ConfigEntryNotReady(f"Unknown AI provider: {provider}")
@@ -103,11 +99,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 for k, v in config_data.items()
                 if k
                 not in [
-                    "llama_token",
                     "openai_token",
-                    "gemini_token",
-                    "openrouter_token",
-                    "anthropic_token",
+                    "anthropic_token"
                 ]
             },
         )
