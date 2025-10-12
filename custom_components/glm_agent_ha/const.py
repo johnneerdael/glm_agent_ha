@@ -1,4 +1,4 @@
-"""Constants for the AI Agent HA integration."""
+"""Constants for the GLM Coding Plan Agent HA integration."""
 
 DOMAIN = "glm_agent_ha"
 CONF_API_KEY = "api_key"

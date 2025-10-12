@@ -1,4 +1,4 @@
-"""The AI Agent HA integration."""
+"""The GLM Coding Plan Agent HA integration."""
 
 from __future__ import annotations
 
@@ -106,14 +106,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         hass.data[DOMAIN]["agents"][provider] = AiAgentHaAgent(hass, config_data)
 
-        _LOGGER.info("Successfully set up AI Agent HA for provider: %s", provider)
+        _LOGGER.info("Successfully set up GLM Coding Plan Agent HA for provider: %s", provider)
 
     except KeyError as err:
         _LOGGER.error("Missing required configuration key: %s", err)
         raise ConfigEntryNotReady(f"Missing required configuration key: {err}")
     except Exception as err:
-        _LOGGER.exception("Unexpected error setting up AI Agent HA")
-        raise ConfigEntryNotReady(f"Error setting up AI Agent HA: {err}")
+        _LOGGER.exception("Unexpected error setting up GLM Coding Plan Agent HA")
+        raise ConfigEntryNotReady(f"Error setting up GLM Coding Plan Agent HA: {err}")
 
     # Modify the query service handler to use the correct provider
     async def async_handle_query(call):
@@ -125,7 +125,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     "No AI agents available. Please configure the integration first."
                 )
                 result = {"error": "No AI agents configured"}
-                hass.bus.async_fire("ai_agent_ha_response", result)
+                hass.bus.async_fire("glm_agent_ha_response", result)
                 return
 
             provider = call.data.get("provider")
@@ -135,7 +135,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 if not available_providers:
                     _LOGGER.error("No AI agents available")
                     result = {"error": "No AI agents configured"}
-                    hass.bus.async_fire("ai_agent_ha_response", result)
+                    hass.bus.async_fire("glm_agent_ha_response", result)
                     return
                 provider = available_providers[0]
                 _LOGGER.debug(f"Using fallback provider: {provider}")
@@ -144,11 +144,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             result = await agent.process_query(
                 call.data.get("prompt", ""), provider=provider
             )
-            hass.bus.async_fire("ai_agent_ha_response", result)
+            hass.bus.async_fire("glm_agent_ha_response", result)
         except Exception as e:
             _LOGGER.error(f"Error processing query: {e}")
             result = {"error": str(e)}
-            hass.bus.async_fire("ai_agent_ha_response", result)
+            hass.bus.async_fire("glm_agent_ha_response", result)
 
     async def async_handle_create_automation(call):
         """Handle the create_automation service call."""
@@ -340,37 +340,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.http.async_register_static_paths(
         [
             StaticPathConfig(
-                "/frontend/ai_agent_ha",
-                hass.config.path("custom_components/ai_agent_ha/frontend"),
+                "/frontend/glm_agent_ha",
+                hass.config.path("custom_components/glm_agent_ha/frontend"),
                 False,
             )
         ]
     )
 
     # Panel registration with proper error handling
-    panel_name = "ai_agent_ha"
+    panel_name = "glm_agent_ha"
     try:
         if await _panel_exists(hass, panel_name):
-            _LOGGER.debug("AI Agent HA panel already exists, skipping registration")
+            _LOGGER.debug("GLM Coding Plan Agent HA panel already exists, skipping registration")
             return True
 
-        _LOGGER.debug("Registering AI Agent HA panel")
+        _LOGGER.debug("Registering GLM Coding Plan Agent HA panel")
         async_register_built_in_panel(
             hass,
             component_name="custom",
-            sidebar_title="AI Agent HA",
+            sidebar_title="GLM Coding Plan Agent HA",
             sidebar_icon="mdi:robot",
             frontend_url_path=panel_name,
             require_admin=False,
             config={
                 "_panel_custom": {
-                    "name": "ai_agent_ha-panel",
-                    "module_url": "/frontend/ai_agent_ha/ai_agent_ha-panel.js",
+                    "name": "glm_agent_ha-panel",
+                    "module_url": "/frontend/glm_agent_ha/glm_agent_ha-panel.js",
                     "embed_iframe": False,
                 }
             },
         )
-        _LOGGER.debug("AI Agent HA panel registered successfully")
+        _LOGGER.debug("GLM Coding Plan Agent HA panel registered successfully")
     except Exception as e:
         _LOGGER.warning("Panel registration error: %s", str(e))
 
@@ -379,12 +379,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    if await _panel_exists(hass, "ai_agent_ha"):
+    if await _panel_exists(hass, "glm_agent_ha"):
         try:
             from homeassistant.components.frontend import async_remove_panel
 
-            async_remove_panel(hass, "ai_agent_ha")
-            _LOGGER.debug("AI Agent HA panel removed successfully")
+            async_remove_panel(hass, "glm_agent_ha")
+            _LOGGER.debug("GLM Coding Plan Agent HA panel removed successfully")
         except Exception as e:
             _LOGGER.debug("Error removing panel: %s", str(e))
 

@@ -1,0 +1,63 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "GLM Coding Plan Agent HA - Select Provider",
+                "description": "Choose your AI provider",
+                "data": {
+                    "ai_provider": "AI Provider"
+                },
+                "data_description": {
+                    "ai_provider": "Select your preferred AI provider"
+                }
+            },
+            "configure": {
+                "title": "GLM Coding Plan Agent HA - Configure {provider}",
+                "description": "Configure your {provider} API credentials and model",
+                "data": {
+                    "openai_token": "GLM Coding Plan API Key",
+                    "anthropic_token": "GLM Coding Plan API Key"
+                },
+                "data_description": {
+                    "openai_token": "Enter your GLM Coding Plan API key for the OpenAI API endpoint",
+                    "anthropic_token": "Enter your GLM Coding Plan API key for the OpenAI API endpoint"
+                }
+            }
+        },
+        "error": {
+            "invalid_api_key": "Invalid API key or token",
+            "openai_token": "GLM Coding Plan API key is required",
+            "anthropic_token": "GLM Coding Plan API key is required",
+            "unknown": "Unexpected error occurred"
+        },
+        "abort": {
+            "already_configured": "AI Agent HA is already configured"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "GLM Coding Plan Agent HA - Select Provider",
+                "description": "Choose your AI provider (Current: {current_provider})",
+                "data": {
+                    "ai_provider": "AI Provider"
+                },
+                "data_description": {
+                    "ai_provider": "Select your preferred AI provider"
+                }
+            },
+            "configure_options": {
+                "title": "AI Agent HA - Configure {provider}",
+                "description": "Update your {provider} API credentials and model",
+                "data": {
+                    "openai_token": "GLM Coding Plan API Key",
+                    "anthropic_token": "GLM Coding Plan API Key"
+                },
+                "data_description": {
+                    "openai_token": "Enter your GLM Coding Plan API key for the OpenAI API endpoint",
+                    "anthropic_token": "Enter your GLM Coding Plan API key for the OpenAI API endpoint"
+                }
+            }
+        }
+    }
+} 

@@ -21,15 +21,15 @@ jobs:
         shell: "bash"
         run: |
           yq -i -o json '.version="${{ github.event.release.tag_name }}"' \
-            "${{ github.workspace }}/custom_components/glmagentha/manifest.json"
+            "${{ github.workspace }}/custom_components/glm_agent_ha/manifest.json"
 
       - name: "ZIP the integration directory"
         shell: "bash"
         run: |
-          cd "${{ github.workspace }}/custom_components/glmagentha"
-          zip glmagentha.zip -r ./
+          cd "${{ github.workspace }}/custom_components/glm_agent_ha"
+          zip glm_agent_ha.zip -r ./
 
       - name: "Upload the ZIP file to the release"
         uses: softprops/action-gh-release@v2.2.1
         with:
-          files: ${{ github.workspace }}/custom_components/glmagentha/glmagentha.zip
+          files: ${{ github.workspace }}/custom_components/glm_agent_ha/glm_agent_ha.zip

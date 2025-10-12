@@ -574,7 +574,7 @@ class AiAgentHaPanel extends LitElement {
       this._eventSubscriptionSetup = true;
       this.hass.connection.subscribeEvents(
         (event) => this._handleLlamaResponse(event),
-        'ai_agent_ha_response'
+        'glm_agent_ha_response'
       );
       console.debug("Event subscription set up in connectedCallback()");
       // Load prompt history from Home Assistant storage
@@ -597,7 +597,7 @@ class AiAgentHaPanel extends LitElement {
       this._eventSubscriptionSetup = true;
       this.hass.connection.subscribeEvents(
         (event) => this._handleLlamaResponse(event),
-        'ai_agent_ha_response'
+        'glm_agent_ha_response'
       );
       console.debug("Event subscription set up in updated()");
     }
@@ -611,7 +611,7 @@ class AiAgentHaPanel extends LitElement {
         const allEntries = await this.hass.callWS({ type: 'config_entries/get' });
 
         const aiAgentEntries = allEntries.filter(
-          entry => entry.domain === 'ai_agent_ha'
+          entry => entry.domain === 'glm_agent_ha'
         );
 
         if (aiAgentEntries.length > 0) {
@@ -643,7 +643,7 @@ class AiAgentHaPanel extends LitElement {
             this._selectedProvider = this._availableProviders[0].value;
           }
         } else {
-          console.debug("No 'ai_agent_ha' config entries found via WebSocket.");
+          console.debug("No 'glm_agent_ha' config entries found via WebSocket.");
           this._availableProviders = [];
         }
       } catch (error) {
@@ -779,7 +779,7 @@ class AiAgentHaPanel extends LitElement {
 
     console.debug('Loading prompt history...');
     try {
-      const result = await this.hass.callService('ai_agent_ha', 'load_prompt_history', {
+      const result = await this.hass.callService('glm_agent_ha', 'load_prompt_history', {
         provider: this._selectedProvider
       });
       console.debug('Prompt history service result:', result);
@@ -806,7 +806,7 @@ class AiAgentHaPanel extends LitElement {
 
   _loadFromLocalStorage() {
     try {
-      const savedList = localStorage.getItem('ai_agent_ha_prompt_history');
+      const savedList = localStorage.getItem('glm_agent_ha_prompt_history');
       if (savedList) {
         const parsedList = JSON.parse(savedList);
         const saved = parsedList.history && parsedList.provider === this._selectedProvider ? parsedList.history : null;
@@ -834,7 +834,7 @@ class AiAgentHaPanel extends LitElement {
 
     console.debug('Saving prompt history:', this._promptHistory);
     try {
-      const result = await this.hass.callService('ai_agent_ha', 'save_prompt_history', {
+      const result = await this.hass.callService('glm_agent_ha', 'save_prompt_history', {
         history: this._promptHistory,
         provider: this._selectedProvider
       });
@@ -855,7 +855,7 @@ class AiAgentHaPanel extends LitElement {
         provider: this._selectedProvider,
         history: JSON.stringify(this._promptHistory)
       }
-      localStorage.setItem('ai_agent_ha_prompt_history', JSON.stringify(data));
+      localStorage.setItem('glm_agent_ha_prompt_history', JSON.stringify(data));
       console.debug('Saved prompt history to localStorage');
     } catch (e) {
       console.error('Error saving to localStorage:', e);
@@ -1066,8 +1066,8 @@ class AiAgentHaPanel extends LitElement {
     }, 60000); // 60 second timeout
 
     try {
-      console.debug("Calling ai_agent_ha service");
-      await this.hass.callService('ai_agent_ha', 'query', {
+      console.debug("Calling glm_agent_ha service");
+      await this.hass.callService('glm_agent_ha', 'query', {
         prompt: prompt,
         provider: this._selectedProvider
       });
@@ -1174,7 +1174,7 @@ class AiAgentHaPanel extends LitElement {
     if (this._isLoading) return;
     this._isLoading = true;
     try {
-      const result = await this.hass.callService('ai_agent_ha', 'create_automation', {
+      const result = await this.hass.callService('glm_agent_ha', 'create_automation', {
         automation: automation
       });
 
@@ -1216,7 +1216,7 @@ class AiAgentHaPanel extends LitElement {
     if (this._isLoading) return;
     this._isLoading = true;
     try {
-      const result = await this.hass.callService('ai_agent_ha', 'create_dashboard', {
+      const result = await this.hass.callService('glm_agent_ha', 'create_dashboard', {
         dashboard_config: dashboard
       });
 
@@ -1284,6 +1284,6 @@ class AiAgentHaPanel extends LitElement {
   }
 }
 
-customElements.define("ai_agent_ha-panel", AiAgentHaPanel);
+customElements.define("glm_agent_ha-panel", AiAgentHaPanel);
 
 console.log("AI Agent HA Panel registered");

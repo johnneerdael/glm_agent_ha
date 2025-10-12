@@ -1,4 +1,4 @@
-"""Config flow for AI Agent HA integration."""
+"""Config flow for GLM Coding Plan Agent HA integration."""
 
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ from .const import CONF_LOCAL_MODEL, CONF_LOCAL_URL, DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 PROVIDERS = {
-    "openai": "OpenAI",
-    "anthropic": "Anthropic (Claude)"
+    "openai": "GLM Coding Plan OpenAI Endpoint",
+    "anthropic": "GLM Coding Plan Anthropic Endpoint"
 }
 
 TOKEN_FIELD_NAMES = {
@@ -57,7 +57,7 @@ DEFAULT_PROVIDER = "openai"
 
 
 class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg,misc]
-    """Handle a config flow for AI Agent HA."""
+    """Handle a config flow for GLM Coding Plan Agent HA."""
 
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
@@ -78,7 +78,7 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
 
         if user_input is not None:
             # Check if this provider is already configured
-            await self.async_set_unique_id(f"ai_agent_ha_{user_input['ai_provider']}")
+            await self.async_set_unique_id(f"glm_agent_ha_{user_input['ai_provider']}")
             self._abort_if_unique_id_configured()
 
             self.config_data = {"ai_provider": user_input["ai_provider"]}
@@ -147,7 +147,7 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
                         self.config_data["models"][provider] = default_model
 
                 return self.async_create_entry(
-                    title=f"AI Agent HA ({PROVIDERS[provider]})",
+                    title=f"GLM Coding Plan Agent HA ({PROVIDERS[provider]})",
                     data=self.config_data,
                 )
             except InvalidApiKey:
@@ -217,7 +217,7 @@ class InvalidApiKey(HomeAssistantError):
 
 
 class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options flow for AI Agent HA."""
+    """Handle options flow for GLM Coding Plan Agent HA."""
 
     def __init__(self, config_entry):
         """Initialize options flow."""

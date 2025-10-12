@@ -15,13 +15,15 @@
                 "title": "Configure {provider}",
                 "description": "Enter your {token_label} and optionally select a model",
                 "data": {
-                    "openai_token": "OpenAI API Key",
-                    "anthropic_token": "Anthropic API Key",
-                     "model": "Model"
+                    "openai_token": "GLM Coding Plan API Key",
+                    "anthropic_token": "GLM Coding Plan API Key",
+                    "model": "Model"
                 },
                 "data_description": {
                     "openai_token": "Enter your GLM Coding Plan API key",
-                    "anthropic_token": "Enter your GLM Coding Plan API key"
+                    "anthropic_token": "Enter your GLM Coding Plan API key",
+					"model": "Choose a model or select 'Custom...' to enter your own",
+
                 }
             }
         },
@@ -32,7 +34,7 @@
             "anthropic_token": "GLM Coding Plan API key is required"
         },
         "abort": {
-            "already_configured": "GLM Agent HA is already configured"
+            "already_configured": "GLM Coding Plan Agent HA is already configured"
         }
     },
     "options": {
@@ -56,8 +58,8 @@
                     "model": "Model"
                 },
                 "data_description": {
-                    "openai_token": "Enter your OpenAI API key",
-                    "anthropic_token": "Enter your Anthropic API key",
+                    "openai_token": "Enter your GLM Coding Plan API key",
+                    "anthropic_token": "Enter your GLM Coding Plan API key",
                     "model": "Choose a model or select 'Custom...' to enter your own",
                 }
             }
