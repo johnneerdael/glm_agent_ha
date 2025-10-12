@@ -1,8 +1,8 @@
 panel_custom:
-  - name: AI Agent HA
-    sidebar_title: AI Agent HA
+  - name: GLM Coding Plan Agent HA
+    sidebar_title: GLM Coding Plan Agent HA
     sidebar_icon: mdi:robot
-    url_path: ai_agent_ha
-    module_url: /local/ai_agent_ha/frontend/ai_agent_ha-panel.js
+    url_path: glm_agent_ha
+    module_url: /local/glm_agent_ha/frontend/ai_agent_ha-panel.js
     trust_external: true
     require_admin: false 
