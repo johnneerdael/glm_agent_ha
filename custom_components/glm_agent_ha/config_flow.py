@@ -30,7 +30,7 @@ TOKEN_FIELD_NAMES = {
 }
 
 TOKEN_LABELS = {
-    "openai": "GLM Coding Plan API Key"
+    "openai": "GLM Coding Plan API Key",
     "anthropic": "GLM Coding Plan API Key"
 }
 
