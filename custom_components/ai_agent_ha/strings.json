@@ -56,13 +56,9 @@
                     "model": "Model"
                 },
                 "data_description": {
-                    "llama_token": "Enter your Llama API token",
                     "openai_token": "Enter your OpenAI API key",
-                    "gemini_token": "Enter your Google Gemini API key",
-                    "openrouter_token": "Enter your OpenRouter API key",
                     "anthropic_token": "Enter your Anthropic API key",
                     "model": "Choose a model or select 'Custom...' to enter your own",
-                    "custom_model": "Enter a custom model name (only used if 'Custom...' is selected above)"
                 }
             }
         }
