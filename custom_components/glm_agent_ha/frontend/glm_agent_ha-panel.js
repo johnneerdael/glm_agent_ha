@@ -7,7 +7,7 @@ import {
 console.log("AI Agent HA Panel loading..."); // Debug log
 
 const PROVIDERS = {
-  openai: "OpenAI"
+  openai: "OpenAI",
   anthropic: "Anthropic"
 };
 
