@@ -11,7 +11,7 @@ ai_agent_ha:
   local_url: "http://localhost:11434/api/generate"  # Required for local models
   # Model configuration (optional, defaults will be used if not specified)
   models:
-    openai: "gpt-3.5-turbo"  # or "gpt-4", "gpt-4-turbo", etc.
+    openai: "GLM-4.6"  # or "gpt-4", "gpt-4-turbo", etc.
     llama: "Llama-4-Maverick-17B-128E-Instruct-FP8"
     gemini: "gemini-1.5-flash"  # or "gemini-1.5-pro", "gemini-1.0-pro", etc.
     openrouter: "openai/gpt-4o"  # or any model available on OpenRouter
@@ -410,21 +410,18 @@ class LlamaClient(BaseAIClient):
 
 
 class OpenAIClient(BaseAIClient):
-    def __init__(self, token, model="gpt-3.5-turbo"):
+    def __init__(self, token, model="GLM-4.6"):
         self.token = token
         self.model = model
-        self.api_url = "https://api.openai.com/v1/chat/completions"
+        self.api_url = "https://api.z.ai/api/coding/paas/v4/chat/completions"
 
     def _get_token_parameter(self):
         """Determine which token parameter to use based on the model."""
         # Models that require max_completion_tokens instead of max_tokens
         completion_token_models = [
-            "o3-mini",
-            "o3",
-            "o1-mini",
-            "o1-preview",
-            "o1",
-            "gpt-5",
+            "GLM-4.5",
+            "GLM-4.6",
+            "GLM-4.5-air"
         ]
 
         # Check if the model name contains any of the newer model identifiers
@@ -613,10 +610,10 @@ class GeminiClient(BaseAIClient):
 
 
 class AnthropicClient(BaseAIClient):
-    def __init__(self, token, model="claude-3-5-sonnet-20241022"):
+    def __init__(self, token, model="GLM-4.6"):
         self.token = token
         self.model = model
-        self.api_url = "https://api.anthropic.com/v1/messages"
+        self.api_url = "https://api.z.ai/api/anthropic/messages"
 
     async def get_response(self, messages, **kwargs):
         _LOGGER.debug("Making request to Anthropic API with model: %s", self.model)
