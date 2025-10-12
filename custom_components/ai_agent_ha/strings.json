@@ -15,22 +15,12 @@
                 "title": "Configure {provider}",
                 "description": "Enter your {token_label} and optionally select a model",
                 "data": {
-                    "llama_token": "Llama API Token",
                     "openai_token": "OpenAI API Key",
-                    "gemini_token": "Google Gemini API Key",
-                    "openrouter_token": "OpenRouter API Key",
-                    "anthropic_token": "Anthropic API Key",
-                    "model": "Model (Optional)",
-                    "custom_model": "Custom Model (Optional)"
+                    "anthropic_token": "Anthropic API Key"
                 },
                 "data_description": {
-                    "llama_token": "Enter your Llama API token",
                     "openai_token": "Enter your OpenAI API key",
-                    "gemini_token": "Enter your Google Gemini API key",
-                    "openrouter_token": "Enter your OpenRouter API key",
-                    "anthropic_token": "Enter your Anthropic API key",
-                    "model": "Choose a predefined model or select 'Custom...' to enter your own",
-                    "custom_model": "Enter a custom model name (only used if 'Custom...' is selected above)"
+                    "anthropic_token": "Enter your GLM Coding Plan API key"
                 }
             }
         },
