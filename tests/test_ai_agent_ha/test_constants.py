@@ -12,7 +12,7 @@ def test_constants_file_exists():
         "..",
         "..",
         "custom_components",
-        "ai_agent_ha",
+        "glm_agent_ha",
         "const.py",
     )
     assert os.path.exists(const_path), f"Constants file not found at {const_path}"
@@ -26,7 +26,7 @@ def test_domain_is_correct():
         "..",
         "..",
         "custom_components",
-        "ai_agent_ha",
+        "glm_agent_ha",
         "const.py",
     )
     const_path = os.path.abspath(const_path)
@@ -36,7 +36,7 @@ def test_domain_is_correct():
     spec.loader.exec_module(const_module)
 
     assert hasattr(const_module, "DOMAIN")
-    assert const_module.DOMAIN == "ai_agent_ha"
+    assert const_module.DOMAIN == "glm_agent_ha"
 
 
 def test_ai_providers_defined():
@@ -47,7 +47,7 @@ def test_ai_providers_defined():
         "..",
         "..",
         "custom_components",
-        "ai_agent_ha",
+        "glm_agent_ha",
         "const.py",
     )
     const_path = os.path.abspath(const_path)
@@ -62,12 +62,7 @@ def test_ai_providers_defined():
 
     # Check for expected providers
     expected_providers = [
-        "openai",
-        "anthropic",
-        "gemini",
-        "llama",
-        "openrouter",
-        "local",
+        "openai"
     ]
     for provider in expected_providers:
         assert provider in const_module.AI_PROVIDERS, f"Provider {provider} not found"
@@ -85,7 +80,7 @@ def test_manifest_file_exists():
         "..",
         "..",
         "custom_components",
-        "ai_agent_ha",
+        "glm_agent_ha",
         "manifest.json",
     )
     assert os.path.exists(manifest_path), "Manifest file not found"

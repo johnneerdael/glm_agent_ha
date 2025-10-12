@@ -1,14 +1,12 @@
 """The AI Agent implementation with multiple provider support.
 
 Example config:
-ai_agent_ha:
-  ai_provider: openai  # or 'anthropic'
+glm_agent_ha:
+  ai_provider: openai 
   openai_token: "..."
-  anthropic_token: "..."
   # Model configuration (optional, defaults will be used if not specified)
   models:
     openai: "GLM-4.6"  # or "GLM-4.5", "GLM-4.5-air".
-    anthropic: "GLM-4.6"  # or "GLM-4.5", "GLM-4.5-air".
 
 """
 
@@ -462,70 +460,6 @@ class OpenAIClient(BaseAIClient):
                     )
                     return str(data)
 
-class AnthropicClient(BaseAIClient):
-    def __init__(self, token, model="GLM-4.6"):
-        self.token = token
-        self.model = model
-        self.api_url = "https://api.z.ai/api/anthropic/messages"
-
-    async def get_response(self, messages, **kwargs):
-        _LOGGER.debug("Making request to Anthropic API with model: %s", self.model)
-        headers = {
-            "x-api-key": self.token,
-            "Content-Type": "application/json",
-            "anthropic-version": "2023-06-01",
-        }
-
-        # Convert OpenAI-style messages to Anthropic format
-        system_message = None
-        anthropic_messages = []
-
-        for message in messages:
-            role = message.get("role", "user")
-            content = message.get("content", "")
-
-            if role == "system":
-                # Anthropic uses a separate system parameter
-                system_message = content
-            elif role == "user":
-                anthropic_messages.append({"role": "user", "content": content})
-            elif role == "assistant":
-                anthropic_messages.append({"role": "assistant", "content": content})
-
-        payload = {
-            "model": self.model,
-            "max_tokens": 2048,
-            "temperature": 0.7,
-            "messages": anthropic_messages,
-        }
-
-        # Add system message if present
-        if system_message:
-            payload["system"] = system_message
-
-        _LOGGER.debug("Anthropic request payload: %s", json.dumps(payload, indent=2))
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                self.api_url,
-                headers=headers,
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as resp:
-                if resp.status != 200:
-                    error_text = await resp.text()
-                    _LOGGER.error("Anthropic API error %d: %s", resp.status, error_text)
-                    raise Exception(f"Anthropic API error {resp.status}")
-                data = await resp.json()
-                # Extract text from Anthropic response
-                content_blocks = data.get("content", [])
-                if content_blocks and isinstance(content_blocks, list):
-                    # Get the text from the first content block
-                    for block in content_blocks:
-                        if block.get("type") == "text":
-                            return block.get("text", str(data))
-                return str(data)
-
 # === Main Agent ===
 class AiAgentHaAgent:
     """Agent for handling queries with dynamic data requests and multiple AI providers."""
@@ -771,27 +705,11 @@ class AiAgentHaAgent:
 
         # Initialize the appropriate AI client with model selection
         if provider == "openai":
-            model = models_config.get("openai", "gpt-3.5-turbo")
+            model = models_config.get("openai", "GLM-4.5-air")
             self.ai_client = OpenAIClient(config.get("openai_token"), model)
-        elif provider == "gemini":
-            model = models_config.get("gemini", "gemini-1.5-flash")
-            self.ai_client = GeminiClient(config.get("gemini_token"), model)
-        elif provider == "openrouter":
-            model = models_config.get("openrouter", "openai/gpt-4o")
-            self.ai_client = OpenRouterClient(config.get("openrouter_token"), model)
-        elif provider == "anthropic":
-            model = models_config.get("anthropic", "claude-3-5-sonnet-20241022")
-            self.ai_client = AnthropicClient(config.get("anthropic_token"), model)
-        elif provider == "local":
-            model = models_config.get("local", "")
-            url = config.get("local_url")
-            if not url:
-                _LOGGER.error("Missing local_url for local provider")
-                raise Exception("Missing local_url configuration for local provider")
-            self.ai_client = LocalClient(url, model)
         else:  # default to llama if somehow specified
-            model = models_config.get("llama", "Llama-4-Maverick-17B-128E-Instruct-FP8")
-            self.ai_client = LlamaClient(config.get("llama_token"), model)
+            model = models_config.get("openai", "GLM-4.5-air")
+            self.ai_client = OpenAIClient(config.get("openai_token"), model)
 
         _LOGGER.debug(
             "AiAgentHaAgent initialized successfully with provider: %s, model: %s",
@@ -805,23 +723,9 @@ class AiAgentHaAgent:
 
         if provider == "openai":
             token = self.config.get("openai_token")
-        elif provider == "gemini":
-            token = self.config.get("gemini_token")
-        elif provider == "openrouter":
-            token = self.config.get("openrouter_token")
-        elif provider == "anthropic":
-            token = self.config.get("anthropic_token")
-        elif provider == "local":
-            token = self.config.get("local_url")
-        else:
-            token = self.config.get("llama_token")
 
         if not token or not isinstance(token, str):
             return False
-
-        # For local provider, validate URL format
-        if provider == "local":
-            return bool(token.startswith(("http://", "https://")))
 
         # Add more specific validation based on your API key format
         return len(token) >= 32
@@ -1967,35 +1871,6 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                     "model": models_config.get("openai", "gpt-3.5-turbo"),
                     "client_class": OpenAIClient,
                 },
-                "gemini": {
-                    "token_key": "gemini_token",
-                    "model": models_config.get("gemini", "gemini-1.5-flash"),
-                    "client_class": GeminiClient,
-                },
-                "openrouter": {
-                    "token_key": "openrouter_token",
-                    "model": models_config.get("openrouter", "openai/gpt-4o"),
-                    "client_class": OpenRouterClient,
-                },
-                "llama": {
-                    "token_key": "llama_token",
-                    "model": models_config.get(
-                        "llama", "Llama-4-Maverick-17B-128E-Instruct-FP8"
-                    ),
-                    "client_class": LlamaClient,
-                },
-                "anthropic": {
-                    "token_key": "anthropic_token",
-                    "model": models_config.get(
-                        "anthropic", "claude-3-5-sonnet-20241022"
-                    ),
-                    "client_class": AnthropicClient,
-                },
-                "local": {
-                    "token_key": "local_url",
-                    "model": models_config.get("local", ""),
-                    "client_class": LocalClient,
-                },
             }
 
             # Validate provider and get configuration
@@ -2638,7 +2513,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                             try:
                                 import os
 
-                                debug_dir = "/config/ai_agent_ha_debug"
+                                debug_dir = "/config/glm_agent_ha_debug"
 
                                 def write_debug_file():
                                     if not os.path.exists(debug_dir):
@@ -2997,7 +2872,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
     ) -> Dict[str, Any]:
         """Save user's prompt history to HA storage."""
         try:
-            store: Store = Store(self.hass, 1, f"ai_agent_ha_history_{user_id}")
+            store: Store = Store(self.hass, 1, f"glm_agent_ha_history_{user_id}")
             await store.async_save({"history": history})
             return {"success": True}
         except Exception as e:
@@ -3007,7 +2882,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
     async def load_user_prompt_history(self, user_id: str) -> Dict[str, Any]:
         """Load user's prompt history from HA storage."""
         try:
-            store: Store = Store(self.hass, 1, f"ai_agent_ha_history_{user_id}")
+            store: Store = Store(self.hass, 1, f"glm_agent_ha_history_{user_id}")
             data = await store.async_load()
             history = data.get("history", []) if data else []
             return {"success": True, "history": history}

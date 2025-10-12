@@ -70,14 +70,14 @@ class TestIntegration:
                 "openai": MagicMock(),
             },
         ), patch(
-            "custom_components.ai_agent_ha.agent.AiAgentHaAgent"
+            "custom_components.glm_agent_ha.agent.AiAgentHaAgent"
         ) as mock_agent_class:
 
             # Mock agent instance
             mock_agent = MagicMock()
             mock_agent_class.return_value = mock_agent
 
-            from custom_components.ai_agent_ha import async_setup_entry
+            from custom_components.glm_agent_ha import async_setup_entry
 
             result = await async_setup_entry(mock_hass, mock_config_entry)
             assert result is True
@@ -103,7 +103,7 @@ class TestIntegration:
                 "openai": MagicMock(),
             },
         ), patch(
-            "custom_components.ai_agent_ha.agent.AiAgentHaAgent"
+            "custom_components.glm_agent_ha.agent.AiAgentHaAgent"
         ) as mock_agent_class:
 
             # Mock agent instance with query method
@@ -111,7 +111,7 @@ class TestIntegration:
             mock_agent.send_query = AsyncMock(return_value="Test response")
             mock_agent_class.return_value = mock_agent
 
-            from custom_components.ai_agent_ha import async_setup_entry
+            from custom_components.glm_agent_ha import async_setup_entry
 
             # Setup the integration
             await async_setup_entry(mock_hass, mock_config_entry)
@@ -143,13 +143,13 @@ class TestIntegration:
                 "openai": MagicMock(),
             },
         ), patch(
-            "custom_components.ai_agent_ha.agent.AiAgentHaAgent"
+            "custom_components.glm_agent_ha.agent.AiAgentHaAgent"
         ) as mock_agent_class:
 
             mock_agent = MagicMock()
             mock_agent_class.return_value = mock_agent
 
-            from custom_components.ai_agent_ha import async_setup_entry
+            from custom_components.glm_agent_ha import async_setup_entry
 
             result = await async_setup_entry(mock_hass, mock_config_entry)
             assert result is True
@@ -175,13 +175,13 @@ class TestIntegration:
                 "openai": MagicMock(),
             },
         ), patch(
-            "custom_components.ai_agent_ha.agent.AiAgentHaAgent"
+            "custom_components.glm_agent_ha.agent.AiAgentHaAgent"
         ) as mock_agent_class:
 
             mock_agent = MagicMock()
             mock_agent_class.return_value = mock_agent
 
-            from custom_components.ai_agent_ha import (
+            from custom_components.glm_agent_ha import (
                 async_setup_entry,
                 async_unload_entry,
             )
@@ -202,7 +202,7 @@ class TestIntegration:
             "..",
             "..",
             "custom_components",
-            "ai_agent_ha",
+            "glm_agent_ha",
             "manifest.json",
         )
 
@@ -227,7 +227,7 @@ class TestIntegration:
             "..",
             "..",
             "custom_components",
-            "ai_agent_ha",
+            "glm_agent_ha",
             "services.yaml",
         )
 

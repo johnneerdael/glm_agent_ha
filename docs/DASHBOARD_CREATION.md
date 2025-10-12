@@ -203,21 +203,21 @@ The system handles:
 
 The integration provides these services:
 
-#### `ai_agent_ha.query`
+#### `glm_agent_ha.query`
 Natural language dashboard requests through the main query interface.
 
 ```yaml
-service: ai_agent_ha.query
+service: glm_agent_ha.query
 data:
   prompt: "Create a living room dashboard"
   provider: "openai"  # optional
 ```
 
-#### `ai_agent_ha.create_dashboard`
+#### `glm_agent_ha.create_dashboard`
 Direct dashboard creation (for advanced users).
 
 ```yaml
-service: ai_agent_ha.create_dashboard
+service: glm_agent_ha.create_dashboard
 data:
   dashboard_config:
     title: "My Dashboard"
@@ -229,11 +229,11 @@ data:
             entities: ["light.living_room"]
 ```
 
-#### `ai_agent_ha.update_dashboard`
+#### `glm_agent_ha.update_dashboard`
 Update existing dashboards.
 
 ```yaml
-service: ai_agent_ha.update_dashboard
+service: glm_agent_ha.update_dashboard
 data:
   dashboard_url: "my-dashboard"
   dashboard_config:

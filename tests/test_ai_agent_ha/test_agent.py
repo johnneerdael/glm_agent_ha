@@ -53,7 +53,7 @@ class TestAIAgent:
                 "openai": MagicMock(),
                 "homeassistant.helpers.storage": MagicMock(),
             },
-        ), patch("custom_components.ai_agent_ha.agent.AiAgentHaAgent") as MockAgent:
+        ), patch("custom_components.glm_agent_ha.agent.AiAgentHaAgent") as MockAgent:
             MockAgent.return_value = MagicMock()
             agent = MockAgent(mock_hass, mock_agent_config)
             assert agent is not None
@@ -64,7 +64,7 @@ class TestAIAgent:
         if not HOMEASSISTANT_AVAILABLE:
             pytest.skip("Home Assistant not available")
 
-        with patch("custom_components.ai_agent_ha.agent.AiAgentHaAgent") as MockAgent:
+        with patch("custom_components.glm_agent_ha.agent.AiAgentHaAgent") as MockAgent:
             mock_instance = MagicMock()
             mock_instance.send_query = AsyncMock(return_value="Test response")
             MockAgent.return_value = mock_instance
@@ -78,11 +78,6 @@ class TestAIAgent:
         # Test valid config
         assert mock_agent_config["ai_provider"] in [
             "openai",
-            "anthropic",
-            "google",
-            "openrouter",
-            "llama",
-            "local",
         ]
         assert "openai_token" in mock_agent_config
         assert len(mock_agent_config["openai_token"]) > 0
@@ -92,7 +87,7 @@ class TestAIAgent:
         """Test agent error handling with invalid config."""
         invalid_config = {"ai_provider": "invalid_provider"}
 
-        with patch("custom_components.ai_agent_ha.agent.AiAgentHaAgent") as MockAgent:
+        with patch("custom_components.glm_agent_ha.agent.AiAgentHaAgent") as MockAgent:
             mock_instance = MagicMock()
             mock_instance.send_query = AsyncMock(
                 side_effect=Exception("Invalid provider")
@@ -107,24 +102,14 @@ class TestAIAgent:
         """Test that all supported AI providers are properly defined."""
         # Import const directly to avoid __init__.py issues
         try:
-            from custom_components.ai_agent_ha.const import AI_PROVIDERS
+            from custom_components.glm_agent_ha.const import AI_PROVIDERS
         except ImportError:
             AI_PROVIDERS = [
-                "llama",
                 "openai",
-                "gemini",
-                "openrouter",
-                "anthropic",
-                "local",
             ]
 
         expected_providers = [
-            "llama",
             "openai", 
-            "gemini",
-            "openrouter",
-            "anthropic",
-            "local",
         ]
         assert all(provider in AI_PROVIDERS for provider in expected_providers)
 
@@ -140,7 +125,7 @@ class TestAIAgent:
             MagicMock(entity_id="sensor.temperature", state="22.5"),
         ]
 
-        with patch("custom_components.ai_agent_ha.agent.AiAgentHaAgent") as MockAgent:
+        with patch("custom_components.glm_agent_ha.agent.AiAgentHaAgent") as MockAgent:
             mock_instance = MagicMock()
             mock_instance.collect_context = AsyncMock(
                 return_value={

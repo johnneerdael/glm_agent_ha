@@ -1,16 +1,16 @@
-# AI Agent HA
+# GLM Agent HA
 
-A powerful Home Assistant custom integration that connects your Home Assistant instance with multiple AI providers (OpenAI, Google Gemini, Anthropic (Claude), OpenRouter, and Llama) to translate user requests into valid Home Assistant operations, including creating automations automatically!
+A powerful Home Assistant custom integration that connects your Home Assistant instance with the GLM Coding Plan OpenAI endpoint to translate user requests into valid Home Assistant operations, including creating automations automatically!
 
 ## 🚀 Quick Install
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=sbenodiz&repository=ai_agent_ha&category=integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=johnneerdael&repository=glm_agent_ha&category=integration)
 
-Click the button above to install AI Agent HA directly through HACS, or see the [detailed installation instructions](#-installation) below.
+Click the button above to install GLM Agent HA directly through HACS, or see the [detailed installation instructions](#-installation) below.
 
 ## ✨ Features
 
-- 🤖 **Multiple AI Provider Support**: OpenAI, Google Gemini, Anthropic (Claude), OpenRouter, and Llama
+- 🤖 **GLM Coding Plan Integration**: Seamless integration with GLM Coding Plan OpenAI endpoint
 - 🎯 **Model Selection**: Choose from predefined models or use custom model names
 - 🏠 **Smart Home Control**: Turn lights on/off, control climate, and manage devices
 - ⚡ **Automation Creation**: Automatically create automations based on natural language
@@ -23,11 +23,11 @@ Click the button above to install AI Agent HA directly through HACS, or see the 
 ## 📸 Screenshots
 
 ### Automation Creation
-![AI Agent HA Automation Creation](image/Screenshot2.png)
+![GLM Agent HA Automation Creation](image/Screenshot2.png)
 
 ## 📋 Dashboard Creation
 
-AI Agent HA now supports creating and managing Home Assistant dashboards through natural language conversations! Simply describe what you want, and the AI will create a complete dashboard for you.
+GLM Agent HA now supports creating and managing Home Assistant dashboards through natural language conversations! Simply describe what you want, and the AI will create a complete dashboard for you.
 
 ### How Dashboard Creation Works
 
@@ -83,35 +83,15 @@ The AI will organize thermostats, temperature sensors, and HVAC controls in a lo
 
 For detailed dashboard creation documentation, see: [Dashboard Creation Guide](docs/DASHBOARD_CREATION.md)
 
-## 🚀 Supported AI Providers
+## 🚀 Supported AI Provider
 
-### OpenAI
-- **Models**: GPT-3.5 Turbo, GPT-4, GPT-4 Turbo, GPT-4o, O1-Preview, O1-Mini
-- **Setup**: Get API key from [OpenAI Platform](https://platform.openai.com/api-keys)
-
-### Google Gemini
-- **Models**: Gemini 1.5 Flash, Gemini 1.5 Pro, Gemini 1.0 Pro, Gemini 2.0 Flash Exp
-- **Setup**: Get API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
-
-### Anthropic (Claude)
-- **Models**: Claude 3.5 Sonnet, Claude 3.5 Haiku, Claude 3 Opus, Claude 3 Sonnet, Claude 3 Haiku
-- **Setup**: Get API key from [Anthropic Console](https://docs.anthropic.com/en/docs/get-started)
-- **Popular Models**:
-  - `claude-3-5-sonnet-20241022` (Latest and most capable)
-  - `claude-3-5-haiku-20241022` (Fast and efficient)
-  - `claude-3-opus-20240229` (Most powerful for complex tasks)
-
-### OpenRouter
-- **Models**: Access to 100+ models including Claude, Llama, Mistral, and more
-- **Setup**: Get API key from [OpenRouter](https://openrouter.ai/keys)
-- **Popular Models**: 
-  - `anthropic/claude-3.5-sonnet`
-  - `meta-llama/llama-3.1-70b-instruct`
-  - `mistralai/mixtral-8x7b-instruct`
-
-### Llama
-- **Models**: Llama 4 Maverick, Llama 3.1, Llama 3.2
-- **Setup**: Get API key from your Llama provider
+### GLM Coding Plan OpenAI Endpoint
+- **Models**: GLM Coding Plan optimized models
+- **Setup**: Get API key from your GLM Coding Plan subscription
+- **Benefits**:
+  - Optimized for Home Assistant integration
+  - Enhanced automation and dashboard creation capabilities
+  - Reliable and consistent performance
 
 ## 📦 Installation
 
@@ -123,71 +103,60 @@ Use the [Quick Install button](#-quick-install) at the top of this README for th
 2. Click on "Integrations"
 3. Click the three dots in the top right corner
 4. Select "Custom repositories"
-5. Add this repository: `https://github.com/sbenodiz/ai_agent_ha`
+5. Add this repository: `https://github.com/johnneerdael/glm_agent_ha`
 6. Select "Integration" as the category
 7. Click "Add"
-8. Find "AI Agent HA" in the integration list
+8. Find "GLM Agent HA" in the integration list
 9. Click "Download"
 10. Restart Home Assistant
 11. Go to Settings → Devices & Services → Add Integration
-12. Search for "AI Agent HA"
-13. Follow the setup wizard to configure your preferred AI provider
+12. Search for "GLM Agent HA"
+13. Follow the setup wizard to configure the GLM Coding Plan OpenAI endpoint
 
 ### Manual Installation
 
-1. Download the latest release from the [releases page](https://github.com/sbenodiz/ai_agent_ha/releases)
+1. Download the latest release from the [releases page](https://github.com/johnneerdael/glm_agent_ha/releases)
 2. Extract the files
-3. Copy the `custom_components/ai_agent_ha` folder to your Home Assistant `custom_components` directory
+3. Copy the `custom_components/glm_agent_ha` folder to your Home Assistant `custom_components` directory
 4. Restart Home Assistant
 5. Go to Settings → Devices & Services → Add Integration
-6. Search for "AI Agent HA"
-7. Follow the setup wizard to configure your preferred AI provider
+6. Search for "GLM Agent HA"
+7. Follow the setup wizard to configure the GLM Coding Plan OpenAI endpoint
 
 ## ⚙️ Configuration
 
-The integration uses a two-step configuration process:
+The integration uses a simple configuration process:
 
-### Step 1: Choose AI Provider
-Select your preferred AI provider from the dropdown:
-- OpenAI
-- Google Gemini  
-- Anthropic (Claude)
-- OpenRouter
-- Llama
-
-### Step 2: Configure Provider
-Enter your API credentials and optionally select a model:
-- **API Key/Token**: Your provider-specific API key
-- **Model**: Choose from predefined models or enter a custom model name
+### Configuration Steps
+Enter your GLM Coding Plan credentials:
+- **API Key**: Your GLM Coding Plan API key
+- **Model**: Select from available GLM Coding Plan models
 
 ### Configuration Examples
 
 ```yaml
 # Example configuration.yaml (optional - integration supports config flow only)
-ai_agent_ha:
-  ai_provider: anthropic
-  anthropic_token: "sk-ant-..."
+glm_agent_ha:
+  ai_provider: openai
+  glm_coding_plan_api_key: "your-glm-coding-plan-api-key"
   models:
-    anthropic: "claude-3-5-sonnet-20241022"
+    glm_coding_plan: GLM-4.5-air"
 ```
 
 ## 🎮 Usage
 
 ### Chat Interface
 Access the beautiful chat interface at:
-- **Sidebar**: AI Agent HA panel
-- **URL**: `http://your-ha-instance:8123/ai_agent_ha`
+- **Sidebar**: GLM Agent HA panel
+- **URL**: `http://your-ha-instance:8123/glm_agent_ha`
 
 
 
 ## 🔧 Advanced Features
 
 ### Custom Models
-Enter any model name in the "Custom Model" field:
-- OpenAI: `gpt-4-0125-preview`
-- Anthropic: `claude-3-opus-20240229`
-- OpenRouter: `anthropic/claude-3-opus`
-- Gemini: `gemini-pro-vision`
+Enter any GLM Coding Plan model name in the "Custom Model" field:
+- GLM Coding Plan: Enter your preferred GLM Coding Plan model identifier
 
 ### Automation Creation
 The AI can create automations automatically:
@@ -245,7 +214,7 @@ All workflows run automatically on push and pull requests using Python 3.12 to e
 
 ### API Structure
 The integration provides these main components:
-- **AI Clients**: Modular providers (OpenAI, Gemini, Claude, OpenRouter, Llama)
+- **AI Client**: GLM Coding Plan OpenAI endpoint integration
 - **Agent**: Core logic for processing requests
 - **Config Flow**: Setup and options management
 - **Frontend**: Chat interface
@@ -255,7 +224,7 @@ The integration provides these main components:
 
 - Home Assistant 2023.3+
 - **Python 3.12+** (required for compatibility with Home Assistant 2025.1.x+)
-- One of the supported AI provider API keys
+- GLM Coding Plan API key
 
 ### Python Version Note
 
@@ -274,9 +243,9 @@ If you're running an older Home Assistant version with Python 3.11, please use v
 
 If you find this integration helpful and would like to support its development, you can buy me a coffee! Your support helps keep this project active and maintained.
 
-[![Buy Me A Coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-donate-yellow.svg)](https://www.buymeacoffee.com/sbenodiz)
+[![Buy Me A Coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-donate-yellow.svg)](https://www.buymeacoffee.com/johnneerdael)
 
-Every contribution, no matter how small, is greatly appreciated and helps fund the continued development and improvement of AI Agent HA.
+Every contribution, no matter how small, is greatly appreciated and helps fund the continued development and improvement of GLM Agent HA.
 
 ## 📝 License
 
@@ -284,14 +253,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🆘 Support
 
-- **Issues**: [GitHub Issues](https://github.com/sbenodiz/ai_agent_ha/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/sbenodiz/ai_agent_ha/discussions)
-- **Documentation**: [Wiki](https://github.com/sbenodiz/ai_agent_ha/wiki)
+- **Issues**: [GitHub Issues](https://github.com/johnneerdael/glm_agent_ha/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/johnneerdael/glm_agent_ha/discussions)
+- **Documentation**: [Wiki](https://github.com/johnneerdael/glm_agent_ha/wiki)
 
 ## 🙏 Acknowledgments
 
 - Home Assistant community for the excellent platform
-- All AI providers for their powerful APIs
+- GLM Coding Plan for the powerful API endpoint
 - Special thanks to @RmG152 for their valuable help with development
 - Contributors and testers who help improve this integration
 

@@ -13,7 +13,6 @@ query:
         select:
           options:
             - "openai"
-            - "anthropic"
 
 create_dashboard:
   name: "Create Dashboard via AI Agent"
@@ -30,7 +29,6 @@ create_dashboard:
         select:
           options:
             - "openai"
-            - "anthropic"
 
 create_automation:
   name: "Create Automation via AI Agent"
@@ -47,7 +45,6 @@ create_automation:
         select:
           options:
             - "openai"
-            - "anthropic"
 
 update_dashboard:
   name: "Update Dashboard via AI Agent"
@@ -67,4 +64,3 @@ update_dashboard:
         select:
           options:
             - "openai"
-            - "anthropic"

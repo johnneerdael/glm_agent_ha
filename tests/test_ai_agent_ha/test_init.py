@@ -22,10 +22,10 @@ except ImportError:
 
 # Import const directly to avoid __init__.py issues
 try:
-    from custom_components.ai_agent_ha.const import DOMAIN
+    from custom_components.glm_agent_ha.const import DOMAIN
 except ImportError:
     # Fallback for local testing
-    DOMAIN = "ai_agent_ha"
+    DOMAIN = "glm_agent_ha"
 
 
 @pytest.mark.asyncio
@@ -44,7 +44,7 @@ async def test_async_setup():
             "homeassistant.helpers.storage": MagicMock(),
         },
     ):
-        from custom_components.ai_agent_ha import async_setup
+        from custom_components.glm_agent_ha import async_setup
 
         mock_hass = MagicMock()
         mock_config = MagicMock()
@@ -68,9 +68,9 @@ async def test_setup_entry():
             "homeassistant.helpers.storage": MagicMock(),
             "voluptuous": MagicMock(),
         },
-    ), patch("custom_components.ai_agent_ha.agent.AiAgentHaAgent") as mock_agent:
+    ), patch("custom_components.glm_agent_ha.agent.AiAgentHaAgent") as mock_agent:
 
-        from custom_components.ai_agent_ha import async_setup_entry
+        from custom_components.glm_agent_ha import async_setup_entry
 
         # Create mock hass and entry
         mock_hass = MagicMock()

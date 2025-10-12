@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 def _import_config_flow_directly():
     """Import config_flow.py directly without going through __init__.py."""
     config_flow_path = os.path.join(
-        os.path.dirname(__file__), "..", "..", "custom_components", "ai_agent_ha", "config_flow.py"
+        os.path.dirname(__file__), "..", "..", "custom_components", "glm_agent_ha", "config_flow.py"
     )
     config_flow_path = os.path.abspath(config_flow_path)
     
@@ -49,12 +49,7 @@ class TestConfigFlowComprehensive:
             
             required_methods = [
                 'async_step_user',
-                'async_step_openai',
-                'async_step_anthropic',
-                'async_step_gemini',
-                'async_step_llama',
-                'async_step_openrouter',
-                'async_step_local'
+                'async_step_openai'
             ]
             
             for method in required_methods:
@@ -69,13 +64,13 @@ class TestConfigFlowComprehensive:
             config_flow_module = _import_config_flow_directly()
             
             # Test that required constants are defined
-            from custom_components.ai_agent_ha.const import DOMAIN, AI_PROVIDERS
+            from custom_components.glm_agent_ha.const import DOMAIN, AI_PROVIDERS
             
-            assert DOMAIN == "ai_agent_ha"
+            assert DOMAIN == "glm_agent_ha"
             assert isinstance(AI_PROVIDERS, list)
             assert len(AI_PROVIDERS) > 0
             
-            expected_providers = ["llama", "openai", "gemini", "openrouter", "anthropic", "local"]
+            expected_providers = ["openai"]
             for provider in expected_providers:
                 assert provider in AI_PROVIDERS
                 
@@ -90,11 +85,6 @@ class TestConfigFlowComprehensive:
             # Check that schema definitions exist
             assert hasattr(config_flow_module, 'STEP_USER_DATA_SCHEMA')
             assert hasattr(config_flow_module, 'STEP_OPENAI_DATA_SCHEMA')
-            assert hasattr(config_flow_module, 'STEP_ANTHROPIC_DATA_SCHEMA')
-            assert hasattr(config_flow_module, 'STEP_GEMINI_DATA_SCHEMA')
-            assert hasattr(config_flow_module, 'STEP_LLAMA_DATA_SCHEMA')
-            assert hasattr(config_flow_module, 'STEP_OPENROUTER_DATA_SCHEMA')
-            assert hasattr(config_flow_module, 'STEP_LOCAL_DATA_SCHEMA')
             
         except Exception as e:
             pytest.skip(f"Config flow schema test failed: {e}")
@@ -119,12 +109,7 @@ class TestConfigFlowComprehensive:
             
             schemas = [
                 'STEP_USER_DATA_SCHEMA',
-                'STEP_OPENAI_DATA_SCHEMA',
-                'STEP_ANTHROPIC_DATA_SCHEMA',
-                'STEP_GEMINI_DATA_SCHEMA',
-                'STEP_LLAMA_DATA_SCHEMA',
-                'STEP_OPENROUTER_DATA_SCHEMA',
-                'STEP_LOCAL_DATA_SCHEMA'
+                'STEP_OPENAI_DATA_SCHEMA'
             ]
             
             for schema_name in schemas:
@@ -137,15 +122,10 @@ class TestConfigFlowComprehensive:
     def test_config_flow_provider_options(self):
         """Test that all AI providers are properly configured."""
         try:
-            from custom_components.ai_agent_ha.const import AI_PROVIDERS
+            from custom_components.glm_agent_ha.const import AI_PROVIDERS
             
             expected_providers = {
-                "llama": "Llama",
-                "openai": "OpenAI",
-                "gemini": "Google Gemini",
-                "openrouter": "OpenRouter",
-                "anthropic": "Anthropic",
-                "local": "Local Model"
+                "openai": "OpenAI"
             }
             
             for provider_key, provider_name in expected_providers.items():
@@ -161,12 +141,7 @@ class TestConfigFlowComprehensive:
             
             # Check that provider steps are mapped correctly
             provider_steps = {
-                "openai": "async_step_openai",
-                "anthropic": "async_step_anthropic",
-                "gemini": "async_step_gemini",
-                "llama": "async_step_llama",
-                "openrouter": "async_step_openrouter",
-                "local": "async_step_local"
+                "openai": "async_step_openai"
             }
             
             for provider, step_method in provider_steps.items():

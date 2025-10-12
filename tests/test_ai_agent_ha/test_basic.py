@@ -14,7 +14,7 @@ def _import_const_directly():
         "..",
         "..",
         "custom_components",
-        "ai_agent_ha",
+        "glm_agent_ha",
         "const.py",
     )
     const_path = os.path.abspath(const_path)
@@ -28,7 +28,7 @@ def _import_const_directly():
 def test_domain_constant():
     """Test that the domain constant is defined correctly."""
     const = _import_const_directly()
-    assert const.DOMAIN == "ai_agent_ha"
+    assert const.DOMAIN == "glm_agent_ha"
 
 
 def test_ai_providers_constant():
@@ -37,7 +37,6 @@ def test_ai_providers_constant():
     assert isinstance(const.AI_PROVIDERS, list)
     assert len(const.AI_PROVIDERS) > 0
     assert "openai" in const.AI_PROVIDERS
-    assert "anthropic" in const.AI_PROVIDERS
 
 
 def test_version_constant():
@@ -46,7 +45,7 @@ def test_version_constant():
     if "homeassistant" in sys.modules or _homeassistant_available():
         try:
             # Only test config flow if homeassistant is available
-            from custom_components.ai_agent_ha.config_flow import AiAgentHaConfigFlow
+            from custom_components.glm_agent_ha.config_flow import AiAgentHaConfigFlow
 
             assert hasattr(AiAgentHaConfigFlow, "VERSION")
             assert AiAgentHaConfigFlow.VERSION == 1

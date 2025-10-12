@@ -17,13 +17,13 @@ Thank you for your interest in contributing to AI Agent HA! This document provid
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/ai_agent_ha.git
-   cd ai_agent_ha
+   git clone https://github.com/YOUR-USERNAME/glm_agent_ha.git
+   cd glm_agent_ha
    ```
 
 3. **Set up Home Assistant development environment**:
    - Install Home Assistant in development mode
-   - Copy the `custom_components/ai_agent_ha` folder to your Home Assistant `custom_components` directory
+   - Copy the `custom_components/glm_agent_ha` folder to your Home Assistant `custom_components` directory
    - Restart Home Assistant
 
 4. **Configure the integration**:
@@ -34,8 +34,8 @@ Thank you for your interest in contributing to AI Agent HA! This document provid
 ## 🏗️ Project Structure
 
 ```
-ai_agent_ha/
-├── custom_components/ai_agent_ha/
+glm_agent_ha/
+├── custom_components/glm_agent_ha/
 │   ├── __init__.py              # Integration initialization
 │   ├── agent.py                 # Core AI agent logic
 │   ├── config_flow.py           # Configuration flow
@@ -238,7 +238,7 @@ Enable debug logging in Home Assistant:
 logger:
   default: info
   logs:
-    custom_components.ai_agent_ha: debug
+    custom_components.glm_agent_ha: debug
 ```
 
 ## 📞 Getting Help

@@ -9,14 +9,14 @@ This guide provides information about the development workflow and technical asp
 - Python 3.11+
 - Git
 - Home Assistant development environment
-- API keys for one or more supported AI providers (OpenAI, Google Gemini, Anthropic, OpenRouter, Llama)
+- API keys for GLM Coding Plan from Z.AI
 
 ### Setting Up a Development Environment
 
 1. **Fork and clone the repository**:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/ai_agent_ha.git
-   cd ai_agent_ha
+   git clone https://github.com/johnneerdael/glm_agent_ha.git
+   cd glm_agent_ha
    ```
 
 2. **Set up a Home Assistant development environment**:
@@ -27,7 +27,7 @@ This guide provides information about the development workflow and technical asp
    For details on setting up a Home Assistant development environment, see the [Home Assistant Developer Documentation](https://developers.home-assistant.io/docs/development_environment).
 
 3. **Install the integration in development mode**:
-   - Symlink or copy the `custom_components/ai_agent_ha` folder to your Home Assistant `custom_components` directory
+   - Symlink or copy the `custom_components/glm_agent_ha` folder to your Home Assistant `custom_components` directory
    - Restart Home Assistant
    - Add the integration through the Home Assistant UI
 
@@ -124,7 +124,7 @@ This guide provides information about the development workflow and technical asp
 ### Frontend Development
 
 1. **Understand the existing frontend**:
-   - Examine `frontend/ai_agent_ha-panel.js`
+   - Examine `frontend/glm_agent_ha-panel.js`
    - Note Home Assistant frontend patterns
 
 2. **Make frontend changes**:
@@ -157,7 +157,7 @@ Enable debug logging in Home Assistant:
 logger:
   default: info
   logs:
-    custom_components.ai_agent_ha: debug
+    custom_components.glm_agent_ha: debug
 ```
 
 Check the Home Assistant logs at `<config_dir>/home-assistant.log` or in the "Logs" section of the Home Assistant UI.
@@ -202,15 +202,12 @@ To add a new dashboard template:
 - [Home Assistant Custom Component Development](https://developers.home-assistant.io/docs/creating_component_index)
 - [Home Assistant Frontend Development](https://developers.home-assistant.io/docs/frontend/custom-ui/)
 - [AI Provider Documentation]:
-  - [OpenAI API](https://platform.openai.com/docs/api-reference)
-  - [Google Gemini API](https://ai.google.dev/tutorials/rest_quickstart)
-  - [Anthropic Claude API](https://docs.anthropic.com/claude/reference/getting-started-with-the-api)
-  - [OpenRouter API](https://openrouter.ai/docs)
+  - [GLM Coding Plan API](https://docs.z.ai/devpack/overview)
 
 ## Getting Help
 
 If you encounter issues during development:
-- Check the [GitHub Discussions](https://github.com/sbenodiz/ai_agent_ha/discussions)
+- Check the [GitHub Discussions](https://github.com/johnneerdael/glm_agent_ha/discussions)
 - Review existing issues and pull requests
 - Ask questions in the discussions area
 

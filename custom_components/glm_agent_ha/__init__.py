@@ -82,7 +82,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Validate provider
         if provider not in [
             "openai",
-            "anthropic"
         ]:
             _LOGGER.error("Unknown AI provider: %s", provider)
             raise ConfigEntryNotReady(f"Unknown AI provider: {provider}")
@@ -99,9 +98,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 for k, v in config_data.items()
                 if k
                 not in [
-                    "openai_token",
-                    "anthropic_token"
-                ]
+                    "openai_token",                            ]
             },
         )
         hass.data[DOMAIN]["agents"][provider] = AiAgentHaAgent(hass, config_data)

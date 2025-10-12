@@ -6,10 +6,9 @@ CONF_WEATHER_ENTITY = "weather_entity"
 
 # AI Provider configuration keys
 CONF_OPENAI_TOKEN = "openai_token"  # nosec B105
-CONF_ANTHROPIC_TOKEN = "anthropic_token"  # nosec B105
 
 # Available AI providers
-AI_PROVIDERS = ["openai", "anthropic"]
+AI_PROVIDERS = ["openai",]
 
 # AI Provider constants
 CONF_MODELS = "models"

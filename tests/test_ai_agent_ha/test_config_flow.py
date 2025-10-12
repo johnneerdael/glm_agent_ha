@@ -25,7 +25,7 @@ except ImportError:
 def _import_config_flow_directly():
     """Import config_flow.py directly without going through __init__.py."""
     config_flow_path = os.path.join(
-        os.path.dirname(__file__), "..", "..", "custom_components", "ai_agent_ha", "config_flow.py"
+        os.path.dirname(__file__), "..", "..", "custom_components", "glm_agent_ha", "config_flow.py"
     )
     config_flow_path = os.path.abspath(config_flow_path)
     
@@ -74,8 +74,6 @@ class TestConfigFlow:
             # Check that required methods exist
             assert hasattr(flow_class, 'async_step_user')
             assert hasattr(flow_class, 'async_step_openai')
-            assert hasattr(flow_class, 'async_step_anthropic')
-            assert hasattr(flow_class, 'async_step_gemini')
             
         except Exception as e:
             pytest.skip(f"Config flow class test failed: {e}")
@@ -85,16 +83,16 @@ class TestConfigFlow:
         try:
             config_flow_module = _import_config_flow_directly()
             # Basic validation that domain is accessible
-            from custom_components.ai_agent_ha.const import DOMAIN
-            assert DOMAIN == "ai_agent_ha"
+            from custom_components.glm_agent_ha.const import DOMAIN
+            assert DOMAIN == "glm_agent_ha"
         except Exception as e:
             pytest.skip(f"Config flow domain test failed: {e}")
 
     def test_config_flow_ai_providers(self):
         """Test that AI providers are defined."""
         try:
-            from custom_components.ai_agent_ha.const import AI_PROVIDERS
-            expected_providers = ["llama", "openai", "gemini", "openrouter", "anthropic", "local"]
+            from custom_components.glm_agent_ha.const import AI_PROVIDERS
+            expected_providers = ["openai"]
             assert all(provider in AI_PROVIDERS for provider in expected_providers)
         except Exception as e:
             pytest.skip(f"AI providers test failed: {e}")

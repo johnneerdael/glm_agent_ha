@@ -45,5 +45,5 @@ async def hass():
 @pytest.fixture
 def mock_agent():
     """Mock the AI Agent."""
-    with patch("custom_components.ai_agent_ha.agent.AiAgentHaAgent") as mock:
+    with patch("custom_components.glm_agent_ha.agent.AiAgentHaAgent") as mock:
         yield mock

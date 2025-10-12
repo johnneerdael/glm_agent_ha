@@ -9,7 +9,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 try:
-    from custom_components.ai_agent_ha.dashboard_templates import (
+    from custom_components.glm_agent_ha.dashboard_templates import (
         DASHBOARD_TEMPLATES,
         CARD_EXAMPLES,
         COMMON_ICONS,

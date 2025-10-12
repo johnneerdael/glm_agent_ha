@@ -21,22 +21,18 @@ _LOGGER = logging.getLogger(__name__)
 
 PROVIDERS = {
     "openai": "GLM Coding Plan OpenAI Endpoint",
-    "anthropic": "GLM Coding Plan Anthropic Endpoint"
 }
 
 TOKEN_FIELD_NAMES = {
     "openai": "openai_token",
-    "anthropic": "anthropic_token"
 }
 
 TOKEN_LABELS = {
     "openai": "GLM Coding Plan API Key",
-    "anthropic": "GLM Coding Plan API Key"
 }
 
 DEFAULT_MODELS = {
     "openai": "GLM-4.5-air",
-    "anthropic": "GLM-4.5-air"
 }
 
 AVAILABLE_MODELS = {
@@ -45,12 +41,6 @@ AVAILABLE_MODELS = {
         "GLM-4.5",
         "GLM-4.6"
     ],
-    "anthropic": [
-        "GLM-4.5-air",
-        "GLM-4.5",
-        "GLM-4.6"
-    ],
-    # For local models, provide common Ollama models with llama3.2 as the default
 }
 
 DEFAULT_PROVIDER = "openai"
@@ -155,33 +145,6 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
-
-        if provider == "local":
-            # For local provider, we need both URL and optional model name
-            schema_dict = {
-                vol.Required(CONF_LOCAL_URL): TextSelector(
-                    TextSelectorConfig(type="text")
-                ),
-            }
-
-            # Add model selection
-            model_options = AVAILABLE_MODELS.get("local", ["Custom..."])
-            schema_dict[vol.Optional("model", default="Custom...")] = SelectSelector(
-                SelectSelectorConfig(options=model_options)
-            )
-            schema_dict[vol.Optional("custom_model")] = TextSelector(
-                TextSelectorConfig(type="text")
-            )
-
-            return self.async_show_form(
-                step_id="configure",
-                data_schema=vol.Schema(schema_dict),
-                errors=errors,
-                description_placeholders={
-                    "token_label": "Local API URL",
-                    "provider": PROVIDERS[provider],
-                },
-            )
 
         # Build schema for other providers
         schema_dict = {
@@ -320,38 +283,6 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception in options flow")
                 errors["base"] = "unknown"
-
-        # Build schema for the selected provider in options
-        if provider == "local":
-            # For local provider, we need both URL and optional model name
-            current_url = self.config_entry.data.get(CONF_LOCAL_URL, "")
-
-            schema_dict = {
-                vol.Required(CONF_LOCAL_URL, default=current_url): TextSelector(
-                    TextSelectorConfig(type="text")
-                ),
-            }
-
-            # Add model selection
-            model_options = AVAILABLE_MODELS.get("local", ["Custom..."])
-            schema_dict[
-                vol.Optional(
-                    "model", default=current_model if current_model else "Custom..."
-                )
-            ] = SelectSelector(SelectSelectorConfig(options=model_options))
-            schema_dict[vol.Optional("custom_model")] = TextSelector(
-                TextSelectorConfig(type="text")
-            )
-
-            return self.async_show_form(
-                step_id="configure_options",
-                data_schema=vol.Schema(schema_dict),
-                errors=errors,
-                description_placeholders={
-                    "token_label": "Local API URL",
-                    "provider": PROVIDERS[provider],
-                },
-            )
 
         # Build schema for other providers
         schema_dict = {

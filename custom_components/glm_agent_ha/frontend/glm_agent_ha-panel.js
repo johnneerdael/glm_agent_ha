@@ -8,7 +8,6 @@ console.log("AI Agent HA Panel loading..."); // Debug log
 
 const PROVIDERS = {
   openai: "OpenAI",
-  anthropic: "Anthropic"
 };
 
 class AiAgentHaPanel extends LitElement {
@@ -626,7 +625,6 @@ class AiAgentHaPanel extends LitElement {
               // Fallback to title mapping
               const titleToProviderMap = {
                 "GLM Coding Plan Agent HA (OpenAI)": "openai",
-                "GLM Coding Plan Agent HA (Anthropic (Claude))": "anthropic"
               };
               provider = titleToProviderMap[entry.title] || "unknown";
             }
