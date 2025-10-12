@@ -1,6 +1,8 @@
 {
   "name": "GLM Agent HA",
   "render_readme": true,
-  "country": "US",
-  "homeassistant": "2024.1.0"
+  "filename": "glmagentha.zip",
+  "hide_default_branch": true,
+  "render_readme": true,
+
 }
