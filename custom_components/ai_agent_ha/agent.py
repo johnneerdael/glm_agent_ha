@@ -2,21 +2,14 @@
 
 Example config:
 ai_agent_ha:
-  ai_provider: openai  # or 'llama', 'gemini', 'openrouter', 'anthropic', 'local'
-  llama_token: "..."
+  ai_provider: openai  # or 'anthropic'
   openai_token: "..."
-  gemini_token: "..."
-  openrouter_token: "..."
   anthropic_token: "..."
-  local_url: "http://localhost:11434/api/generate"  # Required for local models
   # Model configuration (optional, defaults will be used if not specified)
   models:
-    openai: "GLM-4.6"  # or "gpt-4", "gpt-4-turbo", etc.
-    llama: "Llama-4-Maverick-17B-128E-Instruct-FP8"
-    gemini: "gemini-1.5-flash"  # or "gemini-1.5-pro", "gemini-1.0-pro", etc.
-    openrouter: "openai/gpt-4o"  # or any model available on OpenRouter
-    anthropic: "claude-3-5-sonnet-20241022"  # or "claude-3-opus-20240229", etc.
-    local: "llama3.2"  # model name for local API (optional if your API doesn't require it)
+    openai: "GLM-4.6"  # or "GLM-4.5", "GLM-4.5-air".
+    anthropic: "GLM-4.6"  # or "GLM-4.5", "GLM-4.5-air".
+
 """
 
 import asyncio
