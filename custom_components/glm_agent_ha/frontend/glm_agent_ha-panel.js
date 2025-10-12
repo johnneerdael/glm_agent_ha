@@ -45,13 +45,53 @@ class AiAgentHaPanel extends LitElement {
         padding: 16px 24px;
         display: flex;
         align-items: center;
-        gap: 12px;
+        justify-content: space-between;
         font-size: 20px;
         font-weight: 500;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        position: relative;
+        min-height: 64px;
+      }
+      .header-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-grow: 1;
+        min-width: 0;
+      }
+      .header ha-icon {
+        --mdc-icon-size: 24px;
+        color: var(--app-header-text-color);
+        flex-shrink: 0;
+      }
+      /* Responsive design for smaller screens */
+      @media (max-width: 768px) {
+        .header {
+          padding: 12px 16px;
+          font-size: 18px;
+          min-height: 56px;
+        }
+        .header-title {
+          gap: 8px;
+        }
+        .header ha-icon {
+          --mdc-icon-size: 20px;
+        }
+      }
+      @media (max-width: 480px) {
+        .header {
+          padding: 10px 12px;
+          font-size: 16px;
+          min-height: 48px;
+        }
+        .header-title {
+          gap: 6px;
+        }
+        .header ha-icon {
+          --mdc-icon-size: 18px;
+        }
       }
       .clear-button {
-        margin-left: auto;
         --mdc-theme-primary: var(--error-color) !important;
         --mdc-theme-on-primary: #fff !important;
         --mdc-typography-button-font-size: 13px !important;
@@ -70,6 +110,8 @@ class AiAgentHaPanel extends LitElement {
         min-width: unset;
         width: auto;
         height: 32px;
+        flex-shrink: 0;
+        margin-left: 12px;
       }
       .clear-button:hover {
         background: var(--error-color);
@@ -92,6 +134,36 @@ class AiAgentHaPanel extends LitElement {
       }
       .clear-button mdc-button {
         color: #fff !important;
+      }
+      /* Responsive clear button adjustments */
+      @media (max-width: 768px) {
+        .clear-button {
+          --mdc-typography-button-font-size: 12px !important;
+          --mdc-button-height: 28px !important;
+          --mdc-button-padding: 0 8px !important;
+          height: 28px;
+          margin-left: 8px;
+          gap: 4px;
+        }
+        .clear-button ha-icon {
+          --mdc-icon-size: 14px !important;
+        }
+      }
+      @media (max-width: 480px) {
+        .clear-button {
+          --mdc-typography-button-font-size: 11px !important;
+          --mdc-button-height: 24px !important;
+          --mdc-button-padding: 0 6px !important;
+          height: 24px;
+          margin-left: 6px;
+          gap: 3px;
+        }
+        .clear-button ha-icon {
+          --mdc-icon-size: 12px !important;
+        }
+        .clear-button span {
+          display: none; /* Hide text on very small screens */
+        }
       }
       .content {
         flex-grow: 1;
@@ -609,42 +681,76 @@ class AiAgentHaPanel extends LitElement {
       this.providersLoaded = true;
 
       try {
+        console.debug("Loading AI providers...");
         // Uses the WebSocket API to get all entries with their complete data
         const allEntries = await this.hass.callWS({ type: 'config_entries/get' });
+        console.debug("All config entries received from WebSocket API:", allEntries);
 
         const aiAgentEntries = allEntries.filter(
           entry => entry.domain === 'glm_agent_ha'
         );
+        console.debug("Filtered GLM Agent HA entries:", aiAgentEntries);
+        console.debug("Number of GLM Agent HA entries found:", aiAgentEntries.length);
 
         if (aiAgentEntries.length > 0) {
           // More robust approach: extract provider from entry data or use title mapping as fallback
           this._availableProviders = aiAgentEntries.map(entry => {
             let provider = "unknown";
             
+            // Comprehensive debug logging for each config entry
+            console.debug("Processing config entry:", {
+              entry_id: entry.entry_id,
+              title: entry.title,
+              domain: entry.domain,
+              data: entry.data,
+              options: entry.options,
+              unique_id: entry.unique_id
+            });
+            
             // First try to get provider from entry data
             if (entry.data && entry.data.ai_provider) {
               provider = entry.data.ai_provider;
+              console.debug(`Provider detected from entry data: ${provider}`);
             } else {
               // Fallback to title mapping
               const titleToProviderMap = {
-                "GLM Coding Plan Agent HA (OpenAI)": "openai",
+                "GLM Coding Plan Agent HA (GLM Coding Plan OpenAI Endpoint)": "openai",
               };
               provider = titleToProviderMap[entry.title] || "unknown";
+              
+              // Debug logging to help identify issues
+              console.debug("Config entry processing details:", {
+                title: entry.title,
+                data: entry.data,
+                detectedProvider: provider,
+                titleMatch: titleToProviderMap[entry.title] ? "found" : "not found",
+                availableTitles: Object.keys(titleToProviderMap)
+              });
             }
             
-            return {
+            const providerInfo = {
               value: provider,
               label: PROVIDERS[provider] || provider
             };
+            
+            console.debug("Final provider mapping:", {
+              originalTitle: entry.title,
+              provider: provider,
+              label: providerInfo.label
+            });
+            
+            return providerInfo;
           });
 
           console.debug("Available AI providers (mapped from data/title):", this._availableProviders);
 
           if (!this._selectedProvider && this._availableProviders.length > 0) {
             this._selectedProvider = this._availableProviders[0].value;
+            console.debug("Auto-selected first provider:", this._selectedProvider);
           }
         } else {
           console.debug("No 'glm_agent_ha' config entries found via WebSocket.");
+          console.debug("All domains found in config entries:", [...new Set(allEntries.map(entry => entry.domain))]);
           this._availableProviders = [];
         }
       } catch (error) {
@@ -873,8 +979,10 @@ class AiAgentHaPanel extends LitElement {
 
     return html`
       <div class="header">
-        <ha-icon icon="mdi:robot"></ha-icon>
-        GLM Agent HA
+        <div class="header-title">
+          <ha-icon icon="mdi:robot"></ha-icon>
+          GLM Agent HA
+        </div>
         <ha-button
           class="clear-button"
           @click=${this._clearChat}
@@ -1018,8 +1126,10 @@ class AiAgentHaPanel extends LitElement {
   }
 
   async _selectProvider(provider) {
+    const previousProvider = this._selectedProvider;
     this._selectedProvider = provider;
-    console.debug("Provider changed to:", provider);
+    console.debug("Provider changed from:", previousProvider, "to:", provider);
+    console.debug("Selected provider details:", this._availableProviders.find(p => p.value === provider));
     await this._loadPromptHistory();
     this.requestUpdate();
   }
