@@ -15,24 +15,51 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Use the official yq action to update manifest.json
+      # Discover the manifest.json path (supports repos with different nesting)
+      - name: Locate Home Assistant manifest.json
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Workspace: $GITHUB_WORKSPACE"
+          # Look for custom_components/*/manifest.json up to a few levels
+          MANIFEST="$(find "$GITHUB_WORKSPACE" -maxdepth 6 -path '*/custom_components/*/manifest.json' | head -n1 || true)"
+          if [[ -z "$MANIFEST" ]]; then
+            echo "No manifest.json found under custom_components/*" >&2
+            echo "Here is the top-level tree for debugging:" >&2
+            ls -la
+            exit 1
+          fi
+          echo "Found manifest at: $MANIFEST"
+          echo "manifest=$MANIFEST" >> "$GITHUB_OUTPUT"
+          # Capture the integration directory (where __init__.py, manifest.json live)
+          INTEGRATION_DIR="$(dirname "$MANIFEST")"
+          echo "integration_dir=$INTEGRATION_DIR" >> "$GITHUB_OUTPUT"
+          # Integration folder name (e.g., glm_agent_ha)
+          INTEGRATION_NAME="$(basename "$INTEGRATION_DIR")"
+          echo "integration_name=$INTEGRATION_NAME" >> "$GITHUB_OUTPUT"
+
+      # Update the version in the discovered manifest.json
       - name: Adjust version number in manifest.json
         uses: mikefarah/yq@v4.44.3
         with:
-          # Writes the tag name (e.g., v1.2.3) into .version in JSON mode
           cmd: >
             yq -i -o=json
             '.version = "${{ github.event.release.tag_name }}"'
-            "${{ github.workspace }}/custom_components/glm_agent_ha/manifest.json"
+            '${{ steps.locate.outputs.manifest }}'
 
+      # Zip the integration folder (contents only, clean root)
       - name: ZIP the integration directory
+        id: zip
         shell: bash
         run: |
-          cd "${{ github.workspace }}/custom_components/glm_agent_ha"
-          # Create the zip one level up to avoid accidentally nesting paths
-          zip -r glm_agent_ha.zip .
+          set -euo pipefail
+          ZIP_OUT="$GITHUB_WORKSPACE/${{ steps.locate.outputs.integration_name }}.zip"
+          (cd "${{ steps.locate.outputs.integration_dir }}" && zip -r "$ZIP_OUT" .)
+          echo "zip_path=$ZIP_OUT" >> "$GITHUB_OUTPUT"
 
-      - name: Upload the ZIP file to the release
+      # Upload the ZIP file to the release
+      - name: Upload asset to release
         uses: softprops/action-gh-release@v2.4.1
         with:
-          files: ${{ github.workspace }}/custom_components/glm_agent_ha/glm_agent_ha.zip
+          files: ${{ steps.zip.outputs.zip_path }}
