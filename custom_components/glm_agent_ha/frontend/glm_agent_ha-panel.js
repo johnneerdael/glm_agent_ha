@@ -7,7 +7,7 @@ import {
 console.log("AI Agent HA Panel loading..."); // Debug log
 
 const PROVIDERS = {
-  openai: "OpenAI",
+  openai: "GLM Coding Plan OpenAI",
 };
 
 class AiAgentHaPanel extends LitElement {
@@ -52,19 +52,19 @@ class AiAgentHaPanel extends LitElement {
       }
       .clear-button {
         margin-left: auto;
-        --mdc-theme-primary: var(--error-color);
-        --mdc-theme-on-primary: #fff;
-        --mdc-typography-button-font-size: 13px;
-        --mdc-button-height: 32px;
-        --mdc-button-padding: 0 12px;
+        --mdc-theme-primary: var(--error-color) !important;
+        --mdc-theme-on-primary: #fff !important;
+        --mdc-typography-button-font-size: 13px !important;
+        --mdc-button-height: 32px !important;
+        --mdc-button-padding: 0 12px !important;
         border-radius: 16px;
-        background: var(--error-color);
-        color: #fff;
+        background: var(--error-color) !important;
+        color: #fff !important;
         transition: all 0.2s ease;
         display: flex;
         align-items: center;
         gap: 6px;
-        padding: 0 12px;
+        padding: 0 12px !important;
         font-weight: 500;
         box-shadow: 0 1px 2px rgba(0,0,0,0.08);
         min-width: unset;
@@ -82,13 +82,16 @@ class AiAgentHaPanel extends LitElement {
         box-shadow: 0 1px 2px rgba(0,0,0,0.08);
       }
       .clear-button ha-icon {
-        --mdc-icon-size: 16px;
+        --mdc-icon-size: 16px !important;
         margin-right: 2px;
-        color: #fff;
+        color: #fff !important;
       }
       .clear-button span {
-        color: #fff;
+        color: #fff !important;
         font-weight: 500;
+      }
+      .clear-button mdc-button {
+        color: #fff !important;
       }
       .content {
         flex-grow: 1;
@@ -871,7 +874,7 @@ class AiAgentHaPanel extends LitElement {
     return html`
       <div class="header">
         <ha-icon icon="mdi:robot"></ha-icon>
-        AI Agent HA
+        GLM Agent HA
         <ha-button
           class="clear-button"
           @click=${this._clearChat}
