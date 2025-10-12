@@ -20,7 +20,7 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 PROVIDERS = {
-    "openai": "GLM Coding Plan OpenAI Endpoint",
+    "openai": "GLM Coding Plan API",
 }
 
 TOKEN_FIELD_NAMES = {

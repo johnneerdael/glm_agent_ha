@@ -2,8 +2,8 @@
 
 Example config:
 glm_agent_ha:
-  ai_provider: openai 
-  openai_token: "..."
+  ai_provider: openai
+  openai_token: "..."  # Z.AI API key for GLM Coding Plan
   # Model configuration (optional, defaults will be used if not specified)
   models:
     openai: "GLM-4.6"  # or "GLM-4.5", "GLM-4.5-air".
@@ -361,6 +361,12 @@ class LocalClient(BaseAIClient):
 
 
 class OpenAIClient(BaseAIClient):
+    """GLM Coding Plan API client using OpenAI-compatible interface.
+    
+    This client connects to the GLM Coding Plan endpoint at https://api.z.ai/api/coding/paas/v4
+    while maintaining compatibility with the OpenAI client library interface.
+    """
+    
     def __init__(self, token, model="GLM-4.6"):
         self.token = token
         self.model = model
@@ -390,11 +396,15 @@ class OpenAIClient(BaseAIClient):
         return any(model_id in model_lower for model_id in restricted_models)
 
     async def get_response(self, messages, **kwargs):
-        _LOGGER.debug("Making request to OpenAI API with model: %s", self.model)
+        _LOGGER.debug("Making request to GLM Coding Plan API with model: %s", self.model)
 
-        # Validate token
-        if not self.token or not self.token.startswith("sk-"):
-            raise Exception("Invalid OpenAI API key format")
+        # Validate token - more flexible for GLM Coding Plan API
+        if not self.token:
+            raise Exception("API key is required")
+        
+        # Check for minimum length instead of specific prefix
+        if len(self.token) < 10:
+            raise Exception("API key appears to be too short")
 
         headers = {
             "Authorization": f"Bearer {self.token}",
@@ -418,7 +428,7 @@ class OpenAIClient(BaseAIClient):
         if not is_restricted:
             payload.update({"temperature": 0.7, "top_p": 0.9})
 
-        _LOGGER.debug("OpenAI request payload: %s", json.dumps(payload, indent=2))
+        _LOGGER.debug("GLM Coding Plan request payload: %s", json.dumps(payload, indent=2))
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -428,35 +438,35 @@ class OpenAIClient(BaseAIClient):
                 timeout=aiohttp.ClientTimeout(total=300),
             ) as resp:
                 response_text = await resp.text()
-                _LOGGER.debug("OpenAI API response status: %d", resp.status)
-                _LOGGER.debug("OpenAI API response: %s", response_text[:500])
+                _LOGGER.debug("GLM Coding Plan API response status: %d", resp.status)
+                _LOGGER.debug("GLM Coding Plan API response: %s", response_text[:500])
 
                 if resp.status != 200:
-                    _LOGGER.error("OpenAI API error %d: %s", resp.status, response_text)
-                    raise Exception(f"OpenAI API error {resp.status}: {response_text}")
+                    _LOGGER.error("GLM Coding Plan API error %d: %s", resp.status, response_text)
+                    raise Exception(f"GLM Coding Plan API error {resp.status}: {response_text}")
 
                 try:
                     data = json.loads(response_text)
                 except json.JSONDecodeError as e:
-                    _LOGGER.error("Failed to parse OpenAI response as JSON: %s", str(e))
+                    _LOGGER.error("Failed to parse GLM Coding Plan response as JSON: %s", str(e))
                     raise Exception(
-                        f"Invalid JSON response from OpenAI: {response_text[:200]}"
+                        f"Invalid JSON response from GLM Coding Plan: {response_text[:200]}"
                     )
 
-                # Extract text from OpenAI response
+                # Extract text from GLM Coding Plan response
                 choices = data.get("choices", [])
                 if choices and "message" in choices[0]:
                     content = choices[0]["message"].get("content", "")
                     if not content:
-                        _LOGGER.warning("OpenAI returned empty content in message")
+                        _LOGGER.warning("GLM Coding Plan returned empty content in message")
                         _LOGGER.debug(
-                            "Full OpenAI response: %s", json.dumps(data, indent=2)
+                            "Full GLM Coding Plan response: %s", json.dumps(data, indent=2)
                         )
                     return content
                 else:
-                    _LOGGER.warning("OpenAI response missing expected structure")
+                    _LOGGER.warning("GLM Coding Plan response missing expected structure")
                     _LOGGER.debug(
-                        "Full OpenAI response: %s", json.dumps(data, indent=2)
+                        "Full GLM Coding Plan response: %s", json.dumps(data, indent=2)
                     )
                     return str(data)
 
