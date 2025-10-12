@@ -15,11 +15,11 @@
                 "title": "Configure {provider}",
                 "description": "Enter your {token_label} and optionally select a model",
                 "data": {
-                    "openai_token": "OpenAI API Key",
+                    "openai_token": "GLM Coding Plan API Key",
                     "model": "Model (Optional)"
                 },
                 "data_description": {
-                    "openai_token": "Enter your OpenAI API key",
+                    "openai_token": "Enter your GLM Coding Plan API key",
                     "model": "Choose a predefined model or select 'Custom...' to enter your own"
                 }
             }
@@ -27,7 +27,7 @@
         "error": {
             "invalid_api_key": "Invalid API key format",
             "unknown": "Unknown error occurred",
-            "openai_token": "OpenAI API key is required"
+            "openai_token": "GLM Coding Plan API key is required"
         },
         "abort": {
             "already_configured": "AI Agent HA is already configured"
@@ -54,7 +54,7 @@
                 },
                 "data_description": {
                     "openai_token": "Enter your OpenAI API key",
-                    "model": "Choose a model or select 'Custom...' to enter your own"
+                    "model": "Choose a model"
                 }
             }
         }

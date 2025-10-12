@@ -91,15 +91,19 @@ class AiAgentHaPanel extends LitElement {
           --mdc-icon-size: 18px;
         }
       }
+      
       .clear-button {
         --mdc-theme-primary: var(--error-color) !important;
         --mdc-theme-on-primary: #fff !important;
         --mdc-typography-button-font-size: 13px !important;
         --mdc-button-height: 32px !important;
         --mdc-button-padding: 0 12px !important;
+        appearance: none;
+        border: none;
         border-radius: 16px;
         background: var(--error-color) !important;
         color: #fff !important;
+        cursor: pointer;
         transition: all 0.2s ease;
         display: flex;
         align-items: center;
@@ -113,13 +117,44 @@ class AiAgentHaPanel extends LitElement {
         flex-shrink: 0;
         margin-left: 12px;
       }
+      .clear-button[disabled] {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
       
       /* More specific selectors to override any conflicting styles */
-      .header .clear-button {
+      .header 
+      .clear-button {
+        --mdc-theme-primary: var(--error-color) !important;
+        --mdc-theme-on-primary: #fff !important;
+        --mdc-typography-button-font-size: 13px !important;
+        --mdc-button-height: 32px !important;
+        --mdc-button-padding: 0 12px !important;
+        appearance: none;
+        border: none;
+        border-radius: 16px;
         background: var(--error-color) !important;
         color: #fff !important;
-        border: none !important;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 12px !important;
+        font-weight: 500;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        min-width: unset;
+        width: auto;
+        height: 32px;
+        flex-shrink: 0;
+        margin-left: 12px;
       }
+      .clear-button[disabled] {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
       
       .header .clear-button ha-button {
         --mdc-theme-primary: var(--error-color) !important;
@@ -154,27 +189,73 @@ class AiAgentHaPanel extends LitElement {
       }
       /* Responsive clear button adjustments */
       @media (max-width: 768px) {
-        .clear-button {
-          --mdc-typography-button-font-size: 12px !important;
-          --mdc-button-height: 28px !important;
-          --mdc-button-padding: 0 8px !important;
-          height: 28px;
-          margin-left: 8px;
-          gap: 4px;
-        }
+        
+      .clear-button {
+        --mdc-theme-primary: var(--error-color) !important;
+        --mdc-theme-on-primary: #fff !important;
+        --mdc-typography-button-font-size: 13px !important;
+        --mdc-button-height: 32px !important;
+        --mdc-button-padding: 0 12px !important;
+        appearance: none;
+        border: none;
+        border-radius: 16px;
+        background: var(--error-color) !important;
+        color: #fff !important;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 12px !important;
+        font-weight: 500;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        min-width: unset;
+        width: auto;
+        height: 32px;
+        flex-shrink: 0;
+        margin-left: 12px;
+      }
+      .clear-button[disabled] {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
         .clear-button ha-icon {
           --mdc-icon-size: 14px !important;
         }
       }
       @media (max-width: 480px) {
-        .clear-button {
-          --mdc-typography-button-font-size: 11px !important;
-          --mdc-button-height: 24px !important;
-          --mdc-button-padding: 0 6px !important;
-          height: 24px;
-          margin-left: 6px;
-          gap: 3px;
-        }
+        
+      .clear-button {
+        --mdc-theme-primary: var(--error-color) !important;
+        --mdc-theme-on-primary: #fff !important;
+        --mdc-typography-button-font-size: 13px !important;
+        --mdc-button-height: 32px !important;
+        --mdc-button-padding: 0 12px !important;
+        appearance: none;
+        border: none;
+        border-radius: 16px;
+        background: var(--error-color) !important;
+        color: #fff !important;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 12px !important;
+        font-weight: 500;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        min-width: unset;
+        width: auto;
+        height: 32px;
+        flex-shrink: 0;
+        margin-left: 12px;
+      }
+      .clear-button[disabled] {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
         .clear-button ha-icon {
           --mdc-icon-size: 12px !important;
         }
@@ -1000,14 +1081,14 @@ class AiAgentHaPanel extends LitElement {
           <ha-icon icon="mdi:robot"></ha-icon>
           GLM Agent HA
         </div>
-        <ha-button
+        <button
           class="clear-button"
           @click=${this._clearChat}
-          .disabled=${this._isLoading}
+          ?disabled=${this._isLoading}
         >
           <ha-icon icon="mdi:delete-sweep"></ha-icon>
           <span>Clear Chat</span>
-        </ha-button>
+        </button>
       </div>
       <div class="content">
         <div class="chat-container">
