@@ -35,62 +35,22 @@ TOKEN_LABELS = {
 }
 
 DEFAULT_MODELS = {
-    "openai": "gpt-3.5-turbo",
+    "openai": "GLM-4.5-air",
     "anthropic": "GLM-4.5-air",
 }
 
 AVAILABLE_MODELS = {
     "openai": [
-        "gpt-3.5-turbo",
-        "gpt-4",
-        "gpt-4-turbo",
-        "gpt-4o",
-        "gpt-4o-mini",
-        "o1-preview",
-        "o1-mini",
-    ],
-    "gemini": [
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
-        "gemini-1.0-pro",
-        "gemini-2.0-flash-exp",
-    ],
-    "openrouter": [
-        "openai/gpt-4o",
-        "openai/gpt-4-turbo",
-        "openai/gpt-3.5-turbo",
-        "anthropic/claude-3.5-sonnet",
-        "anthropic/claude-3-sonnet",
-        "anthropic/claude-3-haiku",
-        "meta-llama/llama-3.1-70b-instruct",
-        "meta-llama/llama-3.2-90b-instruct",
-        "google/gemini-pro",
-        "mistralai/mixtral-8x7b-instruct",
-        "deepseek/deepseek-r1",
+        "GLM-4.5-air",
+        "GLM-4.5",
+        "GLM-4.6",
     ],
     "anthropic": [
-        "claude-3-5-sonnet-20241022",
-        "claude-3-5-haiku-20241022",
-        "claude-3-opus-20240229",
-        "claude-3-sonnet-20240229",
-        "claude-3-haiku-20240307",
-    ],
-    "llama": [
-        "Llama-4-Maverick-17B-128E-Instruct-FP8",
-        "Llama-3.1-70B-Instruct",
-        "Llama-3.1-8B-Instruct",
-        "Llama-3.2-90B-Instruct",
+        "GLM-4.5-air",
+        "GLM-4.5",
+        "GLM-4.6",
     ],
     # For local models, provide common Ollama models with llama3.2 as the default
-    "local": [
-        "llama3.2",
-        "llama3",
-        "llama3.1",
-        "mistral",
-        "mixtral",
-        "deepseek-coder",
-        "Custom...",
-    ],
 }
 
 DEFAULT_PROVIDER = "openai"
