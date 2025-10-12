@@ -7,12 +7,8 @@ import {
 console.log("AI Agent HA Panel loading..."); // Debug log
 
 const PROVIDERS = {
-  openai: "OpenAI",
-  llama: "Llama",
-  gemini: "Google Gemini",
-  openrouter: "OpenRouter",
-  anthropic: "Anthropic",
-  local: "Local Model",
+  openai: "OpenAI"
+  anthropic: "Anthropic"
 };
 
 class AiAgentHaPanel extends LitElement {
@@ -629,12 +625,8 @@ class AiAgentHaPanel extends LitElement {
             } else {
               // Fallback to title mapping
               const titleToProviderMap = {
-                "AI Agent HA (OpenRouter)": "openrouter",
-                "AI Agent HA (Google Gemini)": "gemini",
-                "AI Agent HA (OpenAI)": "openai",
-                "AI Agent HA (Llama)": "llama",
-                "AI Agent HA (Anthropic (Claude))": "anthropic",
-                "AI Agent HA (Local Model)": "local",
+                "GLM Coding Plan Agent HA (OpenAI)": "openai",
+                "GLM Coding Plan Agent HA (Anthropic (Claude))": "anthropic"
               };
               provider = titleToProviderMap[entry.title] || "unknown";
             }
