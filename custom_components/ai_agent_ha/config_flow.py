@@ -20,39 +20,23 @@ from .const import CONF_LOCAL_MODEL, CONF_LOCAL_URL, DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 PROVIDERS = {
-    "llama": "Llama",
     "openai": "OpenAI",
-    "gemini": "Google Gemini",
-    "openrouter": "OpenRouter",
-    "anthropic": "Anthropic (Claude)",
-    "local": "Local Model",
+    "anthropic": "Anthropic (Claude)"
 }
 
 TOKEN_FIELD_NAMES = {
-    "llama": "llama_token",
     "openai": "openai_token",
-    "gemini": "gemini_token",
-    "openrouter": "openrouter_token",
-    "anthropic": "anthropic_token",
-    "local": CONF_LOCAL_URL,  # For local models, we use URL instead of token
+    "anthropic": "anthropic_token"
 }
 
 TOKEN_LABELS = {
-    "llama": "Llama API Token",
-    "openai": "OpenAI API Key",
-    "gemini": "Google Gemini API Key",
-    "openrouter": "OpenRouter API Key",
-    "anthropic": "Anthropic API Key",
-    "local": "Local API URL (e.g., http://localhost:11434/api/generate)",
+    "openai": "GLM Coding Plan API Key"
+    "anthropic": "GLM Coding Plan API Key"
 }
 
 DEFAULT_MODELS = {
-    "llama": "Llama-4-Maverick-17B-128E-Instruct-FP8",
     "openai": "gpt-3.5-turbo",
-    "gemini": "gemini-1.5-flash",
-    "openrouter": "openai/gpt-4o",
-    "anthropic": "claude-3-5-sonnet-20241022",
-    "local": "llama3.2",  # Updated to use llama3.2 as default
+    "anthropic": "GLM-4.5-air",
 }
 
 AVAILABLE_MODELS = {
