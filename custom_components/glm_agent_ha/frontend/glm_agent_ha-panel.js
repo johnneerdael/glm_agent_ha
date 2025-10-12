@@ -113,6 +113,23 @@ class AiAgentHaPanel extends LitElement {
         flex-shrink: 0;
         margin-left: 12px;
       }
+      
+      /* More specific selectors to override any conflicting styles */
+      .header .clear-button {
+        background: var(--error-color) !important;
+        color: #fff !important;
+        border: none !important;
+      }
+      
+      .header .clear-button ha-button {
+        --mdc-theme-primary: var(--error-color) !important;
+        --mdc-theme-on-primary: #fff !important;
+      }
+      
+      .header .clear-button mdc-button {
+        --mdc-theme-primary: var(--error-color) !important;
+        --mdc-theme-on-primary: #fff !important;
+      }
       .clear-button:hover {
         background: var(--error-color);
         opacity: 0.92;
@@ -1379,6 +1396,22 @@ class AiAgentHaPanel extends LitElement {
   }
 
   _clearChat() {
+    // Debug logging to check button styling
+    console.log("🔍 Clear Chat Button Debug - Checking styles:");
+    const clearButton = this.shadowRoot.querySelector('.clear-button');
+    if (clearButton) {
+      const computedStyles = window.getComputedStyle(clearButton);
+      console.log("🎨 Background color:", computedStyles.backgroundColor);
+      console.log("🎨 Text color:", computedStyles.color);
+      console.log("🎨 Border color:", computedStyles.borderColor);
+      console.log("🔧 CSS Variables --error-color:", getComputedStyle(document.documentElement).getPropertyValue('--error-color'));
+      console.log("🔧 CSS Variables --primary-color:", getComputedStyle(document.documentElement).getPropertyValue('--primary-color'));
+      
+      // Check MDC theme variables
+      console.log("🔧 MDC --mdc-theme-primary:", getComputedStyle(clearButton).getPropertyValue('--mdc-theme-primary'));
+      console.log("🔧 MDC --mdc-theme-on-primary:", getComputedStyle(clearButton).getPropertyValue('--mdc-theme-on-primary'));
+    }
+    
     this._messages = [];
     this._clearLoadingState();
     this._error = null;
