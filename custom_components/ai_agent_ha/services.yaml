@@ -13,9 +13,7 @@ query:
         select:
           options:
             - "openai"
-            - "llama"
-            - "gemini"
-            - "openrouter"
+            - "anthropic"
 
 create_dashboard:
   name: "Create Dashboard via AI Agent"
@@ -32,9 +30,7 @@ create_dashboard:
         select:
           options:
             - "openai"
-            - "llama"
-            - "gemini"
-            - "openrouter"
+            - "anthropic"
 
 create_automation:
   name: "Create Automation via AI Agent"
@@ -51,9 +47,7 @@ create_automation:
         select:
           options:
             - "openai"
-            - "llama"
-            - "gemini"
-            - "openrouter"
+            - "anthropic"
 
 update_dashboard:
   name: "Update Dashboard via AI Agent"
@@ -73,6 +67,4 @@ update_dashboard:
         select:
           options:
             - "openai"
-            - "llama"
-            - "gemini"
-            - "openrouter"
+            - "anthropic"
