@@ -15,40 +15,38 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Discover the manifest.json path (supports repos with different nesting)
       - name: Locate Home Assistant manifest.json
         id: locate
         shell: bash
         run: |
           set -euo pipefail
-          echo "Workspace: $GITHUB_WORKSPACE"
-          # Look for custom_components/*/manifest.json up to a few levels
           MANIFEST="$(find "$GITHUB_WORKSPACE" -maxdepth 6 -path '*/custom_components/*/manifest.json' | head -n1 || true)"
           if [[ -z "$MANIFEST" ]]; then
             echo "No manifest.json found under custom_components/*" >&2
-            echo "Here is the top-level tree for debugging:" >&2
-            ls -la
             exit 1
           fi
-          echo "Found manifest at: $MANIFEST"
-          echo "manifest=$MANIFEST" >> "$GITHUB_OUTPUT"
-          # Capture the integration directory (where __init__.py, manifest.json live)
           INTEGRATION_DIR="$(dirname "$MANIFEST")"
-          echo "integration_dir=$INTEGRATION_DIR" >> "$GITHUB_OUTPUT"
-          # Integration folder name (e.g., glm_agent_ha)
           INTEGRATION_NAME="$(basename "$INTEGRATION_DIR")"
+      
+          # Also provide *relative* paths for containerized steps (yq)
+          MANIFEST_REL="${MANIFEST#"$GITHUB_WORKSPACE/"}"
+          INTEGRATION_DIR_REL="${INTEGRATION_DIR#"$GITHUB_WORKSPACE/"}"
+      
+          echo "manifest=$MANIFEST" >> "$GITHUB_OUTPUT"
+          echo "integration_dir=$INTEGRATION_DIR" >> "$GITHUB_OUTPUT"
           echo "integration_name=$INTEGRATION_NAME" >> "$GITHUB_OUTPUT"
-
-      # Update the version in the discovered manifest.json
+          echo "manifest_rel=$MANIFEST_REL" >> "$GITHUB_OUTPUT"
+          echo "integration_dir_rel=$INTEGRATION_DIR_REL" >> "$GITHUB_OUTPUT"
+      
       - name: Adjust version number in manifest.json
         uses: mikefarah/yq@v4.44.3
         with:
+          # Use the *relative* path so it resolves inside /github/workspace
           cmd: >
             yq -i -o=json
             '.version = "${{ github.event.release.tag_name }}"'
-            '${{ steps.locate.outputs.manifest }}'
-
-      # Zip the integration folder (contents only, clean root)
+            '${{ steps.locate.outputs.manifest_rel }}'
+      
       - name: ZIP the integration directory
         id: zip
         shell: bash
@@ -57,9 +55,8 @@ jobs:
           ZIP_OUT="$GITHUB_WORKSPACE/${{ steps.locate.outputs.integration_name }}.zip"
           (cd "${{ steps.locate.outputs.integration_dir }}" && zip -r "$ZIP_OUT" .)
           echo "zip_path=$ZIP_OUT" >> "$GITHUB_OUTPUT"
-
-      # Upload the ZIP file to the release
+      
       - name: Upload asset to release
-        uses: softprops/action-gh-release@v2.4.1
+        uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.zip.outputs.zip_path }}
