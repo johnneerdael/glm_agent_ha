@@ -19,7 +19,7 @@
                     "anthropic_token": "Anthropic API Key"
                 },
                 "data_description": {
-                    "openai_token": "Enter your OpenAI API key",
+                    "openai_token": "Enter your GLM Coding Plan API key",
                     "anthropic_token": "Enter your GLM Coding Plan API key"
                 }
             }
