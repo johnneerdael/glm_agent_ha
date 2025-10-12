@@ -36,19 +36,19 @@ TOKEN_LABELS = {
 
 DEFAULT_MODELS = {
     "openai": "GLM-4.5-air",
-    "anthropic": "GLM-4.5-air",
+    "anthropic": "GLM-4.5-air"
 }
 
 AVAILABLE_MODELS = {
     "openai": [
         "GLM-4.5-air",
         "GLM-4.5",
-        "GLM-4.6",
+        "GLM-4.6"
     ],
     "anthropic": [
         "GLM-4.5-air",
         "GLM-4.5",
-        "GLM-4.6",
+        "GLM-4.6"
     ],
     # For local models, provide common Ollama models with llama3.2 as the default
 }
