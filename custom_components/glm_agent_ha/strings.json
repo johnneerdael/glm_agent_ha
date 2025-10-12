@@ -22,8 +22,7 @@
                 "data_description": {
                     "openai_token": "Enter your GLM Coding Plan API key",
                     "anthropic_token": "Enter your GLM Coding Plan API key",
-					"model": "Choose a model or select 'Custom...' to enter your own",
-
+					"model": "Choose a model or select 'Custom...' to enter your own"
                 }
             }
         },
@@ -60,7 +59,7 @@
                 "data_description": {
                     "openai_token": "Enter your GLM Coding Plan API key",
                     "anthropic_token": "Enter your GLM Coding Plan API key",
-                    "model": "Choose a model or select 'Custom...' to enter your own",
+                    "model": "Choose a model or select 'Custom...' to enter your own"
                 }
             }
         }
