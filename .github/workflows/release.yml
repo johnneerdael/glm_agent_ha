@@ -1,35 +1,38 @@
-name: "Release"
+name: Release
 
 on:
   release:
-    types:
-      - "published"
-
-permissions: {}
+    types: [published]
 
 jobs:
   release:
-    name: "Release"
-    runs-on: "ubuntu-latest"
+    name: Release
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-    steps:
-      - name: "Checkout the repository"
-        uses: "actions/checkout@v4"
 
-      - name: "Adjust version number"
-        shell: "bash"
-        run: |
-          yq -i -o json '.version="${{ github.event.release.tag_name }}"' \
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Use the official yq action to update manifest.json
+      - name: Adjust version number in manifest.json
+        uses: mikefarah/yq@v4.44.3
+        with:
+          # Writes the tag name (e.g., v1.2.3) into .version in JSON mode
+          cmd: >
+            yq -i -o=json
+            '.version = "${{ github.event.release.tag_name }}"'
             "${{ github.workspace }}/custom_components/glm_agent_ha/manifest.json"
 
-      - name: "ZIP the integration directory"
-        shell: "bash"
+      - name: ZIP the integration directory
+        shell: bash
         run: |
           cd "${{ github.workspace }}/custom_components/glm_agent_ha"
-          zip glm_agent_ha.zip -r ./
+          # Create the zip one level up to avoid accidentally nesting paths
+          zip -r glm_agent_ha.zip .
 
-      - name: "Upload the ZIP file to the release"
-        uses: softprops/action-gh-release@v0.9.6
+      - name: Upload the ZIP file to the release
+        uses: softprops/action-gh-release@v2.4.1
         with:
           files: ${{ github.workspace }}/custom_components/glm_agent_ha/glm_agent_ha.zip
