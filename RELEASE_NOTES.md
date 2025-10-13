@@ -1,3 +1,100 @@
+# GLM Agent HA v1.05.0 Release Notes
+
+## 🔧 Configuration Flow Improvements
+
+GLM Agent HA v1.05.0 focuses on fixing configuration issues and simplifying the setup process for a better user experience.
+
+## 🚀 What's Fixed
+
+### Config Flow Fixes
+- **"Invalid handler specified" Error**: Resolved critical config flow error that prevented proper integration setup
+- **Undefined Model Reference**: Fixed `AVAILABLE_MODELS` reference issue that caused configuration failures
+- **Simplified Configuration Process**: Streamlined the setup flow to reduce user friction
+
+### Configuration Simplification
+- **Reduced Complexity**: Removed custom model selection to streamline the setup process
+- **Minimal Requirements**: Configuration now only requires:
+  - API Token (for authentication)
+  - Plan Selection (Lite/Pro/Max)
+- **Better Error Handling**: Improved error messages and validation during setup
+- **Enhanced Reliability**: More robust configuration process with better failure recovery
+
+## 📋 Updated Setup Process
+
+### Before (Complex)
+1. Enter API token
+2. Select custom model from dropdown
+3. Choose plan type
+4. Configure additional options
+5. Validate configuration
+
+### After (Simplified)
+1. Enter API token
+2. Choose plan type (Lite/Pro/Max)
+3. Save and enjoy!
+
+## 🛠️ Technical Changes
+
+### Code Improvements
+- **Config Flow Refactoring**: Simplified configuration flow logic
+- **Error Handling**: Enhanced error detection and user feedback
+- **Model Management**: Removed complex model selection logic
+- **Validation**: Improved input validation and sanitization
+
+### Files Modified
+- `custom_components/glm_agent_ha/config_flow.py` - Streamlined configuration logic
+- `custom_components/glm_agent_ha/__init__.py` - Updated model handling
+- `custom_components/glm_agent_ha/manifest.json` - Version bump
+
+## 🎯 User Benefits
+
+### Easier Setup
+- **Faster Installation**: Reduced setup time from multiple steps to just two
+- **Fewer Errors**: Eliminated common configuration pitfalls
+- **Better UX**: Cleaner, more intuitive configuration interface
+- **Reliable**: More robust setup process with better error recovery
+
+### Improved Experience
+- **Clear Instructions**: Better guidance during setup
+- **Instant Feedback**: Real-time validation and error reporting
+- **Graceful Failures**: Better handling of configuration issues
+
+## 🔒 Migration Notes
+
+### For Existing Users
+- **No Action Required**: Existing configurations will continue to work
+- **Automatic Migration**: Custom model settings will be automatically migrated to plan-based selection
+- **Backward Compatibility**: All existing functionality preserved
+
+### For New Users
+- **Simplified Setup**: Experience the streamlined configuration process
+- **Quick Start**: Get up and running in just two steps
+- **Better Documentation**: Updated setup guides and troubleshooting
+
+## 🐛 Bug Fixes
+
+- Fixed config flow "Invalid handler specified" error
+- Resolved undefined `AVAILABLE_MODELS` reference
+- Improved configuration validation
+- Enhanced error messaging and user feedback
+- Simplified model selection logic
+
+## ⚠️ Breaking Changes
+
+None. This release maintains full backward compatibility while improving the setup experience.
+
+## 🙏 Acknowledgments
+
+Thank you to the community members who reported configuration issues and provided valuable feedback that helped improve the setup process.
+
+---
+
+**Upgrade Instructions**: Update to v1.05.0 through HACS or manual installation. Existing users will experience no disruption to their configurations. New users will benefit from the simplified setup process.
+
+**Support**: For issues and questions, please use the [GitHub Issues](https://github.com/johnneerdael/glm_agent_ha/issues) page.
+
+---
+
 # GLM Agent HA v1.03.0 Release Notes
 
 ## 🎉 Major New Feature: AI Task Entity Integration

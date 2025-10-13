@@ -20,6 +20,9 @@ from .const import (
     DOMAIN,
 )
 
+# Import config flow to ensure it's registered with Home Assistant
+from . import config_flow  # noqa: F401
+
 _LOGGER = logging.getLogger(__name__)
 
 # Config schema - this integration only supports config entries

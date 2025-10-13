@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.05.0] - 2025-10-13
+
+### Fixed
+- **Config Flow Error**: Fixed "Invalid handler specified" config flow error
+- **Model Reference**: Fixed undefined `AVAILABLE_MODELS` reference
+- **Configuration Simplification**: Removed custom model selection to streamline setup
+
+### Changes
+- **Simplified Configuration**: Configuration now only requires API token and plan selection
+- **Improved User Experience**: Streamlined config flow with fewer required fields
+- **Enhanced Reliability**: More robust configuration process with better error handling
+
 ## [1.04.0] - 2025-10-13
 
 ### Fixed

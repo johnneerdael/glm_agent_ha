@@ -42,15 +42,7 @@ TOKEN_LABELS = {
 }
 
 DEFAULT_MODELS = {
-    "openai": "GLM-4.5-air",
-}
-
-AVAILABLE_MODELS = {
-    "openai": [
-        "GLM-4.5-air",
-        "GLM-4.5",
-        "GLM-4.6"
-    ],
+    "openai": "GLM-4.6",
 }
 
 DEFAULT_PROVIDER = "openai"
@@ -86,16 +78,25 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
 
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
+    
+    # Add explicit domain attribute for debugging
+    DOMAIN = DOMAIN
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
         """Get the options flow for this handler."""
+        _LOGGER.debug("Creating options flow for config entry: %s", config_entry.entry_id)
         try:
             return AiAgentHaOptionsFlowHandler(config_entry)
         except Exception as e:
             _LOGGER.error("Error creating options flow: %s", e)
             return None
+
+    def __init__(self):
+        """Initialize the config flow."""
+        super().__init__()
+        _LOGGER.debug("AiAgentHaConfigFlow initialized with domain: %s", self.DOMAIN)
 
     async def async_step_user(self, user_input=None):
         """Handle the initial step."""
@@ -150,7 +151,8 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
         token_field = TOKEN_FIELD_NAMES[provider]
         token_label = TOKEN_LABELS[provider]
         default_model = DEFAULT_MODELS[provider]
-        available_models = AVAILABLE_MODELS.get(provider, [default_model])
+        # Use default model for the provider (simplified approach)
+        available_models = [default_model]
         plan_capabilities = PLAN_CAPABILITIES.get(plan, {})
 
         if user_input is not None:
@@ -164,31 +166,12 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
                 # Store the configuration data
                 self.config_data[token_field] = token_value
 
-                # Add model configuration if provided
-                selected_model = user_input.get("model")
-                custom_model = user_input.get("custom_model")
+                # Use default model for the provider (simplified approach)
+                self.config_data["models"] = {provider: default_model}
 
                 _LOGGER.debug(
-                    f"Config flow - Provider: {provider}, Plan: {plan}, Selected model: {selected_model}, Custom model: {custom_model}"
+                    f"Config flow - Provider: {provider}, Plan: {plan}, Model: {default_model}"
                 )
-
-                # Initialize models dict if it doesn't exist
-                if "models" not in self.config_data:
-                    self.config_data["models"] = {}
-
-                if custom_model and custom_model.strip():
-                    # Use custom model if provided and not empty
-                    self.config_data["models"][provider] = custom_model.strip()
-                elif selected_model and selected_model != "Custom...":
-                    # Use selected model if it's not the "Custom..." option
-                    self.config_data["models"][provider] = selected_model
-                else:
-                    # For local provider, allow empty model name
-                    if provider == "local":
-                        self.config_data["models"][provider] = ""
-                    else:
-                        # Fallback to default model for other providers
-                        self.config_data["models"][provider] = default_model
 
                 # Store plan capabilities
                 self.config_data["plan_capabilities"] = plan_capabilities
@@ -205,23 +188,12 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
 
-        # Build schema for other providers
+        # Build schema for providers (simplified - just token)
         schema_dict = {
             vol.Required(token_field): TextSelector(
                 TextSelectorConfig(type="password")
             ),
         }
-
-        # Add model selection if available
-        if available_models:
-            # Add predefined models + custom option
-            model_options = available_models + ["Custom..."]
-            schema_dict[vol.Optional("model", default=default_model)] = SelectSelector(
-                SelectSelectorConfig(options=model_options)
-            )
-            schema_dict[vol.Optional("custom_model")] = TextSelector(
-                TextSelectorConfig(type="text")
-            )
 
         return self.async_show_form(
             step_id="configure",
@@ -288,10 +260,7 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
         token_label = TOKEN_LABELS[provider]
 
         # Get current configuration
-        current_models = self.config_entry.data.get("models", {})
-        current_model = current_models.get(provider, DEFAULT_MODELS[provider])
         current_token = self.config_entry.data.get(token_field, "")
-        available_models = AVAILABLE_MODELS.get(provider, [DEFAULT_MODELS[provider]])
 
         # Use current token if provider hasn't changed, otherwise empty
         display_token = current_token if provider == current_provider else ""
@@ -307,33 +276,11 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
                     updated_data["ai_provider"] = provider
                     updated_data[token_field] = token_value
 
-                    # Update model configuration
-                    selected_model = user_input.get("model")
-                    custom_model = user_input.get("custom_model")
-
-                    # Initialize models dict if it doesn't exist
-                    if "models" not in updated_data:
-                        updated_data["models"] = {}
-
-                    if custom_model and custom_model.strip():
-                        # Use custom model if provided and not empty
-                        updated_data["models"][provider] = custom_model.strip()
-                    elif selected_model and selected_model != "Custom...":
-                        # Use selected model if it's not the "Custom..." option
-                        updated_data["models"][provider] = selected_model
-                    else:
-                        # For local provider, allow empty model name
-                        if provider == "local":
-                            updated_data["models"][provider] = ""
-                        else:
-                            # Ensure we keep the current model or use default for other providers
-                            if provider not in updated_data["models"]:
-                                updated_data["models"][provider] = DEFAULT_MODELS[
-                                    provider
-                                ]
+                    # Use default model for the provider (simplified approach)
+                    updated_data["models"] = {provider: DEFAULT_MODELS[provider]}
 
                     _LOGGER.debug(
-                        f"Options flow - Final model config for {provider}: {updated_data['models'].get(provider)}"
+                        f"Options flow - Updated config for {provider} with default model: {DEFAULT_MODELS[provider]}"
                     )
 
                     # Update the config entry
@@ -346,23 +293,12 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
                 _LOGGER.exception("Unexpected exception in options flow")
                 errors["base"] = "unknown"
 
-        # Build schema for other providers
+        # Build schema for providers (simplified - just token)
         schema_dict = {
             vol.Required(token_field, default=display_token): TextSelector(
                 TextSelectorConfig(type="password")
             ),
         }
-
-        # Add model selection if available
-        if available_models:
-            # Add predefined models + custom option
-            model_options = available_models + ["Custom..."]
-            schema_dict[vol.Optional("model", default=current_model)] = SelectSelector(
-                SelectSelectorConfig(options=model_options)
-            )
-            schema_dict[vol.Optional("custom_model")] = TextSelector(
-                TextSelectorConfig(type="text")
-            )
 
         return self.async_show_form(
             step_id="configure_options",
