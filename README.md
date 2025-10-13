@@ -18,6 +18,7 @@ Click the button above to install GLM Agent HA directly through HACS, or see the
 - 📊 **Data Access**: Get entity states, history, weather, and more
 - 🔒 **Secure**: API keys stored securely in Home Assistant
 - 🎨 **Beautiful UI**: Clean, modern chat interface
+- 🧠 **Context-Aware AI**: New context services provide a deeper understanding of your Home Assistant environment, enabling more intelligent and accurate responses.
 - 🔄 **Real-time**: Instant responses and updates
 
 ## 📸 Screenshots
@@ -219,6 +220,10 @@ The integration provides these main components:
 - **Config Flow**: Setup and options management
 - **Frontend**: Chat interface
 - **Dashboard Templates**: Templates for dashboard creation
+- **Context Services**:
+  - `AreaTopologyService`: Builds a topological map of your home's areas.
+  - `EntityRelationshipService`: Maps relationships between entities, devices, and areas.
+  - `ContextCacheManager`: Improves performance by caching contextual data.
 
 ## 📋 Requirements
 

@@ -57,7 +57,7 @@ class ContextCacheManager:
     
     async def _on_registry_updated(self, event: Dict[str, Any]) -> None:
         """Handle registry update events by invalidating relevant cache entries."""
-        event_type = event.get("event_type", "")
+        event_type = event.data.get("event_type", "")
         _LOGGER.debug("Registry update event received: %s", event_type)
         
         # Invalidate relevant cache entries based on event type
