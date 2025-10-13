@@ -335,7 +335,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     # Register static path for frontend
-    hass.http.async_register_static_paths(
+    await hass.http.async_register_static_paths(
         [
             {
                 "url_path": "glm_agent_ha_frontend",
