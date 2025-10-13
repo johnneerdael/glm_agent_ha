@@ -26,7 +26,8 @@ class AiAgentHaPanel extends LitElement {
       _selectedPrompts: { type: Array, reflect: false, attribute: false },
       _selectedProvider: { type: String, reflect: false, attribute: false },
       _availableProviders: { type: Array, reflect: false, attribute: false },
-      _showProviderDropdown: { type: Boolean, reflect: false, attribute: false }
+      _showProviderDropdown: { type: Boolean, reflect: false, attribute: false },
+      _selectedModel: { type: String, reflect: false, attribute: false }
     };
   }
 
@@ -93,174 +94,46 @@ class AiAgentHaPanel extends LitElement {
       }
       
       .clear-button {
-        --mdc-theme-primary: var(--error-color) !important;
-        --mdc-theme-on-primary: #fff !important;
-        --mdc-typography-button-font-size: 13px !important;
-        --mdc-button-height: 32px !important;
-        --mdc-button-padding: 0 12px !important;
         appearance: none;
         border: none;
         border-radius: 16px;
-        background: var(--error-color) !important;
-        color: #fff !important;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 0 12px !important;
-        font-weight: 500;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
-        min-width: unset;
-        width: auto;
-        height: 32px;
-        flex-shrink: 0;
-        margin-left: 12px;
-      }
-      .clear-button[disabled] {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-
-      
-      /* More specific selectors to override any conflicting styles */
-      .header 
-      .clear-button {
-        --mdc-theme-primary: var(--error-color) !important;
-        --mdc-theme-on-primary: #fff !important;
-        --mdc-typography-button-font-size: 13px !important;
-        --mdc-button-height: 32px !important;
-        --mdc-button-padding: 0 12px !important;
-        appearance: none;
-        border: none;
-        border-radius: 16px;
-        background: var(--error-color) !important;
-        color: #fff !important;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 0 12px !important;
-        font-weight: 500;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
-        min-width: unset;
-        width: auto;
-        height: 32px;
-        flex-shrink: 0;
-        margin-left: 12px;
-      }
-      .clear-button[disabled] {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-
-      
-      .header .clear-button ha-button {
-        --mdc-theme-primary: var(--error-color) !important;
-        --mdc-theme-on-primary: #fff !important;
-      }
-      
-      .header .clear-button mdc-button {
-        --mdc-theme-primary: var(--error-color) !important;
-        --mdc-theme-on-primary: #fff !important;
-      }
-      .clear-button:hover {
         background: var(--error-color);
-        opacity: 0.92;
-        transform: translateY(-1px);
+        color: white;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 12px;
+        font-weight: 500;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        height: 32px;
+        flex-shrink: 0;
+        margin-left: 12px;
+      }
+      .clear-button[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+        background: var(--disabled-text-color);
+      }
+      .clear-button:hover:not([disabled]) {
+        opacity: 0.9;
         box-shadow: 0 2px 6px rgba(0,0,0,0.13);
       }
-      .clear-button:active {
-        transform: translateY(0);
-        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
-      }
       .clear-button ha-icon {
-        --mdc-icon-size: 16px !important;
-        margin-right: 2px;
-        color: #fff !important;
+        --mdc-icon-size: 16px;
+        color: white;
       }
       .clear-button span {
-        color: #fff !important;
+        color: white;
         font-weight: 500;
-      }
-      .clear-button mdc-button {
-        color: #fff !important;
-      }
-      /* Responsive clear button adjustments */
-      @media (max-width: 768px) {
-        
-      .clear-button {
-        --mdc-theme-primary: var(--error-color) !important;
-        --mdc-theme-on-primary: #fff !important;
-        --mdc-typography-button-font-size: 13px !important;
-        --mdc-button-height: 32px !important;
-        --mdc-button-padding: 0 12px !important;
-        appearance: none;
-        border: none;
-        border-radius: 16px;
-        background: var(--error-color) !important;
-        color: #fff !important;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 0 12px !important;
-        font-weight: 500;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
-        min-width: unset;
-        width: auto;
-        height: 32px;
-        flex-shrink: 0;
-        margin-left: 12px;
-      }
-      .clear-button[disabled] {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-
-        .clear-button ha-icon {
-          --mdc-icon-size: 14px !important;
-        }
       }
       @media (max-width: 480px) {
-        
-      .clear-button {
-        --mdc-theme-primary: var(--error-color) !important;
-        --mdc-theme-on-primary: #fff !important;
-        --mdc-typography-button-font-size: 13px !important;
-        --mdc-button-height: 32px !important;
-        --mdc-button-padding: 0 12px !important;
-        appearance: none;
-        border: none;
-        border-radius: 16px;
-        background: var(--error-color) !important;
-        color: #fff !important;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 0 12px !important;
-        font-weight: 500;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
-        min-width: unset;
-        width: auto;
-        height: 32px;
-        flex-shrink: 0;
-        margin-left: 12px;
-      }
-      .clear-button[disabled] {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-
-        .clear-button ha-icon {
-          --mdc-icon-size: 12px !important;
-        }
         .clear-button span {
           display: none; /* Hide text on very small screens */
+        }
+        .clear-button {
+          padding: 0 8px;
         }
       }
       .content {
@@ -721,10 +594,15 @@ class AiAgentHaPanel extends LitElement {
       "Create a 'Good Morning' scene that turns on the lights and coffee maker.",
       "Is the garage door open?",
       "Show me a view of all my cameras.",
-      "Turn off everything in the house except the security system."
+      "Turn off everything in the house except the security system.",
+      "What devices are in the living room?",
+      "Show me all entities related to the living room TV.",
+      "What are the relationships between my areas?",
     ];
     this._selectedPrompts = this._getRandomPrompts();
     this._selectedProvider = null;
+    this._selectedModel = 'GLM-4.6';
+    this._models = ['GLM-4.6', 'GLM-4.5', 'GLM-4.5-air'];
     this._availableProviders = [];
     this._showProviderDropdown = false;
     this.providersLoaded = false;
@@ -813,6 +691,7 @@ class AiAgentHaPanel extends LitElement {
               // Fallback to title mapping
               const titleToProviderMap = {
                 "GLM Coding Plan Agent HA (GLM Coding Plan OpenAI Endpoint)": "openai",
+                "GLM Coding Plan Agent HA (GLM Coding Plan API)": "openai",
               };
               provider = titleToProviderMap[entry.title] || "unknown";
               
@@ -1081,11 +960,7 @@ class AiAgentHaPanel extends LitElement {
           <ha-icon icon="mdi:robot"></ha-icon>
           GLM Agent HA
         </div>
-        <button
-          class="clear-button"
-          @click=${this._clearChat}
-          ?disabled=${this._isLoading}
-        >
+        <button class="clear-button" @click=${this._clearChat} ?disabled=${this._isLoading}>
           <ha-icon icon="mdi:delete-sweep"></ha-icon>
           <span>Clear Chat</span>
         </button>
@@ -1166,7 +1041,7 @@ class AiAgentHaPanel extends LitElement {
 
             <div class="input-footer">
               <div class="provider-selector">
-                <span class="provider-label">Model:</span>
+                <span class="provider-label">Provider:</span>
                 <select
                   class="provider-button"
                   @change=${(e) => this._selectProvider(e.target.value)}
@@ -1178,6 +1053,20 @@ class AiAgentHaPanel extends LitElement {
                       ?selected=${provider.value === this._selectedProvider}
                     >
                       ${provider.label}
+                    </option>
+                  `)}
+                </select>
+              </div>
+              <div class="provider-selector">
+                <span class="provider-label">Model:</span>
+                <select
+                  class="provider-button"
+                  @change=${this._selectModel}
+                  .value=${this._selectedModel}
+                >
+                  ${this._models.map(model => html`
+                    <option value=${model} ?selected=${model === this._selectedModel}>
+                      ${model}
                     </option>
                   `)}
                 </select>
@@ -1232,7 +1121,11 @@ class AiAgentHaPanel extends LitElement {
     this.requestUpdate();
   }
 
-  _getSelectedProviderLabel() {
+  _selectModel(e) {
+    this._selectedModel = e.target.value;
+  }
+ 
+   _getSelectedProviderLabel() {
     const provider = this._availableProviders.find(p => p.value === this._selectedProvider);
     return provider ? provider.label : 'Select Model';
   }
@@ -1278,7 +1171,8 @@ class AiAgentHaPanel extends LitElement {
       console.debug("Calling glm_agent_ha service");
       await this.hass.callService('glm_agent_ha', 'query', {
         prompt: prompt,
-        provider: this._selectedProvider
+        provider: this._selectedProvider,
+        model: this._selectedModel
       });
     } catch (error) {
       console.error("Error calling service:", error);
@@ -1473,8 +1367,9 @@ class AiAgentHaPanel extends LitElement {
            changedProps.has('_showPromptHistory') ||
            changedProps.has('_availableProviders') ||
            changedProps.has('_selectedProvider') ||
-           changedProps.has('_showProviderDropdown');
-  }
+           changedProps.has('_showProviderDropdown') ||
+           changedProps.has('_selectedModel');
+ }
 
   _clearChat() {
     // Debug logging to check button styling

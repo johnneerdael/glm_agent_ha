@@ -138,7 +138,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             agent = hass.data[DOMAIN]["agents"][provider]
             result = await agent.process_query(
-                call.data.get("prompt", ""), provider=provider
+                call.data.get("prompt", ""),
+                provider=provider,
+                model=call.data.get("model"),
             )
             hass.bus.async_fire("glm_agent_ha_response", result)
         except Exception as e:

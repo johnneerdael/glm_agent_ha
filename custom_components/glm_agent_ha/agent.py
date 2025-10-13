@@ -379,7 +379,7 @@ class OpenAIClient(BaseAIClient):
     
     def __init__(self, token, model="GLM-4.6"):
         self.token = token
-        self.model = model
+        self.model = model if model else "GLM-4.6"
         self.api_url = "https://api.z.ai/api/coding/paas/v4/chat/completions"
 
     def _get_token_parameter(self):
@@ -2027,7 +2027,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
             return {"error": f"Error updating dashboard: {str(e)}"}
 
     async def process_query(
-        self, user_query: str, provider: Optional[str] = None
+        self, user_query: str, provider: Optional[str] = None, model: Optional[str] = None
     ) -> Dict[str, Any]:
         """Process a user query with input validation and rate limiting."""
         try:
@@ -2080,7 +2080,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                 else:
                     # Other clients take (token, model)
                     self.ai_client = provider_settings["client_class"](
-                        token=token, model=provider_settings["model"]
+                        token=token, model=model or provider_settings["model"]
                     )
                 _LOGGER.debug(
                     f"Initialized {selected_provider} client with model {provider_settings['model']}"

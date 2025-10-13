@@ -5,6 +5,9 @@ query:
     prompt:
       description: "The question or instruction to send to the AI model."
       example: "Turn on all the lights in the living room"
+    model:
+      description: "The AI model to use for the query. If not provided, the default model for the provider will be used."
+      example: "gpt-4"
     provider:
       description: "The AI provider to use (openai, llama, gemini, openrouter)"
       example: "openai"
