@@ -335,16 +335,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     # Register static path for frontend
-    await hass.http.async_register_static_paths(
-        [
-            {
-                "url_path": "frontend/glm_agent_ha",
-                "path": hass.config.path(
-                    "custom_components/glm_agent_ha/frontend"
-                ),
-                "cache_headers": False,
-            }
-        ]
+    hass.http.register_static_path(
+        "/frontend/glm_agent_ha/glm_agent_ha-panel.js",
+        hass.config.path("custom_components/glm_agent_ha/frontend/glm_agent_ha-panel.js"),
+        cache_headers=False
     )
 
     # Panel registration with proper error handling
