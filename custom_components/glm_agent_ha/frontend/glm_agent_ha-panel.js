@@ -711,17 +711,17 @@ class AiAgentHaPanel extends LitElement {
     this._showPredefinedPrompts = true;
     this._showPromptHistory = true;
     this._predefinedPrompts = [
-      "Build a new automation to turn off all lights at 10:00 PM every day",
-      "What's the current temperature inside and outside?",
-      "Turn on all the lights in the living room",
-      "Show me today's weather forecast",
-      "What devices are currently on?",
-      "Show me the energy usage for today",
-      "Are all the doors and windows locked?",
-      "Turn on movie mode in the living room",
-      "What's the status of my security system?",
-      "Show me who's currently home",
-      "Turn off all devices when I leave home"
+      "How many lights are on the ground floor?",
+      "Turn off all media players in the living room.",
+      "What is the temperature in the kitchen?",
+      "Create a security dashboard with all my cameras and door sensors.",
+      "Are there any windows open on the second floor?",
+      "Dim the lights in the bedroom to 50%.",
+      "What's the average humidity in the basement for the last 24 hours?",
+      "Create a 'Good Morning' scene that turns on the lights and coffee maker.",
+      "Is the garage door open?",
+      "Show me a view of all my cameras.",
+      "Turn off everything in the house except the security system."
     ];
     this._selectedPrompts = this._getRandomPrompts();
     this._selectedProvider = null;

@@ -23,7 +23,17 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_WEATHER_ENTITY, DOMAIN
+from .const import (
+    CONF_WEATHER_ENTITY,
+    DOMAIN,
+    CONF_CACHE_TIMEOUT,
+    CONF_ENABLE_AREA_TOPOLOGY,
+    CONF_ENABLE_ENTITY_TYPE_CACHE,
+    CONF_ENABLE_ENTITY_RELATIONSHIPS,
+)
+from .context.cache import ContextCacheManager
+from .context.area_topology import AreaTopologyService
+from .context.entity_relationships import EntityRelationshipService
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -376,9 +386,9 @@ class OpenAIClient(BaseAIClient):
         """Determine which token parameter to use based on the model."""
         # Models that require max_completion_tokens instead of max_tokens
         completion_token_models = [
-            "GLM-4.5",
-            "GLM-4.6",
-            "GLM-4.5-air"
+            "glm-4.5",
+            "glm-4.6",
+            "glm-4.5-air"
         ]
 
         # Check if the model name contains any of the newer model identifiers
@@ -490,6 +500,10 @@ class AiAgentHaAgent:
             "- get_entity_registry(): Get entity registry entries\n"
             "- get_device_registry(): Get device registry entries\n"
             "- get_area_registry(): Get room/area information\n"
+            "- get_entity_types_by_area(area_id): Get entity types grouped by domain for a specific area\n"
+            "- get_floor_topology(): Get floor topology information including areas and entities per floor\n"
+            "- get_entities_by_category(category): Get entities by category (e.g., 'lighting', 'security', 'climate')\n"
+            "- get_related_entities(entity_id): Get entities related to a specific entity\n"
             "- get_history(entity_id, hours): Get historical state changes\n"
             "- get_logbook_entries(hours): Get recent events\n"
             "- get_person_data(): Get person tracking information\n"
@@ -595,6 +609,10 @@ class AiAgentHaAgent:
             "- get_entity_registry(): Get entity registry entries\n"
             "- get_device_registry(): Get device registry entries\n"
             "- get_area_registry(): Get room/area information\n"
+            "- get_entity_types_by_area(area_id): Get entity types grouped by domain for a specific area\n"
+            "- get_floor_topology(): Get floor topology information including areas and entities per floor\n"
+            "- get_entities_by_category(category): Get entities by category (e.g., 'lighting', 'security', 'climate')\n"
+            "- get_related_entities(entity_id): Get entities related to a specific entity\n"
             "- get_history(entity_id, hours): Get historical state changes\n"
             "- get_logbook_entries(hours): Get recent events\n"
             "- get_person_data(): Get person tracking information\n"
@@ -691,13 +709,30 @@ class AiAgentHaAgent:
         self.conversation_history: List[Dict[str, Any]] = []
         self._cache: Dict[str, Any] = {}
         self.ai_client: BaseAIClient
-        self._cache_timeout = 300  # 5 minutes
+        self._cache_timeout = config.get(CONF_CACHE_TIMEOUT, 300)  # Configurable cache timeout
         self._max_retries = 10
         self._retry_delay = 1  # seconds
         self._rate_limit = 60  # requests per minute
         self._last_request_time = 0
         self._request_count = 0
         self._request_window_start = time.time()
+        
+        # Initialize context services with feature flags
+        self._context_cache = ContextCacheManager(self.hass, self._cache_timeout)
+        self._area_topology = AreaTopologyService(
+            hass,
+            self._context_cache,
+            enabled=config.get(CONF_ENABLE_AREA_TOPOLOGY, True)
+        )
+        
+        self._entity_relationships = EntityRelationshipService(
+            hass,
+            self._context_cache,
+            enabled=config.get(CONF_ENABLE_ENTITY_RELATIONSHIPS, True)
+        )
+        
+        # Feature flags
+        self._enable_entity_type_cache = config.get(CONF_ENABLE_ENTITY_TYPE_CACHE, True)
 
         provider = config.get("ai_provider", "openai")
         models_config = config.get("models", {})
@@ -755,16 +790,22 @@ class AiAgentHaAgent:
 
     def _get_cached_data(self, key: str) -> Optional[Any]:
         """Get data from cache if it's still valid."""
-        if key in self._cache:
-            timestamp, data = self._cache[key]
-            if time.time() - timestamp < self._cache_timeout:
-                return data
-            del self._cache[key]
-        return None
+        return self._context_cache.get(key)
 
     def _set_cached_data(self, key: str, data: Any) -> None:
         """Store data in cache with timestamp."""
-        self._cache[key] = (time.time(), data)
+        self._context_cache.set(key, data)
+
+    def _invalidate_context_caches(self) -> None:
+        """Invalidate all context-related caches when registries change."""
+        self._context_cache.clear_pattern("area_registry")
+        self._context_cache.clear_pattern("device_registry")
+        self._context_cache.clear_pattern("entity_registry")
+        self._context_cache.clear_pattern("area_topology")
+        self._context_cache.clear_pattern("entities_by_area")
+        self._context_cache.clear_pattern("entities_by_domain")
+        self._context_cache.clear_pattern("entity_relationships")
+        _LOGGER.debug("Invalidated context caches due to registry changes")
 
     def _sanitize_automation_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Sanitize automation configuration to prevent injection attacks."""
@@ -826,38 +867,22 @@ class AiAgentHaAgent:
             return [{"error": f"Error getting entities for domain {domain}: {str(e)}"}]
 
     async def get_entities_by_area(self, area_id: str) -> List[Dict[str, Any]]:
-        """Get all entities for a specific area."""
+        """Get all entities for a specific area with caching and topology integration."""
         try:
             _LOGGER.debug("Requesting all entities for area: %s", area_id)
 
-            # Get entity registry to find entities assigned to the area
-            from homeassistant.helpers import device_registry as dr
-            from homeassistant.helpers import entity_registry as er
-
-            entity_registry = er.async_get(self.hass)
-            device_registry = dr.async_get(self.hass)
-
-            entities_in_area = []
-
-            # Find entities assigned to the area (directly or through their device)
-            for entity in entity_registry.entities.values():
-                # Check if entity is directly assigned to the area
-                if entity.area_id == area_id:
-                    entities_in_area.append(entity.entity_id)
-                # Check if entity's device is assigned to the area
-                elif entity.device_id:
-                    device = device_registry.devices.get(entity.device_id)
-                    if device and device.area_id == area_id:
-                        entities_in_area.append(entity.entity_id)
-
+            # Use area topology service if enabled
+            # Use area topology service if enabled
+            summaries = await self._area_topology.get_area_entities(area_id)
+            
             _LOGGER.debug(
-                "Found %d entities in area %s", len(entities_in_area), area_id
+                "Found %d entities in area %s", len(summaries), area_id
             )
 
             # Get state information for each entity
             result = []
-            for entity_id in entities_in_area:
-                state_info = await self.get_entity_state(entity_id)
+            for summary in summaries:
+                state_info = await self.get_entity_state(summary.entity_id)
                 if not state_info.get("error"):  # Only include entities that exist
                     result.append(state_info)
 
@@ -866,6 +891,30 @@ class AiAgentHaAgent:
         except Exception as e:
             _LOGGER.exception("Error getting entities by area: %s", str(e))
             return [{"error": f"Error getting entities for area {area_id}: {str(e)}"}]
+
+    async def _get_entities_by_area_manual(self, area_id: str) -> List[str]:
+        """Manual fallback method for getting entities by area."""
+        # Get entity registry to find entities assigned to the area
+        from homeassistant.helpers import device_registry as dr
+        from homeassistant.helpers import entity_registry as er
+
+        entity_registry = er.async_get(self.hass)
+        device_registry = dr.async_get(self.hass)
+
+        entities_in_area = []
+
+        # Find entities assigned to the area (directly or through their device)
+        for entity in entity_registry.entities.values():
+            # Check if entity is directly assigned to the area
+            if entity.area_id == area_id:
+                entities_in_area.append(entity.entity_id)
+            # Check if entity's device is assigned to the area
+            elif entity.device_id:
+                device = device_registry.devices.get(entity.device_id)
+                if device and device.area_id == area_id:
+                    entities_in_area.append(entity.entity_id)
+
+        return entities_in_area
 
     async def get_entities(self, area_id=None, area_ids=None) -> List[Dict[str, Any]]:
         """Get entities by area(s) - flexible method that supports single area or multiple areas."""
@@ -944,62 +993,82 @@ class AiAgentHaAgent:
             return [{"error": f"Error getting automations: {str(e)}"}]
 
     async def get_entity_registry(self) -> List[Dict]:
-        """Get entity registry entries"""
+        """Get entity registry entries with caching"""
+        cache_key = "entity_registry"
+        cached_data = self._get_cached_data(cache_key)
+        if cached_data is not None:
+            _LOGGER.debug("Returning cached entity registry data")
+            return cached_data
+
         _LOGGER.debug("Requesting all entity registry entries")
         try:
             from homeassistant.helpers import entity_registry as er
 
             registry = er.async_get(self.hass)
             if not registry:
-                return []
-            return [
-                {
-                    "entity_id": entry.entity_id,
-                    "device_id": entry.device_id,
-                    "platform": entry.platform,
-                    "disabled": entry.disabled,
-                    "area_id": entry.area_id,
-                    "original_name": entry.original_name,
-                    "unique_id": entry.unique_id,
-                }
-                for entry in registry.entities.values()
-            ]
+                result = []
+            else:
+                result = [
+                    {
+                        "entity_id": entry.entity_id,
+                        "device_id": entry.device_id,
+                        "platform": entry.platform,
+                        "disabled": entry.disabled,
+                        "area_id": entry.area_id,
+                        "original_name": entry.original_name,
+                        "unique_id": entry.unique_id,
+                    }
+                    for entry in registry.entities.values()
+                ]
+            
+            self._set_cached_data(cache_key, result)
+            return result
         except Exception as e:
             _LOGGER.exception("Error getting entity registry entries: %s", str(e))
             return [{"error": f"Error getting entity registry entries: {str(e)}"}]
 
     async def get_device_registry(self) -> List[Dict]:
-        """Get device registry entries"""
+        """Get device registry entries with caching"""
+        cache_key = "device_registry"
+        cached_data = self._get_cached_data(cache_key)
+        if cached_data is not None:
+            _LOGGER.debug("Returning cached device registry data")
+            return cached_data
+
         _LOGGER.debug("Requesting all device registry entries")
         try:
             from homeassistant.helpers import device_registry as dr
 
             registry = dr.async_get(self.hass)
             if not registry:
-                return []
-            return [
-                {
-                    "id": device.id,
-                    "name": device.name,
-                    "model": device.model,
-                    "manufacturer": device.manufacturer,
-                    "sw_version": device.sw_version,
-                    "hw_version": device.hw_version,
-                    "connections": (
-                        list(device.connections) if device.connections else []
-                    ),
-                    "identifiers": (
-                        list(device.identifiers) if device.identifiers else []
-                    ),
-                    "area_id": device.area_id,
-                    "disabled": device.disabled_by is not None,
-                    "entry_type": (
-                        device.entry_type.value if device.entry_type else None
-                    ),
-                    "name_by_user": device.name_by_user,
-                }
-                for device in registry.devices.values()
-            ]
+                result = []
+            else:
+                result = [
+                    {
+                        "id": device.id,
+                        "name": device.name,
+                        "model": device.model,
+                        "manufacturer": device.manufacturer,
+                        "sw_version": device.sw_version,
+                        "hw_version": device.hw_version,
+                        "connections": (
+                            list(device.connections) if device.connections else []
+                        ),
+                        "identifiers": (
+                            list(device.identifiers) if device.identifiers else []
+                        ),
+                        "area_id": device.area_id,
+                        "disabled": device.disabled_by is not None,
+                        "entry_type": (
+                            device.entry_type.value if device.entry_type else None
+                        ),
+                        "name_by_user": device.name_by_user,
+                    }
+                    for device in registry.devices.values()
+                ]
+            
+            self._set_cached_data(cache_key, result)
+            return result
         except Exception as e:
             _LOGGER.exception("Error getting device registry entries: %s", str(e))
             return [{"error": f"Error getting device registry entries: {str(e)}"}]
@@ -1073,29 +1142,131 @@ class AiAgentHaAgent:
             return [{"error": f"Error getting logbook entries: {str(e)}"}]
 
     async def get_area_registry(self) -> Dict[str, Any]:
-        """Get area registry information"""
+        """Get area registry information with caching and topology integration"""
+        cache_key = "area_registry"
+        cached_data = self._get_cached_data(cache_key)
+        if cached_data is not None:
+            _LOGGER.debug("Returning cached area registry data")
+            return cached_data
+
         _LOGGER.debug("Get area registry information")
         try:
             from homeassistant.helpers import area_registry as ar
 
             registry = ar.async_get(self.hass)
             if not registry:
-                return {}
+                result = {}
+            else:
+                result = {}
+                for area in registry.areas.values():
+                    result[area.id] = {
+                        "name": area.name,
+                        "normalized_name": area.normalized_name,
+                        "picture": area.picture,
+                        "icon": area.icon,
+                        "floor_id": area.floor_id,
+                        "labels": list(area.labels) if area.labels else [],
+                    }
+            
+            self._set_cached_data(cache_key, result)
+            
+            # Invalidate topology cache since area registry has been updated
+            if self._area_topology.enabled:
+                self._area_topology.invalidate_cache()
+            
+            if self._entity_relationships.enabled:
+                await self._entity_relationships.build_relationship_maps()
 
-            result = {}
-            for area in registry.areas.values():
-                result[area.id] = {
-                    "name": area.name,
-                    "normalized_name": area.normalized_name,
-                    "picture": area.picture,
-                    "icon": area.icon,
-                    "floor_id": area.floor_id,
-                    "labels": list(area.labels) if area.labels else [],
-                }
             return result
         except Exception as e:
             _LOGGER.exception("Error getting area registry: %s", str(e))
             return {"error": f"Error getting area registry: {str(e)}"}
+
+    async def get_entity_types_by_area(self, area_id: str) -> Dict[str, List[str]]:
+        """Get entity types grouped by domain for a specific area."""
+        try:
+            _LOGGER.debug("Getting entity types for area: %s", area_id)
+            
+            if self._area_topology.enabled:
+                return await self._area_topology.get_entity_types_by_area(area_id)
+            else:
+                # Fallback implementation
+                entities = await self.get_entities_by_area(area_id)
+                entity_types = {}
+                for entity in entities:
+                    if isinstance(entity, dict) and "entity_id" in entity:
+                        domain = entity["entity_id"].split(".")[0]
+                        if domain not in entity_types:
+                            entity_types[domain] = []
+                        entity_types[domain].append(entity["entity_id"])
+                return entity_types
+                
+        except Exception as e:
+            _LOGGER.exception("Error getting entity types by area: %s", str(e))
+            return {"error": f"Error getting entity types by area: {str(e)}"}
+
+    async def get_floor_topology(self) -> Dict[str, Any]:
+        """Get floor topology information including areas and entities per floor."""
+        try:
+            _LOGGER.debug("Getting floor topology information")
+            
+            if self._area_topology.enabled:
+                return await self._area_topology.get_floor_topology()
+            else:
+                # Fallback implementation
+                area_registry = await self.get_area_registry()
+                if isinstance(area_registry, dict) and "error" not in area_registry:
+                    floor_topology = {}
+                    for area_id, area_info in area_registry.items():
+                        floor_id = area_info.get("floor_id", "unknown")
+                        if floor_id not in floor_topology:
+                            floor_topology[floor_id] = {
+                                "areas": [],
+                                "entity_count": 0
+                            }
+                        floor_topology[floor_id]["areas"].append({
+                            "area_id": area_id,
+                            "name": area_info.get("name", "Unknown")
+                        })
+                    return floor_topology
+                else:
+                    return {"error": "Could not retrieve area registry"}
+                    
+        except Exception as e:
+            _LOGGER.exception("Error getting floor topology: %s", str(e))
+            return {"error": f"Error getting floor topology: {str(e)}"}
+
+    async def get_entities_by_category(self, category: str) -> List[Dict[str, Any]]:
+        """Get entities by category (e.g., 'lighting', 'security')."""
+        try:
+            _LOGGER.debug("Getting entities for category: %s", category)
+            if self._entity_relationships.enabled:
+                entity_ids = await self._entity_relationships.get_entities_by_category(category)
+                
+                # Get state information for each entity
+                result = []
+                for entity_id in entity_ids:
+                    state_info = await self.get_entity_state(entity_id)
+                    if not state_info.get("error"):
+                        result.append(state_info)
+                return result
+            else:
+                return {"error": "Entity relationship service is not enabled"}
+        except Exception as e:
+            _LOGGER.exception("Error getting entities by category: %s", str(e))
+            return {"error": f"Error getting entities by category: {str(e)}"}
+
+    async def get_related_entities(self, entity_id: str) -> Dict[str, Any]:
+        """Get entities related to a specific entity."""
+        try:
+            _LOGGER.debug("Getting related entities for: %s", entity_id)
+            if self._entity_relationships.enabled:
+                return await self._entity_relationships.get_related_entities(entity_id)
+            else:
+                return {"error": "Entity relationship service is not enabled"}
+        except Exception as e:
+            _LOGGER.exception("Error getting related entities: %s", str(e))
+            return {"error": f"Error getting related entities: {str(e)}"}
 
     async def get_person_data(self) -> List[Dict]:
         """Get person tracking information"""
@@ -2071,6 +2242,10 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                             "get_device_registry",
                             "get_weather_data",
                             "get_area_registry",
+                            "get_entity_types_by_area",
+                            "get_floor_topology",
+                            "get_entities_by_category",
+                            "get_related_entities",
                             "get_history",
                             "get_logbook_entries",
                             "get_person_data",
@@ -2143,6 +2318,22 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                                 data = await self.get_weather_data()
                             elif request_type == "get_area_registry":
                                 data = await self.get_area_registry()
+                            elif request_type == "get_entity_types_by_area":
+                                data = await self.get_entity_types_by_area(
+                                    parameters.get("area_id")
+                                )
+                            elif request_type == "get_floor_topology":
+                                data = await self.get_floor_topology()
+                            elif request_type == "get_floor_topology":
+                                data = await self.get_floor_topology()
+                            elif request_type == "get_entities_by_category":
+                                data = await self.get_entities_by_category(
+                                    parameters.get("category")
+                                )
+                            elif request_type == "get_related_entities":
+                                data = await self.get_related_entities(
+                                    parameters.get("entity_id")
+                                )
                             elif request_type == "get_history":
                                 data = await self.get_history(
                                     parameters.get("entity_id"),

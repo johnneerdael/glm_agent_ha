@@ -37,7 +37,7 @@ class TestIntegration:
         mock.bus = MagicMock()
         mock.states = MagicMock()
         mock.http = MagicMock()
-        mock.http.async_register_static_paths = AsyncMock()
+        mock.http.register_static_path = Mock()
         return mock
 
     @pytest.fixture
@@ -155,7 +155,7 @@ class TestIntegration:
             assert result is True
 
             # Verify static paths were registered for frontend
-            mock_hass.http.async_register_static_paths.assert_called()
+            mock_hass.http.register_static_path.assert_called()
 
     @pytest.mark.asyncio
     @pytest.mark.skipif(

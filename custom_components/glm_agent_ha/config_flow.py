@@ -15,7 +15,16 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
 )
 
-from .const import DOMAIN
+from .const import (
+    CONF_CACHE_TTL,
+    CONF_ENABLE_AREA_TOPOLOGY,
+    CONF_ENABLE_DIAGNOSTICS,
+    CONF_ENABLE_ENERGY,
+    CONF_ENABLE_ENTITY_RELATIONSHIPS,
+    CONF_ENABLE_ENTITY_TYPE_CACHE,
+    DEFAULT_CACHE_TTL,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -310,4 +319,87 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
                 "token_label": token_label,
                 "provider": PROVIDERS[provider],
             },
+        )
+
+    async def async_step_advanced_options(self, user_input=None):
+        """Handle advanced options for context features."""
+        errors = {}
+        
+        # Get current values
+        current_cache_ttl = self.config_entry.options.get(CONF_CACHE_TTL, DEFAULT_CACHE_TTL)
+        current_enable_diagnostics = self.config_entry.options.get(CONF_ENABLE_DIAGNOSTICS, True)
+        current_enable_energy = self.config_entry.options.get(CONF_ENABLE_ENERGY, True)
+        current_enable_area_topology = self.config_entry.options.get(CONF_ENABLE_AREA_TOPOLOGY, True)
+        current_enable_entity_type_cache = self.config_entry.options.get(CONF_ENABLE_ENTITY_TYPE_CACHE, True)
+        current_enable_entity_relationships = self.config_entry.options.get(CONF_ENABLE_ENTITY_RELATIONSHIPS, True)
+        
+        if user_input is not None:
+            try:
+                updated_options = dict(self.config_entry.options)
+                
+                # Update cache TTL
+                cache_ttl = user_input.get(CONF_CACHE_TTL, current_cache_ttl)
+                if cache_ttl < 60:  # Minimum 1 minute
+                    errors[CONF_CACHE_TTL] = "min_60_seconds"
+                elif cache_ttl > 3600:  # Maximum 1 hour
+                    errors[CONF_CACHE_TTL] = "max_3600_seconds"
+                else:
+                    updated_options[CONF_CACHE_TTL] = cache_ttl
+                
+                # Update feature toggles
+                updated_options[CONF_ENABLE_DIAGNOSTICS] = user_input.get(
+                    CONF_ENABLE_DIAGNOSTICS, current_enable_diagnostics
+                )
+                updated_options[CONF_ENABLE_ENERGY] = user_input.get(
+                    CONF_ENABLE_ENERGY, current_enable_energy
+                )
+                updated_options[CONF_ENABLE_AREA_TOPOLOGY] = user_input.get(
+                    CONF_ENABLE_AREA_TOPOLOGY, current_enable_area_topology
+                )
+                updated_options[CONF_ENABLE_ENTITY_TYPE_CACHE] = user_input.get(
+                    CONF_ENABLE_ENTITY_TYPE_CACHE, current_enable_entity_type_cache
+                )
+                updated_options[CONF_ENABLE_ENTITY_RELATIONSHIPS] = user_input.get(
+                    CONF_ENABLE_ENTITY_RELATIONSHIPS, current_enable_entity_relationships
+                )
+                
+                # Update the config entry options
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, options=updated_options
+                )
+                
+                return self.async_create_entry(title="", data={})
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception in advanced options flow")
+                errors["base"] = "unknown"
+        
+        return self.async_show_form(
+            step_id="advanced_options",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    CONF_CACHE_TTL,
+                    default=current_cache_ttl
+                ): vol.All(vol.Coerce(int), vol.Range(min=60, max=3600)),
+                vol.Optional(
+                    CONF_ENABLE_DIAGNOSTICS,
+                    default=current_enable_diagnostics
+                ): bool,
+                vol.Optional(
+                    CONF_ENABLE_ENERGY,
+                    default=current_enable_energy
+                ): bool,
+                vol.Optional(
+                    CONF_ENABLE_AREA_TOPOLOGY,
+                    default=current_enable_area_topology
+                ): bool,
+                vol.Optional(
+                    CONF_ENABLE_ENTITY_TYPE_CACHE,
+                    default=current_enable_entity_type_cache
+                ): bool,
+                vol.Optional(
+                    CONF_ENABLE_ENTITY_RELATIONSHIPS,
+                    default=current_enable_entity_relationships
+                ): bool,
+            }),
+            errors=errors,
         )

@@ -1,3 +1,4 @@
+
 # Development Guide for AI Agent HA
 
 This guide provides information about the development workflow and technical aspects of the AI Agent HA project.
@@ -44,9 +45,52 @@ This guide provides information about the development workflow and technical asp
 - **services.yaml**: Service definitions
 - **translations/**: Localization files
 
-### Data Flow
+### Context Services
 
-1. **User Input**: User provides a natural language request
+To enhance the agent's environmental awareness, a dedicated context services layer has been introduced. These services run in the background to build a rich, structured understanding of the Home Assistant environment. This data is then injected into the AI's context, allowing for more accurate and intelligent responses.
+
+#### How it Works
+
+1.  **Data Collection**: The services periodically fetch data from Home Assistant's area, device, and entity registries.
+2.  **Caching**: The raw data is stored in the `ContextCacheManager` to avoid redundant lookups and reduce the load on Home Assistant.
+3.  **Data Modeling**: The `AreaTopologyService` and `EntityRelationshipService` process the cached data, building structured Pydantic models that represent the home's layout and relationships.
+4.  **Context Injection**: When the agent receives a prompt, it queries these services to retrieve relevant contextual information, which is then passed to the AI model.
+
+- **context/cache.py**: Implements the `ContextCacheManager`, a simple in-memory cache to store the results of context-gathering operations. This reduces redundant lookups and improves performance.
+- **context/area_topology.py**: Contains the `AreaTopologyService`, which discovers and maps the physical layout of the home by analyzing Home Assistant Areas and their relationships.
+- **context/entity_relationships.py**: Contains the `EntityRelationshipService`, which discovers and maps the connections between entities, devices, and areas, creating a comprehensive graph of the environment.
+
+#### ContextCacheManager
+
+The `ContextCacheManager` is a foundational service that provides an in-memory caching layer for Home Assistant's registries. It is designed to minimize redundant data lookups and improve the overall performance of the agent.
+
+**Key Features**:
+- **Time-to-Live (TTL) Caching**: Stores registry data for a configurable duration, ensuring a balance between performance and data freshness.
+- **Automatic Invalidation**: Listens for Home Assistant's `EVENT_REGISTRY_UPDATED` and clears the relevant cache, ensuring that the agent always has access to up-to-date information.
+- **Asynchronous by Design**: All cache operations are asynchronous to prevent blocking Home Assistant's event loop.
+- **Graceful Shutdown**: Clears all caches when Home Assistant stops to ensure a clean state on restart.
+
+#### AreaTopologyService
+
+The `AreaTopologyService` builds a structured understanding of the physical layout of the user's home. It analyzes areas, floors, and the entities and devices within them to create a comprehensive topological map.
+
+**Key Methods**:
+- `get_floor_summary()`: Returns a high-level summary of all floors, including the areas and number of entities on each. This is useful for getting a quick overview of the home's structure.
+- `get_area_topology(area_id)`: Provides a detailed, structured breakdown of a specific area, including its associated entities and devices.
+- `get_entities_by_filter(...)`: Allows for advanced, server-side filtering of entities based on criteria like domain, device class, area, and floor.
+
+#### EntityRelationshipService
+
+The `EntityRelationshipService` is responsible for discovering and mapping the complex relationships between entities, devices, and areas. It creates a rich graph of the environment that allows the agent to make more intelligent inferences about how different parts of the smart home are connected.
+
+**Key Features**:
+- **Relationship Graph**: Builds and caches a graph of device-to-entity and area-to-device relationships, enabling fast lookups of related components.
+- **Intelligent Categorization**: Groups entities into logical, human-readable categories (e.g., "lighting," "security," "climate") based on their domain and device class.
+- **Advanced Discovery Methods**: Provides methods to find related entities, discover entities by category, and perform attribute-based searches, giving the agent powerful tools for environmental analysis.
+ 
+ ### Data Flow
+ 
+ 1. **User Input**: User provides a natural language request
 2. **Agent Processing**:
    - Context collection (entities, states, etc.)
    - AI provider query
@@ -189,9 +233,33 @@ To add a new dashboard template:
 - **Frontend not updating**: Check for JavaScript errors in browser console
 - **Agent not responding**: Check debug logs for connection issues
 
-## Release Process
+### Configuring Context Services
 
-1. **Update version number** in `manifest.json`
+The new context services can be configured from the integration's options menu in the Home Assistant UI. These settings allow you to enable or disable specific features and fine-tune their behavior.
+
+- **Enable Area Topology Service**: Activates the `AreaTopologyService`. When enabled, the agent gains a deep understanding of your home's physical layout, including floors and areas. This allows the agent to answer questions like, "How many lights are on the ground floor?"
+- **Enable Entity Relationships Service**: Activates the `EntityRelationshipService`. This allows the agent to understand the connections between your devices and entities, enabling more complex commands like, "Turn off all media players in the living room."
+- **Context Cache TTL**: Sets the time-to-live (in seconds) for the context cache. A lower value means the agent will have more up-to-date information, but may result in slightly slower responses. A higher value can improve performance but may lead to the agent using stale data.
+
+These options can be found under the "Advanced Options" section of the integration's configuration.
+
+### Testing Context Services
+
+The context services are designed to be tested independently. The test suite includes dedicated files for each service:
+- `tests/test_ai_agent_ha/test_cache.py`
+- `tests/test_ai_agent_ha/test_area_topology.py`
+- `tests/test_ai_agent_ha/test_entity_relationships.py`
+
+To run the tests, use `pytest`:
+```bash
+pytest tests/test_ai_agent_ha/
+```
+
+When writing tests for these services, make use of the provided fixtures to mock `HomeAssistant` and the various registries.
+ 
+ ## Release Process
+ 
+ 1. **Update version number** in `manifest.json`
 2. **Update CHANGELOG.md** with notable changes
 3. **Create a release** on GitHub
 4. **Tag the release** with the version number

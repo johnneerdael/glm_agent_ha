@@ -6,7 +6,6 @@ import logging
 
 import voluptuous as vol
 from homeassistant.components.frontend import async_register_built_in_panel
-from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
@@ -334,14 +333,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     # Register static path for frontend
-    await hass.http.async_register_static_paths(
-        [
-            StaticPathConfig(
-                "/frontend/glm_agent_ha",
-                hass.config.path("custom_components/glm_agent_ha/frontend"),
-                False,
-            )
-        ]
+    hass.http.register_static_path(
+        "/frontend/glm_agent_ha",
+        hass.config.path("custom_components/glm_agent_ha/frontend"),
+        False,
     )
 
     # Panel registration with proper error handling
