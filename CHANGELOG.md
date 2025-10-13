@@ -1,75 +1,69 @@
 # Changelog
 
-All notable changes to the AI Agent HA project will be documented in this file.
+All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-## [0.99.3] - 2025-07-04
-### Changed
-- **Breaking**: Now requires Python 3.12+ for Home Assistant compatibility
-- Updated all GitHub Actions workflows to use Python 3.12
-- Updated mypy configuration for Python 3.12 compatibility
-- Improved type annotations throughout codebase
-
-### Fixed
-- Fixed mypy type checking errors with Home Assistant 2025.1.x
-- Fixed code formatting issues with black formatter
-- Fixed test compatibility with Python 3.12
-- Resolved CI/CD pipeline failures
+## [1.03.0] - 2025-10-13
 
 ### Added
-- Comprehensive documentation updates for Python 3.12 requirement
-- Enhanced development environment setup instructions
-- Better error handling for AI provider imports
+- **AI Task Entity Integration**: Full integration with Home Assistant's AI Task API
+  - Structured data generation with support for image/video attachments
+  - MCP (Model Context Protocol) vision integration for Pro/Max plans
+  - Media handling for camera snapshots and other media sources
+  - Configurable base URL for image hosting via HA's www folder
 
-## [0.99.2] - Previous Release
+### Features
+- **MCP Vision Workaround**: Clever solution for GLM models lacking native vision
+  - Downloads media to HA's www folder
+  - Generates publicly accessible URLs for MCP analysis
+  - Combines MCP analysis results with user instructions
+  - Processes enhanced context with GLM for structured output
+
+### Technical Implementation
+- New `GLMAgentAITaskEntity` class extending Home Assistant's `AITaskEntity`
+- AI Task platform setup and registration
+- Media download and save functionality with unique filename generation
+- MCP integration for Z.AI image/video analysis services
+- Comprehensive error handling and graceful degradation
+- Full test coverage for AI Task entity functionality
+
+### Configuration
+- New configuration options:
+  - `enable_ai_task`: Enable/disable AI Task entity
+  - `ha_base_url`: Base URL for image hosting (e.g., `https://ha.netskope.pro`)
+  - `enable_mcp_integration`: MCP feature toggle (for Pro/Max plans)
+
+### Dependencies
+- Added `media_source` and `ai_task` Home Assistant dependencies
+- Updated OpenAI requirement to `~=1.55.0` for newer features
+
+### Example Use Cases
+- Camera analysis automations with structured output
+- Image/video content analysis via MCP services
+- Natural language to structured data conversion
+- Home Assistant automation integration with AI-powered insights
+
+## [1.02.0] - 2025-10-13
+
 ### Added
-- Contribution guidelines for the project
-- Issue and pull request templates
-- Code of Conduct
-- Security policy
-- Development guide
-- Changelog
+- **MCP Server Integration**: Support for Model Context Protocol servers
+  - Z.AI MCP server integration for image/video analysis
+  - Web search capabilities via MCP
+  - Plan-based feature access (Pro/Max plans)
 
-## [1.0.0] - YYYY-MM-DD (Replace with actual release date)
-### Added
-- Initial release of AI Agent HA
-- Support for multiple AI providers (OpenAI, Google Gemini, Anthropic Claude, OpenRouter, Llama)
-- Entity control through natural language
-- Automation creation
-- Dashboard creation
-- Entity state queries
-- Home Assistant panel integration
-- Configuration flow setup
-- Documentation
+### Features
+- **Plan Selection**: Lite/Pro/Max plan configuration with capability-based features
+- **Image Analysis**: Z.AI MCP integration for image and video content analysis
+- **Web Search**: MCP-powered web search functionality
+- **Structured Output**: Enhanced JSON response formatting and validation
 
-## How to Update This Changelog
+## [1.01.7] - Previous
 
-For each new release, create a new section with:
-- `[version number] - YYYY-MM-DD` as the heading
-- Group changes under the following subheadings as needed:
-  - **Added** - for new features
-  - **Changed** - for changes in existing functionality
-  - **Deprecated** - for soon-to-be removed features
-  - **Removed** - for now removed features
-  - **Fixed** - for bug fixes
-  - **Security** - for security improvements and fixes
-  
-Example:
-```
-## [1.1.0] - 2023-12-15
-### Added
-- New feature X
-- New provider Y
-
-### Changed
-- Improved handling of Z
-
-### Fixed
-- Bug in feature A
-```
-
-When adding items to the Unreleased section, follow the same format. When creating a release, rename "Unreleased" to the new version number and release date, then create a new "Unreleased" section. 
+### Features
+- Basic GLM Agent HA integration
+- Query service for natural language processing
+- Dashboard creation and automation services
+- Configuration flow for OpenAI provider setup
+- Frontend panel integration

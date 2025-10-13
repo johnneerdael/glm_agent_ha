@@ -12,15 +12,18 @@
     ],
     "config_flow": true,
     "dependencies": [
-        "http"
+        "http",
+        "media_source",
+        "ai_task"
     ],
     "documentation": "https://github.com/johnneerdael/glm_agent_ha",
     "integration_type": "service",
     "iot_class": "cloud_polling",
     "issue_tracker": "https://github.com/johnneerdael/glm_agent_ha/issues",
     "requirements": [
-        "aiohttp>=3.8.0"
+        "aiohttp>=3.8.0",
+        "openai~=1.55.0"
     ],
-    "version": "1.01.6",
+    "version": "1.03.0",
     "frontend_module_url": "/frontend/glm_agent_ha/glm_agent_ha-panel.js"
 }

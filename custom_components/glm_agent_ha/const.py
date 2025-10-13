@@ -28,3 +28,31 @@ CONF_ENABLE_ENERGY = "enable_energy"
 CONF_ENABLE_AREA_TOPOLOGY = "enable_area_topology"
 CONF_ENABLE_ENTITY_TYPE_CACHE = "enable_entity_type_cache"
 CONF_ENABLE_ENTITY_RELATIONSHIPS = "enable_entity_relationships"
+
+# Plan configuration
+CONF_PLAN = "plan"
+
+# Available plans
+PLAN_LITE = "lite"
+PLAN_PRO = "pro"
+PLAN_MAX = "max"
+
+DEFAULT_PLAN = PLAN_LITE
+
+# MCP Server configuration
+CONF_MCP_SERVERS = "mcp_servers"
+CONF_ENABLE_MCP_INTEGRATION = "enable_mcp_integration"
+
+# AI Task Entity configuration
+CONF_ENABLE_AI_TASK = "enable_ai_task"
+CONF_ENABLE_CONVERSATION = "enable_conversation"
+
+# LLM API configuration
+CONF_LLM_HASS_API = "llm_hass_api"
+CONF_PROMPT = "prompt"
+
+# Media hosting configuration
+CONF_HA_BASE_URL = "ha_base_url"
+
+# Entity configuration
+CONF_AI_PROVIDER = "ai_provider"

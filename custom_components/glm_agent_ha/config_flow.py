@@ -24,6 +24,7 @@ from .const import (
     CONF_ENABLE_ENTITY_TYPE_CACHE,
     DEFAULT_CACHE_TTL,
     DOMAIN,
+    CONF_PLAN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -54,6 +55,31 @@ AVAILABLE_MODELS = {
 
 DEFAULT_PROVIDER = "openai"
 
+# Plan definitions
+PLANS = {
+    "lite": "GLM Coding Lite",
+    "pro": "GLM Coding Pro",
+    "max": "GLM Coding Max",
+}
+
+DEFAULT_PLAN = "lite"
+
+# Plan capabilities
+PLAN_CAPABILITIES = {
+    "lite": {
+        "mcp_servers": [],
+        "features": ["basic_chat"]
+    },
+    "pro": {
+        "mcp_servers": ["zai-mcp-server", "web-search-prime"],
+        "features": ["basic_chat", "image_analysis", "web_search"]
+    },
+    "max": {
+        "mcp_servers": ["zai-mcp-server", "web-search-prime"],
+        "features": ["basic_chat", "image_analysis", "web_search", "advanced_features"]
+    }
+}
+
 
 class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg,misc]
     """Handle a config flow for GLM Coding Plan Agent HA."""
@@ -80,10 +106,13 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
             await self.async_set_unique_id(f"glm_agent_ha_{user_input['ai_provider']}")
             self._abort_if_unique_id_configured()
 
-            self.config_data = {"ai_provider": user_input["ai_provider"]}
+            self.config_data = {
+                "ai_provider": user_input["ai_provider"],
+                "plan": user_input.get("plan", DEFAULT_PLAN)
+            }
             return await self.async_step_configure()
 
-        # Show provider selection form
+        # Show provider and plan selection form
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
@@ -95,18 +124,34 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
                             ]
                         )
                     ),
+                    vol.Required("plan", default=DEFAULT_PLAN): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[
+                                {"value": k, "label": v} for k, v in PLANS.items()
+                            ]
+                        )
+                    ),
                 }
             ),
+            description_placeholders={
+                "plan_descriptions": (
+                    "Lite: Basic chat functionality\n"
+                    "Pro: Chat + Image analysis + Web search\n"
+                    "Max: All Pro features + Advanced capabilities"
+                )
+            }
         )
 
     async def async_step_configure(self, user_input=None):
         """Handle the configuration step for the selected provider."""
         errors = {}
         provider = self.config_data["ai_provider"]
+        plan = self.config_data.get("plan", DEFAULT_PLAN)
         token_field = TOKEN_FIELD_NAMES[provider]
         token_label = TOKEN_LABELS[provider]
         default_model = DEFAULT_MODELS[provider]
         available_models = AVAILABLE_MODELS.get(provider, [default_model])
+        plan_capabilities = PLAN_CAPABILITIES.get(plan, {})
 
         if user_input is not None:
             try:
@@ -124,7 +169,7 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
                 custom_model = user_input.get("custom_model")
 
                 _LOGGER.debug(
-                    f"Config flow - Provider: {provider}, Selected model: {selected_model}, Custom model: {custom_model}"
+                    f"Config flow - Provider: {provider}, Plan: {plan}, Selected model: {selected_model}, Custom model: {custom_model}"
                 )
 
                 # Initialize models dict if it doesn't exist
@@ -145,8 +190,13 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
                         # Fallback to default model for other providers
                         self.config_data["models"][provider] = default_model
 
+                # Store plan capabilities
+                self.config_data["plan_capabilities"] = plan_capabilities
+                self.config_data["mcp_servers"] = plan_capabilities.get("mcp_servers", [])
+                self.config_data["features"] = plan_capabilities.get("features", [])
+
                 return self.async_create_entry(
-                    title=f"GLM Coding Plan Agent HA ({PROVIDERS[provider]})",
+                    title=f"GLM Coding Plan Agent HA ({PROVIDERS[provider]} - {PLANS[plan]})",
                     data=self.config_data,
                 )
             except InvalidApiKey:
@@ -180,6 +230,9 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
             description_placeholders={
                 "token_label": token_label,
                 "provider": PROVIDERS[provider],
+                "plan": PLANS[plan],
+                "plan_features": ", ".join(plan_capabilities.get("features", [])),
+                "mcp_servers": ", ".join(plan_capabilities.get("mcp_servers", [])) or "None",
             },
         )
 

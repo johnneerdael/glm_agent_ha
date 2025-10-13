@@ -34,6 +34,7 @@ from .const import (
 from .context.cache import ContextCacheManager
 from .context.area_topology import AreaTopologyService
 from .context.entity_relationships import EntityRelationshipService
+from .mcp_integration import MCPIntegrationManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -405,7 +406,7 @@ class OpenAIClient(BaseAIClient):
         model_lower = self.model.lower()
         return any(model_id in model_lower for model_id in restricted_models)
 
-    async def get_response(self, messages, **kwargs):
+    async def get_response(self, messages, response_format=None, **kwargs):
         _LOGGER.debug("Making request to GLM Coding Plan API with model: %s", self.model)
 
         # Validate token - more flexible for GLM Coding Plan API
@@ -433,6 +434,8 @@ class OpenAIClient(BaseAIClient):
 
         # Build payload with model-appropriate parameters
         payload = {"model": self.model, "messages": messages, token_param: 2048}
+        if response_format:
+            payload["response_format"] = response_format
 
         # Only add temperature and top_p for models that support them
         if not is_restricted:
@@ -515,7 +518,10 @@ class AiAgentHaAgent:
             "- call_service(domain, service, target?, service_data?): Call any Home Assistant service directly\n"
             "- create_automation(automation): Create a new automation with the provided configuration\n"
             "- create_dashboard(dashboard_config): Create a new dashboard with the provided configuration\n"
-            "- update_dashboard(dashboard_url, dashboard_config): Update an existing dashboard configuration\n\n"
+            "- update_dashboard(dashboard_url, dashboard_config): Update an existing dashboard configuration\n"
+            "- analyze_image(image_source, prompt?): Analyze an image and provide detailed description\n"
+            "- analyze_video(video_source, prompt?): Analyze a video and provide detailed description\n"
+            "- web_search(query, count?, search_recency_filter?): Search the web for current information\n\n"
             "You can also create dashboards when users ask for them. When creating dashboards:\n"
             "1. First gather information about available entities, areas, and devices\n"
             "2. Ask follow-up questions if the user's requirements are unclear\n"
@@ -523,6 +529,10 @@ class AiAgentHaAgent:
             "4. Use common card types like: entities, glance, picture-entity, weather-forecast, thermostat, media-control, etc.\n"
             "5. Organize cards logically by rooms, device types, or functionality\n"
             "6. Include relevant entities based on the user's request\n\n"
+            "For Pro/Max plans, you can also analyze images and videos, or search the web:\n"
+            "- analyze_image: Provide an image URL or path and optionally a specific prompt for analysis\n"
+            "- analyze_video: Provide a video URL or path and optionally a specific prompt for analysis\n"
+            "- web_search: Search for current information with optional count and recency filters\n\n"
             "IMPORTANT AREA/FLOOR GUIDANCE:\n"
             "- When users ask for entities from a specific floor, use get_area_registry() first\n"
             "- Areas have both 'area_id' and 'floor_id' - these are different concepts\n"
@@ -733,6 +743,13 @@ class AiAgentHaAgent:
         
         # Feature flags
         self._enable_entity_type_cache = config.get(CONF_ENABLE_ENTITY_TYPE_CACHE, True)
+
+        # Initialize MCP integration for Pro/Max plans
+        self.mcp_manager = MCPIntegrationManager(hass, config)
+        if self.mcp_manager.is_mcp_available():
+            _LOGGER.info("MCP integration available for plan: %s", config.get("plan"))
+        else:
+            _LOGGER.debug("MCP integration not available for plan: %s", config.get("plan"))
 
         provider = config.get("ai_provider", "openai")
         models_config = config.get("models", {})
@@ -2027,12 +2044,15 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
             return {"error": f"Error updating dashboard: {str(e)}"}
 
     async def process_query(
-        self, user_query: str, provider: Optional[str] = None, model: Optional[str] = None
+        self, user_query: str, provider: Optional[str] = None, model: Optional[str] = None, structure: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Process a user query with input validation and rate limiting."""
         try:
             if not user_query or not isinstance(user_query, str):
                 return {"success": False, "error": "Invalid query format"}
+
+            # If Home Assistant passed a structured-output schema, enforce JSON mode
+            enforce_json = bool(structure)
 
             # Get the correct configuration for the requested provider
             if provider and provider in self.hass.data[DOMAIN]["configs"]:
@@ -2116,6 +2136,14 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
             if not self.conversation_history:
                 _LOGGER.debug("Adding system message to new conversation")
                 self.conversation_history.append(self.system_prompt)
+                if enforce_json and structure:
+                    # Inject strict JSON schema instruction for AI Task
+                    schema_instruction = (
+                        "You MUST return a single valid JSON object that exactly matches this schema:\n"
+                        f"{json.dumps(structure, indent=2)}\n"
+                        "Do NOT wrap the JSON in code blocks, add explanations, or include any text outside the JSON."
+                    )
+                    self.conversation_history.append({"role": "system", "content": schema_instruction})
 
             # Add user query to conversation
             self.conversation_history.append({"role": "user", "content": user_query})
@@ -2131,7 +2159,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                 try:
                     # Get AI response
                     _LOGGER.debug("Requesting response from AI provider")
-                    response = await self._get_ai_response()
+                    response = await self._get_ai_response(enforce_json=enforce_json)
                     _LOGGER.debug("Received response from AI provider: %s", response)
 
                     try:
@@ -2257,6 +2285,9 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                             "create_automation",
                             "create_dashboard",
                             "update_dashboard",
+                            "analyze_image",
+                            "analyze_video",
+                            "web_search",
                         ]
 
                         if (
@@ -2375,6 +2406,22 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                                 data = await self.update_dashboard(
                                     parameters.get("dashboard_url"),
                                     parameters.get("dashboard_config"),
+                                )
+                            elif request_type == "analyze_image":
+                                data = await self.analyze_image(
+                                    parameters.get("image_source"),
+                                    parameters.get("prompt", "Analyze this image")
+                                )
+                            elif request_type == "analyze_video":
+                                data = await self.analyze_video(
+                                    parameters.get("video_source"),
+                                    parameters.get("prompt", "Analyze this video")
+                                )
+                            elif request_type == "web_search":
+                                data = await self.web_search(
+                                    parameters.get("query"),
+                                    parameters.get("count", 5),
+                                    parameters.get("search_recency_filter", "noLimit")
                                 )
                             else:
                                 data = {
@@ -2708,6 +2755,18 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                                 "Response starts with: %s",
                                 repr(response[:10]) if response else "None",
                             )
+                            
+                            # If we were enforcing JSON and got a parsing error, try a corrective retry
+                            if enforce_json and iteration < max_iterations:
+                                _LOGGER.warning(
+                                    "JSON parsing failed despite enforce_json=True. Attempting corrective retry with explicit JSON instruction."
+                                )
+                                # Add an explicit system message asking for pure JSON
+                                self.conversation_history.append({
+                                    "role": "system",
+                                    "content": "The previous response was not valid JSON. Please respond with ONLY a valid JSON object. Do not include any explanations, code blocks, or text outside the JSON."
+                                })
+                                continue  # Try again with the explicit instruction
 
                         # Also log the response to a separate debug file for detailed analysis (non-local providers only)
                         if provider != "local":
@@ -2828,7 +2887,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
             _LOGGER.exception("Error in process_query: %s", str(e))
             return {"success": False, "error": f"Error in process_query: {str(e)}"}
 
-    async def _get_ai_response(self) -> str:
+    async def _get_ai_response(self, enforce_json: bool = False) -> str:
         """Get response from the selected AI provider with retries and rate limiting."""
         if not self._check_rate_limit():
             raise Exception("Rate limit exceeded. Please try again later.")
@@ -2846,6 +2905,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
 
         _LOGGER.debug("Sending %d messages to AI provider", len(recent_messages))
         _LOGGER.debug("AI provider: %s", self.config.get("ai_provider", "unknown"))
+        _LOGGER.debug("Enforce JSON mode: %s", enforce_json)
 
         while retry_count < self._max_retries:
             try:
@@ -2854,7 +2914,13 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                     retry_count + 1,
                     self._max_retries,
                 )
-                response = await self.ai_client.get_response(recent_messages)
+                # Pass response_format to enforce JSON mode when needed
+                response_format = {"type": "json_object"} if enforce_json else None
+                response = await self.ai_client.get_response(
+                    recent_messages,
+                    response_format=response_format
+                )
+                _LOGGER.debug("Used response_format: %s", response_format)
                 _LOGGER.debug(
                     "AI client returned response of length: %d", len(response or "")
                 )
@@ -3090,3 +3156,101 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
         except Exception as e:
             _LOGGER.exception("Error loading prompt history: %s", str(e))
             return {"error": f"Error loading prompt history: {str(e)}", "history": []}
+
+    async def analyze_image(self, image_source: str, prompt: str = "Analyze this image") -> Dict[str, Any]:
+        """Analyze an image using Z.AI MCP integration (Pro/Max plans only)."""
+        try:
+            _LOGGER.debug("Analyzing image with source: %s", image_source)
+            
+            if not self.mcp_manager.is_mcp_available():
+                return {
+                    "error": "Image analysis is only available with Pro or Max plans",
+                    "plan_required": "pro"
+                }
+            
+            parameters = {
+                "image_source": image_source,
+                "prompt": prompt
+            }
+            
+            result = await self.mcp_manager.call_mcp_tool("image_analysis", parameters)
+            _LOGGER.debug("Image analysis result: %s", result)
+            return result
+            
+        except Exception as e:
+            _LOGGER.exception("Error analyzing image: %s", str(e))
+            return {"error": f"Error analyzing image: {str(e)}"}
+
+    async def analyze_video(self, video_source: str, prompt: str = "Analyze this video") -> Dict[str, Any]:
+        """Analyze a video using Z.AI MCP integration (Pro/Max plans only)."""
+        try:
+            _LOGGER.debug("Analyzing video with source: %s", video_source)
+            
+            if not self.mcp_manager.is_mcp_available():
+                return {
+                    "error": "Video analysis is only available with Pro or Max plans",
+                    "plan_required": "pro"
+                }
+            
+            parameters = {
+                "video_source": video_source,
+                "prompt": prompt
+            }
+            
+            result = await self.mcp_manager.call_mcp_tool("video_analysis", parameters)
+            _LOGGER.debug("Video analysis result: %s", result)
+            return result
+            
+        except Exception as e:
+            _LOGGER.exception("Error analyzing video: %s", str(e))
+            return {"error": f"Error analyzing video: {str(e)}"}
+
+    async def web_search(self, query: str, count: int = 5, search_recency_filter: str = "noLimit") -> Dict[str, Any]:
+        """Search the web using Z.AI MCP integration (Pro/Max plans only)."""
+        try:
+            _LOGGER.debug("Performing web search for: %s", query)
+            
+            if not self.mcp_manager.is_mcp_available():
+                return {
+                    "error": "Web search is only available with Pro or Max plans",
+                    "plan_required": "pro"
+                }
+            
+            parameters = {
+                "query": query,
+                "count": count,
+                "search_recency_filter": search_recency_filter
+            }
+            
+            result = await self.mcp_manager.call_mcp_tool("webSearchPrime", parameters)
+            _LOGGER.debug("Web search result: %s", result)
+            return result
+            
+        except Exception as e:
+            _LOGGER.exception("Error performing web search: %s", str(e))
+            return {"error": f"Error performing web search: {str(e)}"}
+
+    async def initialize_mcp_integration(self) -> bool:
+        """Initialize MCP integration for Pro/Max plans."""
+        try:
+            if self.mcp_manager.is_mcp_available():
+                success = await self.mcp_manager.initialize_mcp_connections()
+                if success:
+                    _LOGGER.info("MCP integration initialized successfully")
+                else:
+                    _LOGGER.warning("Failed to initialize some MCP connections")
+                return success
+            else:
+                _LOGGER.debug("MCP integration not available for current plan")
+                return False
+        except Exception as e:
+            _LOGGER.exception("Error initializing MCP integration: %s", str(e))
+            return False
+
+    async def get_mcp_status(self) -> Dict[str, Any]:
+        """Get the status of MCP integration."""
+        try:
+            return self.mcp_manager.get_mcp_status()
+        except Exception as e:
+            _LOGGER.exception("Error getting MCP status: %s", str(e))
+            return {"error": f"Error getting MCP status: {str(e)}"}
