@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from types import SimpleNamespace
 
 import voluptuous as vol
 from homeassistant.components.frontend import async_register_built_in_panel
@@ -335,18 +336,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     # Register static path for frontend
-    hass.http.register_static_path(
-        "/frontend/glm_agent_ha/glm_agent_ha-panel.js",
-        hass.config.path("custom_components/glm_agent_ha/frontend/glm_agent_ha-panel.js"),
-        cache_headers=False
-    )
+    await hass.http.async_register_static_paths([
+        SimpleNamespace(
+            url_path="/frontend/glm_agent_ha/glm_agent_ha-panel.js",
+            path=hass.config.path("custom_components/glm_agent_ha/frontend/glm_agent_ha-panel.js"),
+            cache_headers=False,
+        )
+    ])
 
     # Panel registration with proper error handling
     panel_name = "glm_agent_ha"
     try:
         if await _panel_exists(hass, panel_name):
             _LOGGER.debug("GLM Coding Plan Agent HA panel already exists, skipping registration")
-            return True
 
         _LOGGER.debug("Registering GLM Coding Plan Agent HA panel")
         async_register_built_in_panel(
@@ -399,9 +401,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def _panel_exists(hass: HomeAssistant, panel_name: str) -> bool:
     """Check if a panel already exists."""
     try:
-        return hasattr(hass.data, "frontend_panels") and panel_name in hass.data.get(
-            "frontend_panels", {}
-        )
+        return panel_name in hass.data.get("frontend_panels", {})
     except Exception as e:
         _LOGGER.debug("Error checking panel existence: %s", str(e))
         return False
