@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant.components.ai_task import AITaskEntityDescription, AITaskEntityFeature, async_setup_ai_task_platform
@@ -16,6 +17,8 @@ from ..const import (
     DOMAIN,
 )
 from ..ai_task_entity import GLMAgentAITaskEntity
+
+_LOGGER = logging.getLogger(__name__)
 
 # AI Task entity description
 AI_TASK_ENTITY_DESCRIPTION = AITaskEntityDescription(
