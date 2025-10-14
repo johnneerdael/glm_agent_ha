@@ -108,6 +108,32 @@ async def _setup_pipeline_integrations(
         except Exception as e:
             _LOGGER.error("Error setting up voice integration: %s", e)
 
+    # Set up conversation platform for Assist
+    try:
+        from .conversations import async_setup_conversation
+        conversation_success = await async_setup_conversation(hass, config_data)
+        if conversation_success:
+            _LOGGER.info("Conversation platform setup completed")
+        else:
+            _LOGGER.debug("Conversation platform not available")
+    except ImportError:
+        _LOGGER.debug("Conversation platform not available in this HA version")
+    except Exception as e:
+        _LOGGER.error("Error setting up conversation platform: %s", e)
+
+    # Set up AI Task platform
+    try:
+        from .ai_task import async_setup_ai_task_entity
+        ai_task_success = await async_setup_ai_task_entity(hass, config_data)
+        if ai_task_success:
+            _LOGGER.info("AI Task platform setup completed")
+        else:
+            _LOGGER.debug("AI Task platform not available")
+    except ImportError:
+        _LOGGER.debug("AI Task platform not available in this HA version")
+    except Exception as e:
+        _LOGGER.error("Error setting up AI Task platform: %s", e)
+
     _LOGGER.info("All pipeline integrations setup completed")
 
 
@@ -206,13 +232,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         agent = AiAgentHaAgent(hass, config_data)
         hass.data[DOMAIN]["agents"][provider] = agent
 
-        # Initialize MCP integration for Pro/Max plans
+        # Initialize MCP integration for Pro/Max plans (graceful fallback)
         if config_data.get("plan") in ["pro", "max"]:
             try:
-                await agent.initialize_mcp_integration()
-                _LOGGER.info("MCP integration initialized for plan: %s", config_data.get("plan"))
+                success = await agent.initialize_mcp_integration()
+                if success:
+                    _LOGGER.info("MCP integration initialized for plan: %s", config_data.get("plan"))
+                else:
+                    _LOGGER.warning("MCP integration not available - features will work without enhanced capabilities")
             except Exception as e:
-                _LOGGER.error("Failed to initialize MCP integration: %s", e)
+                _LOGGER.warning("MCP integration failed - continuing without enhanced features: %s", e)
 
         # Set up pipeline integrations
         await _setup_pipeline_integrations(hass, config_data, entry)

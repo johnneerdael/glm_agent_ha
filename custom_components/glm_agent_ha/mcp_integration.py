@@ -297,27 +297,30 @@ class MCPIntegrationManager:
         """Connect to HTTP-based MCP server."""
         try:
             # Test connection with a simple request
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
                 headers = config.get("headers", {})
-                async with session.get(
-                    config["url"],
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as response:
-                    if response.status == 200:
-                        self.active_connections[server_name] = {
-                            "type": "http",
-                            "config": config,
-                            "session": session,
-                            "status": "connected"
-                        }
-                        _LOGGER.debug("Successfully connected to HTTP MCP server: %s", server_name)
-                        return True
-                    else:
-                        _LOGGER.error("HTTP MCP server returned status %d: %s", response.status, server_name)
-                        return False
+                try:
+                    async with session.get(
+                        config["url"],
+                        headers=headers
+                    ) as response:
+                        if response.status == 200:
+                            self.active_connections[server_name] = {
+                                "type": "http",
+                                "config": config,
+                                "session": session,
+                                "status": "connected"
+                            }
+                            _LOGGER.debug("Successfully connected to HTTP MCP server: %s", server_name)
+                            return True
+                        else:
+                            _LOGGER.warning("HTTP MCP server returned status %d: %s - MCP features will be unavailable", response.status, server_name)
+                            return False
+                except aiohttp.ClientError as e:
+                    _LOGGER.warning("HTTP MCP server connection failed for %s: %s - MCP features will be unavailable", server_name, e)
+                    return False
         except Exception as e:
-            _LOGGER.error("Failed to connect to HTTP MCP server %s: %s", server_name, e)
+            _LOGGER.warning("Failed to connect to HTTP MCP server %s: %s - MCP features will be unavailable", server_name, e)
             return False
 
     async def call_mcp_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
