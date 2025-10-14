@@ -792,6 +792,52 @@ class AiAgentHaAgent:
         # Add more specific validation based on your API key format
         return len(token) >= 32
 
+    async def _process_image_with_mcp(self, filename: str, base64_data: str, query: str) -> Optional[str]:
+        """Process image through MCP integration."""
+        try:
+            if not self.mcp_manager or not self.mcp_manager.is_mcp_available():
+                return None
+
+            # Determine if this is an image or video
+            file_extension = filename.lower().split('.')[-1]
+            is_video = file_extension in ['mp4', 'mov', 'avi', 'mkv', 'webm']
+
+            # Create appropriate prompt based on user query
+            if 'analyze' in query.lower() or 'what' in query.lower():
+                prompt = "Analyze this image in detail for Home Assistant automation and optimization"
+            elif 'security' in query.lower() or 'camera' in query.lower():
+                prompt = "Analyze this security camera image for unusual activity or security concerns"
+            elif 'room' in query.lower() or 'optimize' in query.lower():
+                prompt = "Analyze this room layout and suggest Home Assistant automations and improvements"
+            elif 'error' in query.lower() or 'decode' in query.lower():
+                prompt = "Decode and explain any error messages or codes shown in this image"
+            else:
+                prompt = "Analyze this image and provide relevant insights for Home Assistant automation"
+
+            # Call appropriate MCP tool
+            if is_video:
+                result = await self.mcp_manager.call_mcp_tool("video_analysis", {
+                    "video_source": f"data:video/{file_extension};base64,{base64_data}",
+                    "prompt": prompt
+                })
+            else:
+                result = await self.mcp_manager.call_mcp_tool("image_analysis", {
+                    "image_source": f"data:image/{file_extension};base64,{base64_data}",
+                    "prompt": prompt
+                })
+
+            if result.get("success") and result.get("result"):
+                if isinstance(result["result"], dict):
+                    return result["result"].get("description", str(result["result"]))
+                else:
+                    return str(result["result"])
+
+            return None
+
+        except Exception as e:
+            _LOGGER.error("Error processing image with MCP: %s", e)
+            return None
+
     def _check_rate_limit(self) -> bool:
         """Check if we're within rate limits."""
         current_time = time.time()
@@ -2044,7 +2090,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
             return {"error": f"Error updating dashboard: {str(e)}"}
 
     async def process_query(
-        self, user_query: str, provider: Optional[str] = None, model: Optional[str] = None, structure: Optional[Dict[str, Any]] = None
+        self, user_query: str, provider: Optional[str] = None, model: Optional[str] = None, structure: Optional[Dict[str, Any]] = None, attachment: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Process a user query with input validation and rate limiting."""
         try:
@@ -2110,6 +2156,52 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                 _LOGGER.error(error_msg)
                 return {"success": False, "error": error_msg}
 
+            # Process attachment if provided
+            image_analysis_result = None
+            if attachment and attachment.get('data'):
+                try:
+                    _LOGGER.debug("Processing image attachment")
+
+                    # Validate attachment size and type
+                    if attachment.get('size', 0) > 50 * 1024 * 1024:  # 50MB limit
+                        return {"success": False, "error": "Attachment too large. Maximum size is 50MB."}
+
+                    file_type = attachment.get('type', '').lower()
+                    if not file_type.startswith('image/') and not file_type.startswith('video/'):
+                        return {"success": False, "error": "Only image and video files are supported."}
+
+                    # Get user plan to check capabilities
+                    plan = config.get('plan', 'lite')
+                    if plan not in ['pro', 'max']:
+                        return {"success": False, "error": "File attachments require a Pro or Max plan."}
+
+                    # Process image through MCP if available
+                    if hasattr(self, 'mcp_manager') and self.mcp_manager:
+                        try:
+                            # Extract base64 data from data URL
+                            if attachment['data'].startswith('data:'):
+                                # Remove data URL prefix to get base64 data
+                                base64_data = attachment['data'].split(',')[1]
+                                # Save to temporary file or process directly
+                                image_result = await self._process_image_with_mcp(
+                                    attachment['name'], base64_data, user_query
+                                )
+                                if image_result:
+                                    image_analysis_result = image_result
+                                    user_query = f"{user_query}\n\n[Image Analysis Result: {image_result}]"
+                                    _LOGGER.debug("Image processed successfully via MCP")
+                            else:
+                                _LOGGER.warning("Invalid attachment data format")
+                        except Exception as e:
+                            _LOGGER.error("Error processing image via MCP: %s", e)
+                            # Continue without image analysis
+                    else:
+                        _LOGGER.debug("MCP not available, image analysis skipped")
+
+                except Exception as e:
+                    _LOGGER.error("Error processing attachment: %s", e)
+                    # Continue without image analysis
+
             # Process the query with rate limiting and retries
             if not self._check_rate_limit():
                 return {
@@ -2118,7 +2210,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                 }
 
             # Sanitize user input
-            user_query = user_query.strip()[:1000]  # Limit length and trim whitespace
+            user_query = user_query.strip()[:2000]  # Increased limit for image analysis queries
 
             _LOGGER.debug("Processing new query: %s", user_query)
 
@@ -2914,12 +3006,47 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
                     retry_count + 1,
                     self._max_retries,
                 )
+                # Start performance monitoring
+                performance_monitor = self.hass.data[DOMAIN].get("performance_monitor")
+                request_id = None
+
+                if performance_monitor:
+                    request_id = performance_monitor.start_request(
+                        request_id=f"query_{int(time.time() * 1000)}",
+                        request_type="query",
+                        provider=selected_provider,
+                        model=model or models_config.get(selected_provider, "unknown"),
+                        user_id=None,  # Could be extracted from context if available
+                        prompt=user_query
+                    )
+
                 # Pass response_format to enforce JSON mode when needed
                 response_format = {"type": "json_object"} if enforce_json else None
-                response = await self.ai_client.get_response(
-                    recent_messages,
-                    response_format=response_format
-                )
+
+                try:
+                    response = await self.ai_client.get_response(
+                        recent_messages,
+                        response_format=response_format
+                    )
+
+                    # End performance monitoring with success
+                    if performance_monitor and request_id:
+                        performance_monitor.end_request(
+                            request_id=request_id,
+                            success=True,
+                            response=response
+                        )
+
+                except Exception as api_error:
+                    # End performance monitoring with error
+                    if performance_monitor and request_id:
+                        performance_monitor.end_request(
+                            request_id=request_id,
+                            success=False,
+                            error_type=type(api_error).__name__
+                        )
+                    raise api_error
+
                 _LOGGER.debug("Used response_format: %s", response_format)
                 _LOGGER.debug(
                     "AI client returned response of length: %d", len(response or "")
