@@ -1,6 +1,6 @@
 """Comprehensive debugging service for GLM Agent HA integration."""
 
-from __future__import annotations
+from __future__ import annotations
 
 import asyncio
 import json
@@ -22,8 +22,19 @@ from .const import (
     DOMAIN,
 )
 from .agent import AiAgentHaAgent
-from .mcp_integration import MCPIntegrationManager
-from .ai_task_entity import GLMAgentAITaskEntity
+
+# Optional imports that may not be available in all HA versions
+try:
+    from .mcp_integration import MCPIntegrationManager
+    MCP_AVAILABLE = True
+except ImportError:
+    MCP_AVAILABLE = False
+
+try:
+    from .ai_task_entity import GLMAgentAITaskEntity
+    AI_TASK_AVAILABLE = True
+except (ImportError, ModuleNotFoundError):
+    AI_TASK_AVAILABLE = False
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -236,35 +247,47 @@ class GLMAgentDebugService:
                 }
 
             # Test MCP Integration
-            plan = config_entry.data.get(CONF_PLAN, "lite")
-            if plan in ["pro", "max"] and config_entry.options.get(CONF_ENABLE_MCP_INTEGRATION, True):
-                try:
-                    mcp_manager = MCPIntegrationManager(self.hass, config_entry.data)
-                    mcp_status = mcp_manager.get_mcp_status()
-                    status["mcp_integration"] = mcp_status
+            if MCP_AVAILABLE:
+                plan = config_entry.data.get(CONF_PLAN, "lite")
+                if plan in ["pro", "max"] and config_entry.options.get(CONF_ENABLE_MCP_INTEGRATION, True):
+                    try:
+                        mcp_manager = MCPIntegrationManager(self.hass, config_entry.data)
+                        mcp_status = mcp_manager.get_mcp_status()
+                        status["mcp_integration"] = mcp_status
 
-                    # Test MCP connections
-                    connection_test = await mcp_manager.initialize_mcp_connections()
-                    status["mcp_connection_test"] = {
-                        "success": connection_test,
-                        "attempted_at": datetime.now().isoformat()
-                    }
+                        # Test MCP connections
+                        connection_test = await mcp_manager.initialize_mcp_connections()
+                        status["mcp_connection_test"] = {
+                            "success": connection_test,
+                            "attempted_at": datetime.now().isoformat()
+                        }
 
-                except Exception as e:
-                    status["mcp_integration"] = {
-                        "available": False,
-                        "error": str(e)
-                    }
+                    except Exception as e:
+                        status["mcp_integration"] = {
+                            "available": False,
+                            "error": str(e)
+                        }
+            else:
+                status["mcp_integration"] = {
+                    "available": False,
+                    "error": "MCP integration not available"
+                }
 
             # Test AI Task Entity
-            try:
-                ai_task_entity = GLMAgentAITaskEntity(self.hass, config_entry)
-                entity_status = await ai_task_entity._get_entity_status()
-                status["ai_task_entity"] = entity_status
-            except Exception as e:
+            if AI_TASK_AVAILABLE:
+                try:
+                    ai_task_entity = GLMAgentAITaskEntity(self.hass, config_entry)
+                    entity_status = await ai_task_entity._get_entity_status()
+                    status["ai_task_entity"] = entity_status
+                except Exception as e:
+                    status["ai_task_entity"] = {
+                        "error": str(e),
+                        "available": False
+                    }
+            else:
                 status["ai_task_entity"] = {
-                    "error": str(e),
-                    "available": False
+                    "available": False,
+                    "error": "AI Task entity not available"
                 }
 
             return status

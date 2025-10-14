@@ -8,7 +8,6 @@ from datetime import datetime
 from types import SimpleNamespace
 
 import voluptuous as vol
-from homeassistant.components.ai_task import async_setup_ai_task
 from homeassistant.components.frontend import async_register_built_in_panel
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -18,7 +17,6 @@ from homeassistant.helpers.typing import ConfigType
 
 from .agent import AiAgentHaAgent
 from .const import (
-    CONF_ENABLE_AI_TASK,
     DOMAIN,
 )
 from .debug_service import GLMAgentDebugService
@@ -899,28 +897,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception as e:
         _LOGGER.warning("Panel registration error: %s", str(e))
 
-    # Set up AI Task entity if enabled
-    if entry.options.get(CONF_ENABLE_AI_TASK, True):
-        try:
-            await hass.config_entries.async_forward_entry_setup(entry, "ai_task")
-            _LOGGER.info("AI Task entity platform setup completed")
-        except Exception as e:
-            _LOGGER.error("Failed to set up AI Task entity platform: %s", e)
-            # Don't fail the entire setup for AI Task platform issues
-
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    # Unload AI Task entity platform if it was set up
-    if entry.options.get(CONF_ENABLE_AI_TASK, True):
-        try:
-            await hass.config_entries.async_forward_entry_unload(entry, "ai_task")
-            _LOGGER.debug("AI Task entity platform unloaded")
-        except Exception as e:
-            _LOGGER.debug("Error unloading AI Task entity platform: %s", str(e))
-
     if await _panel_exists(hass, "glm_agent_ha"):
         try:
             from homeassistant.components.frontend import async_remove_panel

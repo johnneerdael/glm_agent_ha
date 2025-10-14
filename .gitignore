@@ -147,3 +147,6 @@ ehthumbs.db
 Desktop.ini
 CLAUDE.md
 .claude/*
+
+# MCP configuration
+.mcp.json

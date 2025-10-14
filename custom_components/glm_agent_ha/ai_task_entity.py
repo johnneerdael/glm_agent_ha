@@ -16,12 +16,31 @@ try:
 except ImportError:
     aiohttp = None
 
-from homeassistant.components.ai_task import (
-    AITaskEntity,
-    AITaskEntityFeature,
-    GenDataTask,
-    GenDataTaskResult,
-)
+try:
+    from homeassistant.components.ai_task import (
+        AITaskEntity,
+        AITaskEntityFeature,
+        GenDataTask,
+        GenDataTaskResult,
+    )
+    AI_TASK_COMPONENTS_AVAILABLE = True
+except (ImportError, ModuleNotFoundError) as e:
+    AI_TASK_COMPONENTS_AVAILABLE = False
+    # Create placeholder classes to avoid import errors
+    class AITaskEntity:
+        def __init__(self, hass):
+            pass
+
+    class AITaskEntityFeature:
+        GENERATE_DATA = 1
+
+    class GenDataTask:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class GenDataTaskResult:
+        def __init__(self, *args, **kwargs):
+            pass
 from homeassistant.components.media_source import async_resolve_media
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_LLM_HASS_API
@@ -161,14 +180,18 @@ async def _cleanup_old_files(ai_task_dir: str) -> None:
 class GLMAgentAITaskEntity(AITaskEntity):
     """AI Task entity for GLM Agent HA."""
 
-    _attr_has_entity_name = True
-    _attr_name = "GLM Agent AI Task"
-    _attr_supported_features = AITaskEntityFeature.GENERATE_DATA
-
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize the AI Task entity."""
+        if not AI_TASK_COMPONENTS_AVAILABLE:
+            _LOGGER.warning("AI Task components not available, entity will be disabled")
+            self._attr_available = False
+            return
+
         super().__init__(hass)
         self._entry = entry
+        self._attr_has_entity_name = True
+        self._attr_name = "GLM Agent AI Task"
+        self._attr_supported_features = AITaskEntityFeature.GENERATE_DATA
         self._attr_unique_id = f"{entry.entry_id}_ai_task"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -176,11 +199,11 @@ class GLMAgentAITaskEntity(AITaskEntity):
             manufacturer="GLM Agent HA",
             model=entry.data.get(CONF_PLAN, "lite"),
         )
-        
+
         # Initialize agent
         self._agent = AiAgentHaAgent(hass, entry.data)
         self._mcp_manager = None
-        
+
         # Check if MCP integration is available and enabled
         if (entry.options.get(CONF_ENABLE_MCP_INTEGRATION, True) and
             entry.data.get(CONF_PLAN) in [PLAN_PRO, PLAN_MAX]):
@@ -196,6 +219,8 @@ class GLMAgentAITaskEntity(AITaskEntity):
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
+        if not AI_TASK_COMPONENTS_AVAILABLE:
+            return False
         return True
 
     async def _async_generate_data(
