@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+__all__ = ["AiAgentHaConfigFlow"]
+
 import logging
 
 import voluptuous as vol
@@ -96,6 +98,7 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
     def __init__(self):
         """Initialize the config flow."""
         super().__init__()
+        self.config_data = {}
         _LOGGER.debug("AiAgentHaConfigFlow initialized with domain: %s", self.DOMAIN)
 
     async def async_step_user(self, user_input=None):
@@ -161,31 +164,30 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
                 token_value = user_input.get(token_field)
                 if not token_value:
                     errors[token_field] = "required"
-                    raise InvalidApiKey
+                elif len(token_value.strip()) < 10:
+                    errors[token_field] = "invalid_api_key"
+                else:
+                    # Store the configuration data
+                    self.config_data[token_field] = token_value
 
-                # Store the configuration data
-                self.config_data[token_field] = token_value
+                    # Use default model for the provider (simplified approach)
+                    self.config_data["models"] = {provider: default_model}
 
-                # Use default model for the provider (simplified approach)
-                self.config_data["models"] = {provider: default_model}
+                    _LOGGER.debug(
+                        f"Config flow - Provider: {provider}, Plan: {plan}, Model: {default_model}"
+                    )
 
-                _LOGGER.debug(
-                    f"Config flow - Provider: {provider}, Plan: {plan}, Model: {default_model}"
-                )
+                    # Store plan capabilities
+                    self.config_data["plan_capabilities"] = plan_capabilities
+                    self.config_data["mcp_servers"] = plan_capabilities.get("mcp_servers", [])
+                    self.config_data["features"] = plan_capabilities.get("features", [])
 
-                # Store plan capabilities
-                self.config_data["plan_capabilities"] = plan_capabilities
-                self.config_data["mcp_servers"] = plan_capabilities.get("mcp_servers", [])
-                self.config_data["features"] = plan_capabilities.get("features", [])
-
-                return self.async_create_entry(
-                    title=f"GLM Coding Plan Agent HA ({PROVIDERS[provider]} - {PLANS[plan]})",
-                    data=self.config_data,
-                )
-            except InvalidApiKey:
-                errors["base"] = "invalid_api_key"
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception")
+                    return self.async_create_entry(
+                        title=f"GLM Coding Plan Agent HA ({PROVIDERS[provider]} - {PLANS[plan]})",
+                        data=self.config_data,
+                    )
+            except Exception as e:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception in config flow: %s", e)
                 errors["base"] = "unknown"
 
         # Build schema for providers (simplified - just token)
@@ -270,6 +272,8 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
                 token_value = user_input.get(token_field)
                 if not token_value:
                     errors[token_field] = "required"
+                elif len(token_value.strip()) < 10:
+                    errors[token_field] = "invalid_api_key"
                 else:
                     # Prepare the updated configuration
                     updated_data = dict(self.config_entry.data)
@@ -289,8 +293,8 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
                     )
 
                     return self.async_create_entry(title="", data={})
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception in options flow")
+            except Exception as e:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception in options flow: %s", e)
                 errors["base"] = "unknown"
 
         # Build schema for providers (simplified - just token)

@@ -1,0 +1,147 @@
+{
+  "mcpServers": {
+    "mcp-sequentialthinking-tools": {
+			"type": "stdio",
+			"command": "cmd",
+			"args": ["/c", "-y", "mcp-sequentialthinking-tools"]
+		},
+    "zai-mcp-server": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@z_ai/mcp-server"
+      ],
+      "env": {
+        "Z_AI_API_KEY": "${Z_AI_API_KEY}",
+        "Z_AI_MODE": "ZAI"
+      }
+    },
+    "web-search-prime": {
+      "type": "http",
+      "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
+      "headers": {
+        "Authorization": "${Z_AI_API_KEY}"
+      }
+    },
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}",
+        "Accept": "application/json, text/event-stream"
+      },
+      "alwaysAllow": [
+        "resolve-library-id",
+        "get-library-docs"
+      ]
+    },
+    "supabase": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--read-only",
+        "--project-ref=nuvio-streaming"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
+      }
+    },
+    "crawl-mcp": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/walksoda/crawl-mcp",
+        "crawl-mcp"
+      ],
+      "env": {
+        "CRAWL4AI_LANG": "en"
+      },
+      "disabled": true
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-fetch"
+      ],
+      "alwaysAllow": [
+        "fetch"
+      ]
+    },
+    "jina-mcp-tools": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "jina-mcp-tools"
+      ],
+      "env": {
+        "JINA_API_KEY": "${JINA_API_KEY}"
+      },
+      "alwaysAllow": [
+        "jina_search",
+        "jina_reader"
+      ]
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_TOKEN}"
+      }
+    },
+    "filesystem": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "c:/Users/john/"
+      ],
+      "alwaysAllow": [
+        "read_text_file",
+        "search_files"
+      ]
+    },
+    "tavily-remote-mcp": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "mcp-remote",
+        "https://mcp.tavily.com/mcp/?tavilyApiKey=${TAVILY_API_KEY}"
+      ],
+      "env": {},
+      "alwaysAllow": [
+        "tavily_search",
+        "tavily_extract",
+        "tavily_crawl",
+        "tavily_map"
+      ]
+    },
+    "playwright": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "@playwright/mcp@latest"
+      ]
+    },
+    "puppeteer": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-puppeteer"
+      ]
+    }
+  }
+}

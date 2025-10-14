@@ -2,32 +2,32 @@
     "config": {
         "step": {
             "user": {
-                "title": "Choose AI Provider",
-                "description": "Select your AI provider",
+                "title": "Choose AI Provider and Plan",
+                "description": "Select your AI provider and subscription plan",
                 "data": {
-                    "ai_provider": "AI Provider"
+                    "ai_provider": "AI Provider",
+                    "plan": "Subscription Plan"
                 },
                 "data_description": {
-                    "ai_provider": "Choose your preferred AI provider"
+                    "ai_provider": "Choose your preferred AI provider",
+                    "plan": "Select your subscription plan"
                 }
             },
             "configure": {
-                "title": "Configure {provider}",
-                "description": "Enter your {token_label} and optionally select a model",
+                "title": "Configure {provider} - {plan}",
+                "description": "Enter your {token_label} for {plan} plan\n\nPlan Features:\n{plan_features}\n\nMCP Servers:\n{mcp_servers}",
                 "data": {
-                    "openai_token": "GLM Coding Plan API Key",
-                    "model": "Model"
+                    "openai_token": "GLM Coding Plan API Key"
                 },
                 "data_description": {
-                    "openai_token": "Enter your GLM Coding Plan API key",
-					"model": "Choose a model or select 'Custom...' to enter your own"
+                    "openai_token": "Enter your GLM Coding Plan API key"
                 }
             }
         },
         "error": {
             "invalid_api_key": "Invalid API key format",
             "unknown": "Unknown error occurred",
-            "openai_token": "GLM Coding Plan API key is required"
+            "required": "This field is required"
         },
         "abort": {
             "already_configured": "GLM Coding Plan Agent HA is already configured"
@@ -47,14 +47,12 @@
             },
             "configure_options": {
                 "title": "Configure {provider}",
-                "description": "Update your {token_label} and model settings",
+                "description": "Update your {token_label} settings",
                 "data": {
-                    "openai_token": "GLM Coding Plan API Key",
-                    "model": "Model"
+                    "openai_token": "GLM Coding Plan API Key"
                 },
                 "data_description": {
-                    "openai_token": "Enter your GLM Coding Plan API key",
-                    "model": "Choose a model or select 'Custom...' to enter your own"
+                    "openai_token": "Enter your GLM Coding Plan API key"
                 }
             }
         }

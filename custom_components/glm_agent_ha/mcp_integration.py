@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import time
 from typing import Any, Dict, List, Optional, Union
 
 import aiohttp
@@ -14,6 +15,14 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# MCP monitoring and retry constants
+MAX_RETRY_ATTEMPTS = 3
+RETRY_DELAY_BASE = 1.0  # Base delay in seconds
+MAX_RETRY_DELAY = 30.0  # Maximum delay in seconds
+HEALTH_CHECK_INTERVAL = 300  # Health check every 5 minutes
+CONNECTION_TIMEOUT = 30  # Connection timeout in seconds
+REQUEST_TIMEOUT = 60  # Request timeout in seconds
 
 
 class MCPIntegrationManager:
@@ -28,7 +37,7 @@ class MCPIntegrationManager:
         self.mcp_servers = config.get("mcp_servers", [])
         self.plan_capabilities = config.get("plan_capabilities", {})
         self.enable_mcp = config.get(CONF_ENABLE_MCP_INTEGRATION, True)
-        
+
         # MCP server configurations
         self.mcp_configs = {
             "zai-mcp-server": {
@@ -43,9 +52,14 @@ class MCPIntegrationManager:
                 "headers": {"Authorization": f"Bearer {self.api_token}"}
             }
         }
-        
-        # Active MCP connections
+
+        # Active MCP connections with enhanced monitoring
         self.active_connections: Dict[str, Any] = {}
+
+        # Monitoring and health check data
+        self.connection_stats: Dict[str, Dict[str, Any]] = {}
+        self.health_check_task: Optional[asyncio.Task] = None
+        self._shutdown = False
 
     def is_mcp_available(self) -> bool:
         """Check if MCP integration is available for the current plan."""
@@ -71,27 +85,174 @@ class MCPIntegrationManager:
         return tools
 
     async def initialize_mcp_connections(self) -> bool:
-        """Initialize MCP server connections for Pro/Max plans."""
+        """Initialize MCP server connections for Pro/Max plans with monitoring."""
         if not self.is_mcp_available():
             _LOGGER.debug("MCP integration not available for plan: %s", self.plan)
             return False
 
         _LOGGER.info("Initializing MCP connections for plan: %s", self.plan)
-        
+
+        # Initialize connection statistics
+        for server_name in self.mcp_servers:
+            if server_name not in self.connection_stats:
+                self.connection_stats[server_name] = {
+                    "connected_at": None,
+                    "last_success": None,
+                    "last_failure": None,
+                    "failure_count": 0,
+                    "total_requests": 0,
+                    "successful_requests": 0,
+                    "avg_response_time": 0.0,
+                    "status": "disconnected"
+                }
+
         success = True
         for server_name in self.mcp_servers:
             if server_name in self.mcp_configs:
                 try:
-                    if await self._connect_mcp_server(server_name):
+                    if await self._connect_mcp_server_with_retry(server_name):
                         _LOGGER.info("Successfully connected to MCP server: %s", server_name)
+                        self.connection_stats[server_name]["status"] = "connected"
+                        self.connection_stats[server_name]["connected_at"] = time.time()
+                        self.connection_stats[server_name]["last_success"] = time.time()
                     else:
                         _LOGGER.warning("Failed to connect to MCP server: %s", server_name)
+                        self.connection_stats[server_name]["status"] = "failed"
+                        self.connection_stats[server_name]["last_failure"] = time.time()
+                        self.connection_stats[server_name]["failure_count"] += 1
                         success = False
                 except Exception as e:
                     _LOGGER.error("Error connecting to MCP server %s: %s", server_name, e)
+                    self.connection_stats[server_name]["status"] = "error"
+                    self.connection_stats[server_name]["last_failure"] = time.time()
+                    self.connection_stats[server_name]["failure_count"] += 1
                     success = False
-        
+
+        # Start health monitoring if connections were established
+        if success and not self.health_check_task and not self._shutdown:
+            self.health_check_task = self.hass.async_create_task(
+                self._health_check_loop()
+            )
+            _LOGGER.info("Started MCP health monitoring")
+
         return success
+
+    async def _connect_mcp_server_with_retry(self, server_name: str) -> bool:
+        """Connect to MCP server with retry logic."""
+        for attempt in range(MAX_RETRY_ATTEMPTS):
+            try:
+                result = await self._connect_mcp_server(server_name)
+                if result:
+                    if attempt > 0:
+                        _LOGGER.info("MCP server %s connected after %d attempts", server_name, attempt + 1)
+                    return True
+            except Exception as e:
+                _LOGGER.warning("MCP server %s connection attempt %d failed: %s", server_name, attempt + 1, e)
+
+                if attempt < MAX_RETRY_ATTEMPTS - 1:
+                    # Exponential backoff with jitter
+                    delay = min(RETRY_DELAY_BASE * (2 ** attempt) + (hash(server_name) % 1), MAX_RETRY_DELAY)
+                    await asyncio.sleep(delay)
+
+        _LOGGER.error("MCP server %s failed to connect after %d attempts", server_name, MAX_RETRY_ATTEMPTS)
+        return False
+
+    async def _health_check_loop(self):
+        """Background health check loop for MCP connections."""
+        while not self._shutdown and self.is_mcp_available():
+            try:
+                await asyncio.sleep(HEALTH_CHECK_INTERVAL)
+
+                if self._shutdown:
+                    break
+
+                await self._perform_health_checks()
+
+            except asyncio.CancelledError:
+                _LOGGER.debug("Health check loop cancelled")
+                break
+            except Exception as e:
+                _LOGGER.error("Error in health check loop: %s", e)
+                await asyncio.sleep(60)  # Wait 1 minute before retrying
+
+    async def _perform_health_checks(self):
+        """Perform health checks on all MCP connections."""
+        for server_name in list(self.active_connections.keys()):
+            try:
+                stats = self.connection_stats.get(server_name, {})
+
+                if server_name == "web-search-prime":
+                    # Test HTTP server with a simple health check
+                    healthy = await self._health_check_http_server(server_name)
+                else:
+                    # For stdio servers, check if process is still responsive
+                    healthy = await self._health_check_stdio_server(server_name)
+
+                if healthy:
+                    stats["last_success"] = time.time()
+                    stats["status"] = "healthy"
+                    _LOGGER.debug("Health check passed for MCP server: %s", server_name)
+                else:
+                    stats["last_failure"] = time.time()
+                    stats["failure_count"] += 1
+                    stats["status"] = "unhealthy"
+                    _LOGGER.warning("Health check failed for MCP server: %s", server_name)
+
+                    # Attempt to reconnect if unhealthy
+                    if stats["failure_count"] >= 3:
+                        _LOGGER.info("Attempting to reconnect unhealthy MCP server: %s", server_name)
+                        await self._reconnect_server(server_name)
+
+            except Exception as e:
+                _LOGGER.error("Health check error for server %s: %s", server_name, e)
+                if server_name in self.connection_stats:
+                    self.connection_stats[server_name]["last_failure"] = time.time()
+                    self.connection_stats[server_name]["status"] = "error"
+
+    async def _health_check_http_server(self, server_name: str) -> bool:
+        """Health check for HTTP-based MCP servers."""
+        try:
+            config = self.mcp_configs.get(server_name)
+            if not config or config.get("type") != "streamable-http":
+                return False
+
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+                headers = config.get("headers", {})
+                async with session.get(
+                    config["url"],
+                    headers=headers
+                ) as response:
+                    return response.status == 200
+        except Exception:
+            return False
+
+    async def _health_check_stdio_server(self, server_name: str) -> bool:
+        """Health check for stdio-based MCP servers."""
+        # For stdio servers, we'd normally check if the process is still alive
+        # This is a simplified implementation
+        connection = self.active_connections.get(server_name)
+        return connection is not None and connection.get("status") == "connected"
+
+    async def _reconnect_server(self, server_name: str):
+        """Attempt to reconnect a failed MCP server."""
+        try:
+            # Remove old connection
+            if server_name in self.active_connections:
+                del self.active_connections[server_name]
+
+            # Attempt to reconnect
+            if await self._connect_mcp_server_with_retry(server_name):
+                _LOGGER.info("Successfully reconnected MCP server: %s", server_name)
+                self.connection_stats[server_name]["status"] = "connected"
+                self.connection_stats[server_name]["connected_at"] = time.time()
+                self.connection_stats[server_name]["last_success"] = time.time()
+                self.connection_stats[server_name]["failure_count"] = 0
+            else:
+                _LOGGER.error("Failed to reconnect MCP server: %s", server_name)
+                self.connection_stats[server_name]["status"] = "failed"
+
+        except Exception as e:
+            _LOGGER.error("Error reconnecting MCP server %s: %s", server_name, e)
 
     async def _connect_mcp_server(self, server_name: str) -> bool:
         """Connect to a specific MCP server."""
@@ -160,7 +321,7 @@ class MCPIntegrationManager:
             return False
 
     async def call_mcp_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """Call an MCP tool by name."""
+        """Call an MCP tool by name with monitoring and retry logic."""
         if not self.is_mcp_available():
             return {
                 "success": False,
@@ -181,22 +342,87 @@ class MCPIntegrationManager:
                 "error": f"MCP server not connected: {server_name}"
             }
 
+        # Update request statistics
+        if server_name in self.connection_stats:
+            self.connection_stats[server_name]["total_requests"] += 1
+
+        start_time = time.time()
+
         try:
-            if tool_name in ["image_analysis", "video_analysis"]:
-                return await self._call_zai_mcp_tool(tool_name, parameters)
-            elif tool_name == "webSearchPrime":
-                return await self._call_web_search_tool(parameters)
-            else:
-                return {
-                    "success": False,
-                    "error": f"Unsupported tool: {tool_name}"
-                }
+            result = await self._call_mcp_tool_with_retry(tool_name, parameters, server_name)
+
+            # Update success statistics
+            end_time = time.time()
+            response_time = end_time - start_time
+
+            if server_name in self.connection_stats:
+                stats = self.connection_stats[server_name]
+                if result.get("success"):
+                    stats["successful_requests"] += 1
+                    stats["last_success"] = time.time()
+                    stats["status"] = "healthy"
+
+                # Update average response time
+                total_requests = stats["total_requests"]
+                current_avg = stats["avg_response_time"]
+                stats["avg_response_time"] = ((current_avg * (total_requests - 1)) + response_time) / total_requests
+
+            _LOGGER.debug("MCP tool %s completed in %.2fs", tool_name, response_time)
+            return result
+
         except Exception as e:
-            _LOGGER.error("Error calling MCP tool %s: %s", tool_name, e)
+            # Update failure statistics
+            end_time = time.time()
+            response_time = end_time - start_time
+
+            if server_name in self.connection_stats:
+                stats = self.connection_stats[server_name]
+                stats["last_failure"] = time.time()
+                stats["failure_count"] += 1
+                stats["status"] = "error"
+
+            _LOGGER.error("Error calling MCP tool %s after %.2fs: %s", tool_name, response_time, e)
             return {
                 "success": False,
-                "error": f"Error calling tool {tool_name}: {str(e)}"
+                "error": f"Error calling tool {tool_name}: {str(e)}",
+                "response_time": response_time
             }
+
+    async def _call_mcp_tool_with_retry(self, tool_name: str, parameters: Dict[str, Any], server_name: str) -> Dict[str, Any]:
+        """Call MCP tool with retry logic."""
+        last_error = None
+
+        for attempt in range(MAX_RETRY_ATTEMPTS):
+            try:
+                if tool_name in ["image_analysis", "video_analysis"]:
+                    return await self._call_zai_mcp_tool(tool_name, parameters)
+                elif tool_name == "webSearchPrime":
+                    return await self._call_web_search_tool(parameters)
+                else:
+                    return {
+                        "success": False,
+                        "error": f"Unsupported tool: {tool_name}"
+                    }
+
+            except Exception as e:
+                last_error = e
+                _LOGGER.warning("MCP tool %s attempt %d failed: %s", tool_name, attempt + 1, e)
+
+                if attempt < MAX_RETRY_ATTEMPTS - 1:
+                    # Check if we need to reconnect the server
+                    if "connection" in str(e).lower() or "timeout" in str(e).lower():
+                        _LOGGER.info("Connection issue detected, attempting to reconnect server: %s", server_name)
+                        await self._reconnect_server(server_name)
+
+                    # Exponential backoff
+                    delay = min(RETRY_DELAY_BASE * (2 ** attempt), MAX_RETRY_DELAY)
+                    await asyncio.sleep(delay)
+
+        # All attempts failed
+        return {
+            "success": False,
+            "error": f"Tool {tool_name} failed after {MAX_RETRY_ATTEMPTS} attempts: {str(last_error)}"
+        }
 
     def _get_server_for_tool(self, tool_name: str) -> Optional[str]:
         """Get the MCP server name that handles a specific tool."""
@@ -365,9 +591,19 @@ class MCPIntegrationManager:
             }
 
     async def disconnect_mcp_servers(self):
-        """Disconnect all MCP servers."""
-        _LOGGER.info("Disconnecting MCP servers")
-        
+        """Disconnect all MCP servers and cleanup monitoring."""
+        _LOGGER.info("Disconnecting MCP servers and stopping monitoring")
+
+        # Stop health monitoring
+        self._shutdown = True
+        if self.health_check_task and not self.health_check_task.done():
+            self.health_check_task.cancel()
+            try:
+                await self.health_check_task
+            except asyncio.CancelledError:
+                pass
+
+        # Disconnect all active connections
         for server_name, connection in self.active_connections.items():
             try:
                 if connection.get("type") == "http" and "session" in connection:
@@ -375,15 +611,50 @@ class MCPIntegrationManager:
                 _LOGGER.debug("Disconnected MCP server: %s", server_name)
             except Exception as e:
                 _LOGGER.error("Error disconnecting MCP server %s: %s", server_name, e)
-        
+
         self.active_connections.clear()
+        self.connection_stats.clear()
 
     def get_mcp_status(self) -> Dict[str, Any]:
-        """Get the status of MCP integration."""
+        """Get comprehensive status of MCP integration."""
+        total_requests = sum(stats.get("total_requests", 0) for stats in self.connection_stats.values())
+        successful_requests = sum(stats.get("successful_requests", 0) for stats in self.connection_stats.values())
+        success_rate = (successful_requests / total_requests * 100) if total_requests > 0 else 0
+
         return {
             "available": self.is_mcp_available(),
             "plan": self.plan,
             "enabled_servers": self.mcp_servers,
             "active_connections": list(self.active_connections.keys()),
-            "available_tools": self.get_available_mcp_tools()
+            "available_tools": self.get_available_mcp_tools(),
+            "total_requests": total_requests,
+            "successful_requests": successful_requests,
+            "success_rate": round(success_rate, 2),
+            "health_monitoring_active": self.health_check_task is not None and not self._shutdown,
+            "server_stats": self.connection_stats
         }
+
+    async def analyze_image(self, image_url: str, prompt: str = "Describe this image in detail for AI analysis") -> str:
+        """Analyze an image using MCP - simplified interface for AI Task entity."""
+        try:
+            result = await self.call_mcp_tool("image_analysis", {
+                "image_source": image_url,
+                "prompt": prompt
+            })
+
+            if result.get("success"):
+                analysis = result.get("result", {})
+                if isinstance(analysis, dict) and "description" in analysis:
+                    return analysis["description"]
+                elif isinstance(analysis, str):
+                    return analysis
+                else:
+                    return str(analysis)
+            else:
+                raise Exception(f"Image analysis failed: {result.get('error', 'Unknown error')}")
+
+        except Exception as e:
+            _LOGGER.error("Failed to analyze image: %s", e)
+            raise
+
+    
