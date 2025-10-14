@@ -21,8 +21,28 @@ from .const import (
 )
 from .debug_service import GLMAgentDebugService
 from .performance_monitor import GLMAgentPerformanceMonitor
+from .smart_templates import get_all_templates, get_template_by_id, search_templates
 from .structured_logger import get_logger, LogCategory, LogLevel
 from .security_manager import GLMAgentSecurityManager
+
+# Optional integrations
+try:
+    from .llm_integration import get_conversation_agent, async_get_api_response
+    LLM_INTEGRATION_AVAILABLE = True
+except ImportError:
+    LLM_INTEGRATION_AVAILABLE = False
+
+try:
+    from .ai_task_pipeline import setup_ai_task_integration, create_ai_task_pipeline
+    AI_TASK_PIPELINE_AVAILABLE = True
+except ImportError:
+    AI_TASK_PIPELINE_AVAILABLE = False
+
+try:
+    from .voice_pipeline import setup_voice_integration, create_voice_pipeline
+    VOICE_PIPELINE_AVAILABLE = True
+except ImportError:
+    VOICE_PIPELINE_AVAILABLE = False
 
 # Import config flow to ensure it's registered with Home Assistant
 from . import config_flow  # noqa: F401
@@ -47,6 +67,48 @@ SERVICE_SCHEMA = vol.Schema(
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the GLM Coding Plan Agent HA component."""
     return True
+
+
+async def _setup_pipeline_integrations(
+    hass: HomeAssistant, config_data: Dict[str, Any], entry: ConfigEntry
+) -> None:
+    """Set up LLM and AI Task pipeline integrations."""
+
+    # Set up AI Task pipeline integration
+    if AI_TASK_PIPELINE_AVAILABLE:
+        try:
+            success = await setup_ai_task_integration(hass, config_data)
+            if success:
+                _LOGGER.info("AI Task pipeline integration setup completed")
+            else:
+                _LOGGER.warning("AI Task pipeline integration setup failed")
+        except Exception as e:
+            _LOGGER.error("Error setting up AI Task pipeline: %s", e)
+
+    # Set up LLM integration (conversation agent)
+    if LLM_INTEGRATION_AVAILABLE:
+        try:
+            # This will make GLM available in the Assist pipeline
+            hass.data[DOMAIN]["conversation_agent"] = get_conversation_agent(
+                hass, config_data, entry.entry_id
+            )
+            hass.data[DOMAIN]["llm_api_handler"] = async_get_api_response
+            _LOGGER.info("LLM integration setup completed")
+        except Exception as e:
+            _LOGGER.error("Error setting up LLM integration: %s", e)
+
+    # Set up voice integration
+    if VOICE_PIPELINE_AVAILABLE:
+        try:
+            success = await setup_voice_integration(hass, config_data)
+            if success:
+                _LOGGER.info("Voice integration setup completed")
+            else:
+                _LOGGER.warning("Voice integration setup failed")
+        except Exception as e:
+            _LOGGER.error("Error setting up voice integration: %s", e)
+
+    _LOGGER.info("All pipeline integrations setup completed")
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -151,6 +213,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 _LOGGER.info("MCP integration initialized for plan: %s", config_data.get("plan"))
             except Exception as e:
                 _LOGGER.error("Failed to initialize MCP integration: %s", e)
+
+        # Set up pipeline integrations
+        await _setup_pipeline_integrations(hass, config_data, entry)
 
         # Log successful setup
         setup_duration_ms = (time.time() - setup_start_time) * 1000
@@ -811,6 +876,94 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.error(f"Error managing domains: {e}")
             return {"error": str(e)}
 
+    # Smart template service handlers
+    async def async_handle_get_templates(call):
+        """Handle the get_templates service call."""
+        try:
+            template_category = call.data.get("category")
+            template_id = call.data.get("template_id")
+            search_query = call.data.get("search")
+
+            if template_id:
+                # Get specific template
+                template = get_template_by_id(template_id)
+                result = {"template": template}
+            elif template_category:
+                # Get templates by category
+                from .smart_templates import get_templates_by_category
+                templates = get_templates_by_category(template_category)
+                result = {"category": template_category, "templates": templates}
+            elif search_query:
+                # Search templates
+                templates = search_templates(search_query)
+                result = {"query": search_query, "templates": templates}
+            else:
+                # Get all templates
+                result = get_all_templates()
+
+            if structured_logger:
+                structured_logger.info("Templates retrieved", LogCategory.SYSTEM,
+                                     category=template_category, template_id=template_id,
+                                     search_query=search_query)
+
+            return result
+        except Exception as e:
+            _LOGGER.error(f"Error getting templates: %s", e)
+            return {"error": str(e)}
+
+    async def async_handle_apply_template(call):
+        """Handle the apply_template service call."""
+        try:
+            # Check if agents are available
+            if DOMAIN not in hass.data or not hass.data[DOMAIN].get("agents"):
+                _LOGGER.error("No AI agents available for template application")
+                return {"error": "No AI agents configured"}
+
+            template_id = call.data.get("template_id")
+            if not template_id:
+                return {"error": "Template ID is required"}
+
+            # Get template details
+            template = get_template_by_id(template_id)
+            if not template:
+                return {"error": f"Template not found: {template_id}"}
+
+            # Get available provider
+            available_providers = list(hass.data[DOMAIN]["agents"].keys())
+            if not available_providers:
+                return {"error": "No AI agents available"}
+
+            provider = available_providers[0]
+            agent = hass.data[DOMAIN]["agents"][provider]
+
+            # Process the template with AI
+            result = await agent.process_query(
+                prompt=template.get("prompt", ""),
+                context={
+                    "template_name": template.get("name"),
+                    "template_category": template.get("category"),
+                    "template_complexity": template.get("complexity"),
+                    "requested_by": "template_service"
+                }
+            )
+
+            if structured_logger:
+                structured_logger.info("Template applied", LogCategory.AI_AGENT,
+                                     template_id=template_id, template_name=template.get("name"),
+                                     provider=provider, success=result.get("success", False))
+
+            return {
+                "template_id": template_id,
+                "template_name": template.get("name"),
+                "result": result,
+                "estimated_time": template.get("estimated_time"),
+                "complexity": template.get("complexity")
+            }
+
+        except Exception as e:
+            _LOGGER.error(f"Error applying template: %s", e)
+            return {"error": str(e)}
+
     # Register services
     hass.services.async_register(DOMAIN, "query", async_handle_query)
     hass.services.async_register(
@@ -854,11 +1007,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_register(DOMAIN, "security_block", async_handle_security_block)
     hass.services.async_register(DOMAIN, "security_domains", async_handle_security_domains)
 
+    # Register smart template services
+    hass.services.async_register(DOMAIN, "get_templates", async_handle_get_templates)
+    hass.services.async_register(DOMAIN, "apply_template", async_handle_apply_template)
+
     # Log successful service registration
     structured_logger = hass.data[DOMAIN].get("structured_logger")
     if structured_logger:
         structured_logger.info("All GLM Agent HA services registered successfully", LogCategory.SYSTEM,
-                             debug_services=5, performance_services=6, logging_services=2, security_services=4)
+                             debug_services=5, performance_services=6, logging_services=2, security_services=4, template_services=2)
 
     _LOGGER.debug("Debug, performance, logging, and security services registered successfully")
 

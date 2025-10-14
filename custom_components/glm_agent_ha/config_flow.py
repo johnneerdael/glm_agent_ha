@@ -31,23 +31,19 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-PROVIDERS = {
-    "openai": "GLM Coding Plan API",
+# Simplified since we only support one provider
+PROVIDER_NAME = "GLM Coding Plan API"
+TOKEN_FIELD = "openai_token"
+TOKEN_LABEL = "GLM Coding Plan API Key"
+
+# Available GLM models
+GLM_MODELS = {
+    "GLM-4.6": "GLM-4.6 (Latest, most capable)",
+    "GLM-4.5": "GLM-4.5 (Balanced performance)",
+    "GLM-4.5-air": "GLM-4.5-air (Fast)",
 }
 
-TOKEN_FIELD_NAMES = {
-    "openai": "openai_token",
-}
-
-TOKEN_LABELS = {
-    "openai": "GLM Coding Plan API Key",
-}
-
-DEFAULT_MODELS = {
-    "openai": "GLM-4.6",
-}
-
-DEFAULT_PROVIDER = "openai"
+DEFAULT_MODEL = "GLM-4.6"
 
 # Plan definitions
 PLANS = {
@@ -106,32 +102,33 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
         errors = {}
 
         if user_input is not None:
-            # Check if this provider is already configured
-            await self.async_set_unique_id(f"glm_agent_ha_{user_input['ai_provider']}")
+            # Set unique ID since we only have one provider
+            await self.async_set_unique_id("glm_agent_ha_openai")
             self._abort_if_unique_id_configured()
 
             self.config_data = {
-                "ai_provider": user_input["ai_provider"],
-                "plan": user_input.get("plan", DEFAULT_PLAN)
+                "plan": user_input.get("plan", DEFAULT_PLAN),
+                "model": user_input.get("model", DEFAULT_MODEL),
+                "ai_provider": "openai"  # Fixed provider
             }
             return await self.async_step_configure()
 
-        # Show provider and plan selection form
+        # Show plan and model selection form (no provider selection)
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required("ai_provider"): SelectSelector(
-                        SelectSelectorConfig(
-                            options=[
-                                {"value": k, "label": v} for k, v in PROVIDERS.items()
-                            ]
-                        )
-                    ),
                     vol.Required("plan", default=DEFAULT_PLAN): SelectSelector(
                         SelectSelectorConfig(
                             options=[
                                 {"value": k, "label": v} for k, v in PLANS.items()
+                            ]
+                        )
+                    ),
+                    vol.Required("model", default=DEFAULT_MODEL): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[
+                                {"value": k, "label": v} for k, v in GLM_MODELS.items()
                             ]
                         )
                     ),
@@ -142,39 +139,37 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
                     "Lite: Basic chat functionality\n"
                     "Pro: Chat + Image analysis + Web search\n"
                     "Max: All Pro features + Advanced capabilities"
+                ),
+                "model_descriptions": (
+                    "GLM-4.6: Latest model with best performance\n"
+                    "GLM-4.5: Balanced model for most tasks\n"
+                    "GLM-4.5-air: Fast responses for real-time applications"
                 )
             }
         )
 
     async def async_step_configure(self, user_input=None):
-        """Handle the configuration step for the selected provider."""
+        """Handle the API key configuration step."""
         errors = {}
-        provider = self.config_data["ai_provider"]
         plan = self.config_data.get("plan", DEFAULT_PLAN)
-        token_field = TOKEN_FIELD_NAMES[provider]
-        token_label = TOKEN_LABELS[provider]
-        default_model = DEFAULT_MODELS[provider]
-        # Use default model for the provider (simplified approach)
-        available_models = [default_model]
+        model = self.config_data.get("model", DEFAULT_MODEL)
         plan_capabilities = PLAN_CAPABILITIES.get(plan, {})
 
         if user_input is not None:
             try:
                 # Validate the token
-                token_value = user_input.get(token_field)
+                token_value = user_input.get(TOKEN_FIELD)
                 if not token_value:
-                    errors[token_field] = "required"
+                    errors[TOKEN_FIELD] = "required"
                 elif len(token_value.strip()) < 10:
-                    errors[token_field] = "invalid_api_key"
+                    errors[TOKEN_FIELD] = "invalid_api_key"
                 else:
                     # Store the configuration data
-                    self.config_data[token_field] = token_value
-
-                    # Use default model for the provider (simplified approach)
-                    self.config_data["models"] = {provider: default_model}
+                    self.config_data[TOKEN_FIELD] = token_value
+                    self.config_data["models"] = {"openai": model}
 
                     _LOGGER.debug(
-                        f"Config flow - Provider: {provider}, Plan: {plan}, Model: {default_model}"
+                        f"Config flow - Plan: {plan}, Model: {model}"
                     )
 
                     # Store plan capabilities
@@ -183,16 +178,16 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
                     self.config_data["features"] = plan_capabilities.get("features", [])
 
                     return self.async_create_entry(
-                        title=f"GLM Coding Plan Agent HA ({PROVIDERS[provider]} - {PLANS[plan]})",
+                        title=f"GLM Coding Plan Agent HA ({PLANS[plan]} - {model})",
                         data=self.config_data,
                     )
             except Exception as e:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception in config flow: %s", e)
                 errors["base"] = "unknown"
 
-        # Build schema for providers (simplified - just token)
+        # Build schema for API key
         schema_dict = {
-            vol.Required(token_field): TextSelector(
+            vol.Required(TOKEN_FIELD): TextSelector(
                 TextSelectorConfig(type="password")
             ),
         }
@@ -202,9 +197,10 @@ class AiAgentHaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ig
             data_schema=vol.Schema(schema_dict),
             errors=errors,
             description_placeholders={
-                "token_label": token_label,
-                "provider": PROVIDERS[provider],
+                "token_label": TOKEN_LABEL,
+                "provider": PROVIDER_NAME,
                 "plan": PLANS[plan],
+                "model": model,
                 "plan_features": ", ".join(plan_capabilities.get("features", [])),
                 "mcp_servers": ", ".join(plan_capabilities.get("mcp_servers", [])) or "None",
             },
@@ -224,14 +220,14 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
         self.options_data = {}
 
     async def async_step_init(self, user_input=None):
-        """Handle the initial options step - provider selection."""
-        current_provider = self.config_entry.data.get("ai_provider", DEFAULT_PROVIDER)
+        """Handle the initial options step - model selection."""
+        current_model = self.config_entry.data.get("models", {}).get("openai", DEFAULT_MODEL)
 
         if user_input is not None:
-            # Store selected provider and move to configure step
+            # Store selected model and move to configure step
             self.options_data = {
-                "ai_provider": user_input["ai_provider"],
-                "current_provider": current_provider,
+                "model": user_input["model"],
+                "current_model": current_model,
             }
             return await self.async_step_configure_options()
 
@@ -240,51 +236,43 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        "ai_provider", default=current_provider
+                        "model", default=current_model
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=[
-                                {"value": k, "label": v} for k, v in PROVIDERS.items()
+                                {"value": k, "label": v} for k, v in GLM_MODELS.items()
                             ]
                         )
                     ),
                 }
             ),
-            description_placeholders={"current_provider": PROVIDERS[current_provider]},
+            description_placeholders={"current_model": GLM_MODELS.get(current_model, current_model)},
         )
 
     async def async_step_configure_options(self, user_input=None):
-        """Handle the configuration step for the selected provider in options."""
+        """Handle the API key configuration step in options."""
         errors = {}
-        provider = self.options_data["ai_provider"]
-        current_provider = self.options_data["current_provider"]
-        token_field = TOKEN_FIELD_NAMES[provider]
-        token_label = TOKEN_LABELS[provider]
+        model = self.options_data["model"]
+        current_model = self.options_data["current_model"]
 
         # Get current configuration
-        current_token = self.config_entry.data.get(token_field, "")
-
-        # Use current token if provider hasn't changed, otherwise empty
-        display_token = current_token if provider == current_provider else ""
+        current_token = self.config_entry.data.get(TOKEN_FIELD, "")
 
         if user_input is not None:
             try:
-                token_value = user_input.get(token_field)
+                token_value = user_input.get(TOKEN_FIELD)
                 if not token_value:
-                    errors[token_field] = "required"
+                    errors[TOKEN_FIELD] = "required"
                 elif len(token_value.strip()) < 10:
-                    errors[token_field] = "invalid_api_key"
+                    errors[TOKEN_FIELD] = "invalid_api_key"
                 else:
                     # Prepare the updated configuration
                     updated_data = dict(self.config_entry.data)
-                    updated_data["ai_provider"] = provider
-                    updated_data[token_field] = token_value
-
-                    # Use default model for the provider (simplified approach)
-                    updated_data["models"] = {provider: DEFAULT_MODELS[provider]}
+                    updated_data[TOKEN_FIELD] = token_value
+                    updated_data["models"] = {"openai": model}
 
                     _LOGGER.debug(
-                        f"Options flow - Updated config for {provider} with default model: {DEFAULT_MODELS[provider]}"
+                        f"Options flow - Updated config with model: {model}"
                     )
 
                     # Update the config entry
@@ -297,9 +285,9 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
                 _LOGGER.exception("Unexpected exception in options flow: %s", e)
                 errors["base"] = "unknown"
 
-        # Build schema for providers (simplified - just token)
+        # Build schema for API key
         schema_dict = {
-            vol.Required(token_field, default=display_token): TextSelector(
+            vol.Required(TOKEN_FIELD, default=current_token): TextSelector(
                 TextSelectorConfig(type="password")
             ),
         }
@@ -309,8 +297,9 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
             data_schema=vol.Schema(schema_dict),
             errors=errors,
             description_placeholders={
-                "token_label": token_label,
-                "provider": PROVIDERS[provider],
+                "token_label": TOKEN_LABEL,
+                "provider": PROVIDER_NAME,
+                "model": GLM_MODELS.get(model, model),
             },
         )
 
