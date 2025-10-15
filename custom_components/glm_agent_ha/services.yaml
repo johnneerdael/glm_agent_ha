@@ -67,3 +67,25 @@ update_dashboard:
         select:
           options:
             - "openai"
+
+security_validate:
+  name: "Validate Input Security"
+  description: "Validate input data for security threats and sanitization."
+  fields:
+    input:
+      description: "The input data to validate for security threats."
+      example: "Turn on all the lights in the living room"
+      required: true
+    type:
+      description: "The type of input validation to perform."
+      example: "general"
+      default: "general"
+      selector:
+        select:
+          options:
+            - "general"
+            - "prompt"
+            - "filename"
+            - "url"
+            - "mcp_command"
+            - "api_key"

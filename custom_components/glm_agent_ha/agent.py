@@ -2115,7 +2115,7 @@ Then restart Home Assistant to see your new dashboard in the sidebar."""
             provider_config = {
                 "openai": {
                     "token_key": "openai_token",
-                    "model": models_config.get("openai", "gpt-3.5-turbo"),
+                    "model": model or models_config.get("openai", "GLM-4.6"),  # Use passed model or default to GLM-4.6
                     "client_class": OpenAIClient,
                 },
             }

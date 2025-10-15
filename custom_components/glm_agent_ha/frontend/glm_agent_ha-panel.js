@@ -32,42 +32,42 @@ const PLAN_FEATURES = {
 const SMART_PROMPTS = {
   basic: [
     {
-      text: "Show me my home's energy usage patterns",
-      icon: "mdi:chart-line",
-      tools: ["basic_query"],
-      description: "Analyze energy consumption across devices"
+      text: "🏠 Generate comprehensive home automation blueprint based on my devices",
+      icon: "mdi:home-analytics",
+      tools: ["basic_query", "automation_creation"],
+      description: "Analyze all devices and create complete automation strategy"
     },
     {
-      text: "Optimize my lighting automation",
-      icon: "mdi:lightbulb-auto",
-      tools: ["automation_creation", "basic_query"],
-      description: "Create intelligent lighting schedules"
+      text: "📊 Create custom energy monitoring dashboard with optimization alerts",
+      icon: "mdi:chart-box",
+      tools: ["basic_query", "dashboard_creation"],
+      description: "Build real-time energy tracking with intelligent suggestions"
     },
     {
-      text: "Review my security setup",
-      icon: "mdi:shield-check",
-      tools: ["basic_query", "security_analysis"],
-      description: "Check security sensors and coverage"
+      text: "🔒 Design whole-home security system with threat detection",
+      icon: "mdi:shield-home",
+      tools: ["basic_query", "automation_creation"],
+      description: "Create comprehensive security coverage with smart responses"
     }
   ],
   automation: [
     {
-      text: "Create adaptive routines based on my habits",
-      icon: "mdi:brain",
+      text: "🧠 Implement AI-powered presence simulation with learning algorithms",
+      icon: "mdi:brain-circuit",
       tools: ["automation_creation", "performance_monitoring"],
-      description: "AI learns from your usage patterns"
+      description: "Advanced occupancy simulation that adapts to your patterns"
     },
     {
-      text: "Build multi-room scene automations",
-      icon: "mdi:home-group",
+      text: "🌐 Build ecosystem integrations (HA ↔ Alexa ↔ Google ↔ SmartThings)",
+      icon: "mdi:link-variant",
       tools: ["automation_creation", "basic_query"],
-      description: "Coordinate devices across areas"
+      description: "Create seamless multi-platform automation orchestration"
     },
     {
-      text: "Energy optimization automations",
-      icon: "mdi:leaf",
+      text: "⚡ Design intelligent load shedding and backup power management",
+      icon: "mdi:lightning-bolt",
       tools: ["automation_creation", "performance_monitoring"],
-      description: "Reduce consumption intelligently"
+      description: "Automated power management with UPS/generator integration"
     }
   ],
   visual: [
@@ -698,19 +698,19 @@ class GLMAgentHaPanel extends LitElement {
         gap: 12px;
       }
 
-      .provider-selector {
+      .model-selector {
         display: flex;
         align-items: center;
         gap: 6px;
       }
 
-      .provider-label {
+      .model-label {
         font-size: 12px;
         color: var(--secondary-text-color);
         white-space: nowrap;
       }
 
-      .provider-button {
+      .model-button {
         display: flex;
         align-items: center;
         gap: 4px;
@@ -726,7 +726,7 @@ class GLMAgentHaPanel extends LitElement {
         min-width: 120px;
       }
 
-      .provider-button:hover {
+      .model-button:hover {
         background-color: var(--primary-background-color);
         border-color: var(--primary-color);
       }
@@ -1590,27 +1590,10 @@ class GLMAgentHaPanel extends LitElement {
 
             <div class="input-footer">
               <div class="input-controls">
-                <div class="provider-selector">
-                  <span class="provider-label">Provider:</span>
+                <div class="model-selector">
+                  <span class="model-label">Model:</span>
                   <select
-                    class="provider-button"
-                    @change=${(e) => this._selectProvider(e.target.value)}
-                    .value=${this._selectedProvider || ''}
-                  >
-                    ${this._availableProviders.map(provider => html`
-                      <option
-                        value=${provider.value}
-                        ?selected=${provider.value === this._selectedProvider}
-                      >
-                        ${provider.label}
-                      </option>
-                    `)}
-                  </select>
-                </div>
-                <div class="provider-selector">
-                  <span class="provider-label">Model:</span>
-                  <select
-                    class="provider-button"
+                    class="model-button"
                     @change=${this._selectModel}
                     .value=${this._selectedModel}
                   >
@@ -1624,7 +1607,7 @@ class GLMAgentHaPanel extends LitElement {
               </div>
 
               <button class="send-button" @click=${this._sendMessage}
-                      ?disabled=${this._isLoading || !this._hasProviders()}>
+                      ?disabled=${this._isLoading}>
                 <ha-icon icon="mdi:send"></ha-icon>
                 Send
               </button>
@@ -1850,7 +1833,7 @@ class GLMAgentHaPanel extends LitElement {
 
       const serviceData = {
         prompt: prompt,
-        provider: this._selectedProvider,
+        provider: "openai",  // Fixed provider since only one is supported
         model: this._selectedModel
       };
 

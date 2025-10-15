@@ -220,19 +220,59 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
         self.options_data = {}
 
     async def async_step_init(self, user_input=None):
-        """Handle the initial options step - model selection."""
-        current_model = self.config_entry.data.get("models", {}).get("openai", DEFAULT_MODEL)
-
+        """Handle the initial options step - choose what to configure."""
         if user_input is not None:
-            # Store selected model and move to configure step
-            self.options_data = {
-                "model": user_input["model"],
-                "current_model": current_model,
-            }
-            return await self.async_step_configure_options()
+            action = user_input["action"]
+            if action == "model":
+                return await self.async_step_model()
+            elif action == "api_key":
+                return await self.async_step_api_key()
+            elif action == "advanced":
+                return await self.async_step_advanced()
 
         return self.async_show_form(
             step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("action", default="model"): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[
+                                {"value": "model", "label": "Change AI Model"},
+                                {"value": "api_key", "label": "Update API Key"},
+                                {"value": "advanced", "label": "Advanced Settings"},
+                            ]
+                        )
+                    ),
+                }
+            ),
+            description_placeholders={
+                "current_model": GLM_MODELS.get(
+                    self.config_entry.data.get("models", {}).get("openai", DEFAULT_MODEL),
+                    self.config_entry.data.get("models", {}).get("openai", DEFAULT_MODEL)
+                )
+            },
+        )
+
+    async def async_step_model(self, user_input=None):
+        """Handle model selection step."""
+        current_model = self.config_entry.data.get("models", {}).get("openai", DEFAULT_MODEL)
+
+        if user_input is not None:
+            # Prepare the updated configuration
+            updated_data = dict(self.config_entry.data)
+            updated_data["models"] = {"openai": user_input["model"]}
+
+            _LOGGER.debug(f"Options flow - Updated model to: {user_input['model']}")
+
+            # Update the config entry
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=updated_data
+            )
+
+            return self.async_create_entry(title="", data={})
+
+        return self.async_show_form(
+            step_id="model",
             data_schema=vol.Schema(
                 {
                     vol.Required(
@@ -246,8 +286,67 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
                     ),
                 }
             ),
-            description_placeholders={"current_model": GLM_MODELS.get(current_model, current_model)},
+            description_placeholders={
+                "current_model": GLM_MODELS.get(current_model, current_model),
+                "model_descriptions": (
+                    "GLM-4.6: Latest model with best performance\n"
+                    "GLM-4.5: Balanced model for most tasks\n"
+                    "GLM-4.5-air: Fast responses for real-time applications"
+                )
+            },
         )
+
+    async def async_step_api_key(self, user_input=None):
+        """Handle API key update step."""
+        current_model = self.config_entry.data.get("models", {}).get("openai", DEFAULT_MODEL)
+        current_token = self.config_entry.data.get(TOKEN_FIELD, "")
+
+        if user_input is not None:
+            try:
+                token_value = user_input.get(TOKEN_FIELD)
+                if not token_value:
+                    errors = {"api_key": "required"}
+                elif len(token_value.strip()) < 10:
+                    errors = {"api_key": "invalid_api_key"}
+                else:
+                    # Prepare the updated configuration
+                    updated_data = dict(self.config_entry.data)
+                    updated_data[TOKEN_FIELD] = token_value
+
+                    _LOGGER.debug("Options flow - Updated API key")
+
+                    # Update the config entry
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry, data=updated_data
+                    )
+
+                    return self.async_create_entry(title="", data={})
+            except Exception as e:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception in options flow: %s", e)
+                errors = {"base": "unknown"}
+
+        # Build schema for API key
+        schema_dict = {
+            vol.Required(TOKEN_FIELD, default=current_token): TextSelector(
+                TextSelectorConfig(type="password")
+            ),
+        }
+
+        return self.async_show_form(
+            step_id="api_key",
+            data_schema=vol.Schema(schema_dict),
+            errors=errors if 'errors' in locals() else {},
+            description_placeholders={
+                "token_label": TOKEN_LABEL,
+                "provider": PROVIDER_NAME,
+                "model": GLM_MODELS.get(current_model, current_model),
+            },
+        )
+
+    async def async_step_advanced(self, user_input=None):
+        """Handle advanced settings step."""
+        # Forward to the existing advanced options method
+        return await self.async_step_advanced_options(user_input)
 
     async def async_step_configure_options(self, user_input=None):
         """Handle the API key configuration step in options."""
