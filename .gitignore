@@ -149,4 +149,4 @@ CLAUDE.md
 .claude/*
 
 # MCP configuration
-.mcp.json
+.mcp.json.worktrees
