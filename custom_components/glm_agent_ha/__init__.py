@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from datetime import datetime
@@ -156,6 +157,19 @@ async def async_register_static_route_with_validation(
     Returns True if route was registered successfully, False otherwise.
     """
     try:
+        # Validate HTTP component is ready
+        if hass.http is None:
+            _LOGGER.error("HTTP component not available for static route registration")
+            return False
+
+        if hass.http.app is None:
+            _LOGGER.error("HTTP app not initialized for static route registration")
+            return False
+
+        if hass.http.app.router is None:
+            _LOGGER.error("HTTP router not available for static route registration")
+            return False
+
         # Validate file path exists
         import os
         if not os.path.exists(file_path):
@@ -168,21 +182,40 @@ async def async_register_static_route_with_validation(
             _LOGGER.warning("Static route %s already registered, reusing existing route", url_path)
             return True
 
-        # Create route info
-        route_info = SimpleNamespace(
-            url_path=url_path,
-            path=file_path,
-            cache_headers=cache_headers,
-            registered_at=time.time()
-        )
+        # Create route configuration using StaticPathConfig for newer HA versions
+        try:
+            from homeassistant.components.http import StaticPathConfig
+            route_config = StaticPathConfig(
+                url_path=url_path,
+                path=file_path,
+                cache_headers=cache_headers
+            )
+            _LOGGER.debug("Using StaticPathConfig for HTTP route registration")
+        except ImportError:
+            # Fallback to SimpleNamespace for older HA versions
+            route_config = SimpleNamespace(
+                url_path=url_path,
+                path=file_path,
+                cache_headers=cache_headers,
+                registered_at=time.time()
+            )
+            _LOGGER.debug("Using SimpleNamespace fallback for HTTP route registration")
+        except Exception as e:
+            _LOGGER.warning("Error creating StaticPathConfig, falling back to SimpleNamespace: %s", e)
+            route_config = SimpleNamespace(
+                url_path=url_path,
+                path=file_path,
+                cache_headers=cache_headers,
+                registered_at=time.time()
+            )
 
         # Register in our registry first
-        if not registry.register_route(url_path, route_info):
+        if not registry.register_route(url_path, route_config):
             return False
 
         # Register with Home Assistant
         try:
-            await hass.http.async_register_static_paths([route_info])
+            await hass.http.async_register_static_paths([route_config])
             _LOGGER.info("Successfully registered static route: %s -> %s", url_path, file_path)
             return True
         except Exception as e:
@@ -344,7 +377,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         structured_logger = get_logger(hass, DOMAIN)
         hass.data[DOMAIN]["structured_logger"] = structured_logger
         structured_logger.info("GLM Agent HA integration setup started", LogCategory.SYSTEM,
-                             version="1.10.6", config_entry_id=entry.entry_id, setup_start_time=setup_start_time)
+                             version="1.11.1", config_entry_id=entry.entry_id, setup_start_time=setup_start_time)
 
         # Initialize debug service
         debug_service = GLMAgentDebugService(hass)
@@ -1207,16 +1240,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _LOGGER.debug("Debug, performance, logging, and security services registered successfully")
 
-    # Register static path for frontend with validation and deduplication
-    static_route_success = await async_register_static_route_with_validation(
-        hass,
-        "/frontend/glm_agent_ha/glm_agent_ha-panel.js",
-        hass.config.path("custom_components/glm_agent_ha/frontend/glm_agent_ha-panel.js"),
-        cache_headers=False,
-    )
+    # Register static path for frontend with validation, deduplication, and retry logic
+    static_route_success = False
+    max_retries = 3
+    retry_delay = 1  # seconds
+
+    for attempt in range(max_retries):
+        static_route_success = await async_register_static_route_with_validation(
+            hass,
+            "/frontend/glm_agent_ha/glm_agent_ha-panel.js",
+            hass.config.path("custom_components/glm_agent_ha/frontend/glm_agent_ha-panel.js"),
+            cache_headers=False,
+        )
+
+        if static_route_success:
+            break
+
+        if attempt < max_retries - 1:
+            _LOGGER.warning("HTTP registration attempt %d failed, retrying in %d seconds",
+                          attempt + 1, retry_delay)
+            await asyncio.sleep(retry_delay)
+            retry_delay *= 2  # Exponential backoff
 
     if not static_route_success:
-        _LOGGER.warning("Failed to register static route for frontend panel - dashboard features may be unavailable")
+        _LOGGER.warning("Failed to register static route for frontend panel after %d attempts - dashboard features may be unavailable", max_retries)
 
     # Panel registration with proper error handling
     panel_name = "glm_agent_ha"
