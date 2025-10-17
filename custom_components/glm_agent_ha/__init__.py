@@ -306,6 +306,15 @@ async def _setup_pipeline_integrations(
         conversation_success = await async_setup_conversation(hass, config_data)
         if conversation_success:
             _LOGGER.info("Conversation platform setup completed")
+            # Also register directly with Home Assistant's conversation component if available
+            if hasattr(hass.components, 'conversation'):
+                try:
+                    from .llm_integration import GLMConversationAgent
+                    agent = GLMConversationAgent(hass, config_data, entry.entry_id)
+                    hass.components.conversation.async_set_agent(DOMAIN, agent)
+                    _LOGGER.info("Conversation agent registered with Home Assistant")
+                except Exception as e:
+                    _LOGGER.warning("Failed to register conversation agent with HA: %s", e)
         else:
             _LOGGER.debug("Conversation platform not available")
     except ImportError:
@@ -319,6 +328,11 @@ async def _setup_pipeline_integrations(
         ai_task_success = await async_setup_ai_task_entity(hass, config_data, entry)
         if ai_task_success:
             _LOGGER.info("AI Task platform setup completed")
+            # Verify entity was created by checking hass.data
+            if hasattr(hass, 'data') and 'entity_platform' in hass.data:
+                platform_data = hass.data.get('entity_platform', {})
+                ai_task_entities = platform_data.get('ai_task', {}).get('glm_agent_ha', [])
+                _LOGGER.info("AI Task entities created: %d", len(ai_task_entities))
         else:
             _LOGGER.debug("AI Task platform not available")
     except ImportError:
@@ -1240,30 +1254,53 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _LOGGER.debug("Debug, performance, logging, and security services registered successfully")
 
-    # Register static path for frontend with validation, deduplication, and retry logic
+    # Register static path for frontend with improved error handling and HTTP component validation
     static_route_success = False
-    max_retries = 3
-    retry_delay = 1  # seconds
+    max_retries = 5
+    retry_delay = 2  # seconds
 
     for attempt in range(max_retries):
-        static_route_success = await async_register_static_route_with_validation(
-            hass,
-            "/frontend/glm_agent_ha/glm_agent_ha-panel.js",
-            hass.config.path("custom_components/glm_agent_ha/frontend/glm_agent_ha-panel.js"),
-            cache_headers=False,
-        )
+        try:
+            # Validate HTTP component is ready before attempting registration
+            if not hasattr(hass, 'http') or hass.http is None:
+                _LOGGER.warning("HTTP component not available on attempt %d, retrying...", attempt + 1)
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 1.5, 10)  # Cap at 10 seconds
+                continue
 
-        if static_route_success:
-            break
+            if not hasattr(hass.http, 'app') or hass.http.app is None:
+                _LOGGER.warning("HTTP app not initialized on attempt %d, retrying...", attempt + 1)
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 1.5, 10)
+                continue
 
-        if attempt < max_retries - 1:
-            _LOGGER.warning("HTTP registration attempt %d failed, retrying in %d seconds",
-                          attempt + 1, retry_delay)
-            await asyncio.sleep(retry_delay)
-            retry_delay *= 2  # Exponential backoff
+            if not hasattr(hass.http.app, 'router') or hass.http.app.router is None:
+                _LOGGER.warning("HTTP router not available on attempt %d, retrying...", attempt + 1)
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 1.5, 10)
+                continue
+
+            # Attempt registration with validated HTTP component
+            static_route_success = await async_register_static_route_with_validation(
+                hass,
+                "/frontend/glm_agent_ha/glm_agent_ha-panel.js",
+                hass.config.path("custom_components/glm_agent_ha/frontend/glm_agent_ha-panel.js"),
+                cache_headers=False,
+            )
+
+            if static_route_success:
+                _LOGGER.info("Successfully registered static route for GLM Agent HA panel")
+                break
+
+        except Exception as e:
+            _LOGGER.error("HTTP registration attempt %d failed with error: %s", attempt + 1, e)
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 15)  # Exponential backoff, cap at 15 seconds
 
     if not static_route_success:
-        _LOGGER.warning("Failed to register static route for frontend panel after %d attempts - dashboard features may be unavailable", max_retries)
+        _LOGGER.error("Failed to register static route for frontend panel after %d attempts - dashboard features will be unavailable", max_retries)
+        # Continue with setup but log the failure prominently
 
     # Panel registration with proper error handling
     panel_name = "glm_agent_ha"

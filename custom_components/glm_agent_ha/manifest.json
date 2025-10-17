@@ -26,6 +26,6 @@
         "openai~=1.55.0",
         "fastmcp>=0.1.0"
     ],
-    "version": "1.11.2",
+    "version": "1.11.3",
     "frontend_module_url": "/frontend/glm_agent_ha/glm_agent_ha-panel.js"
 }

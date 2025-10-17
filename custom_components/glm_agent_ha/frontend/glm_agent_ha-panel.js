@@ -1,37 +1,86 @@
-// Error handling for dashboard initialization
-try {
-  import {
-    LitElement,
-    html,
-    css,
-  } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
-} catch (error) {
-  console.error("Failed to load lit-element dependency:", error);
-  // Fallback loading with alternative CDN
-  try {
-    import {
-      LitElement,
-      html,
-      css,
-    } from "https://cdn.skypack.dev/lit-element@2.4.0";
-  } catch (fallbackError) {
-    console.error("Failed to load lit-element from fallback CDN:", fallbackError);
-    // Display error message to user
+// GLM Agent HA Modern Panel - Safe initialization with fallback loading
+console.log("GLM Agent HA Modern Panel loading...");
+
+// Load LitElement safely with proper error handling
+(function() {
+  let loadAttempts = 0;
+  const maxAttempts = 2;
+
+  function loadLitElement(source) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.type = 'module';
+
+      if (source === 'primary') {
+        script.textContent = `
+          import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
+          window.GLM_LitElement = LitElement;
+          window.GLM_html = html;
+          window.GLM_css = css;
+          console.log("LitElement loaded from primary CDN");
+        `;
+      } else {
+        script.textContent = `
+          import { LitElement, html, css } from "https://cdn.skypack.dev/lit-element@2.4.0";
+          window.GLM_LitElement = LitElement;
+          window.GLM_html = html;
+          window.GLM_css = css;
+          console.log("LitElement loaded from fallback CDN");
+        `;
+      }
+
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+
+  async function initializePanel() {
+    try {
+      await loadLitElement('primary');
+      setupPanel();
+    } catch (primaryError) {
+      console.warn("Failed to load from primary CDN, trying fallback:", primaryError);
+      try {
+        await loadLitElement('fallback');
+        setupPanel();
+      } catch (fallbackError) {
+        console.error("Failed to load LitElement from all sources:", fallbackError);
+        showErrorScreen();
+      }
+    }
+  }
+
+  function showErrorScreen() {
     document.body.innerHTML = `
-      <div style="padding: 20px; font-family: Arial, sans-serif; color: #333;">
+      <div style="padding: 20px; font-family: Arial, sans-serif; color: #333; text-align: center; max-width: 500px; margin: 50px auto;">
         <h2>GLM Agent HA Dashboard Loading Error</h2>
         <p>Unable to load dashboard components due to network issues.</p>
         <p>Please try refreshing the page or check your internet connection.</p>
-        <button onclick="window.location.reload()" style="padding: 10px 20px; background: #03a9f4; color: white; border: none; border-radius: 4px; cursor: pointer;">
+        <button onclick="window.location.reload()" style="padding: 10px 20px; background: #03a9f4; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;">
           Refresh Page
         </button>
+        <p style="font-size: 12px; color: #666; margin-top: 20px;">If the problem persists, please check your browser's JavaScript console for more details.</p>
       </div>
     `;
-    throw new Error("Dashboard initialization failed - unable to load required dependencies");
   }
-}
 
-console.log("GLM Agent HA Modern Panel loading...");
+  function setupPanel() {
+    // Wait a brief moment for globals to be available
+    setTimeout(() => {
+      if (window.GLM_LitElement && window.GLM_html && window.GLM_css) {
+        console.log("All dependencies loaded, setting up panel...");
+        // The panel class definition will be loaded below
+      } else {
+        console.error("Dependencies not available after loading");
+        showErrorScreen();
+      }
+    }, 100);
+  }
+
+  // Start the initialization process
+  initializePanel();
+})();
 
 const PROVIDERS = {
   openai: "GLM Coding Plan OpenAI",
@@ -183,7 +232,8 @@ const SMART_PROMPTS = {
   ]
 };
 
-class GLMAgentHaPanel extends LitElement {
+// Define the panel class using the loaded dependencies
+class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
   static get properties() {
     return {
       hass: { type: Object, reflect: false, attribute: false },
@@ -211,7 +261,7 @@ class GLMAgentHaPanel extends LitElement {
   }
 
   static get styles() {
-    return css`
+    return (window.GLM_css || function() { return ''; })`
       :host {
         background: var(--primary-background-color);
         -webkit-font-smoothing: antialiased;
@@ -1272,7 +1322,7 @@ class GLMAgentHaPanel extends LitElement {
       PLAN_FEATURES[this._userPlan]?.smartCategories.includes(cat)
     );
 
-    return html`
+    return (window.GLM_html || function() { return ''; })`
       <div class="prompts-section">
         <div class="prompts-header">
           <div class="prompts-title">
@@ -1284,7 +1334,7 @@ class GLMAgentHaPanel extends LitElement {
               <ha-icon icon="${this._showPredefinedPrompts ? 'mdi:chevron-up' : 'mdi:chevron-down'}"></ha-icon>
               <span>Actions</span>
             </div>
-            ${this._promptHistory.length > 0 ? html`
+            ${this._promptHistory.length > 0 ? (window.GLM_html || function() { return ''; })`
               <div class="prompts-toggle" @click=${() => this._togglePromptHistory()}>
                 <ha-icon icon="${this._showPromptHistory ? 'mdi:chevron-up' : 'mdi:chevron-down'}"></ha-icon>
                 <span>Recent</span>
@@ -1293,9 +1343,9 @@ class GLMAgentHaPanel extends LitElement {
           </div>
         </div>
 
-        ${this._showPredefinedPrompts ? html`
+        ${this._showPredefinedPrompts ? (window.GLM_html || function() { return ''; })`
           <div class="prompts-categories">
-            ${categories.map(category => html`
+            ${categories.map(category => (window.GLM_html || function() { return ''; })`
               <div class="category-tab ${this._activeCategory === category ? 'active' : ''}"
                    @click=${() => this._selectCategory(category)}>
                 <ha-icon icon="mdi:${this._getCategoryIcon(category)}"></ha-icon>
@@ -1305,7 +1355,7 @@ class GLMAgentHaPanel extends LitElement {
           </div>
 
           <div class="prompt-bubbles">
-            ${this._selectedPrompts.map(prompt => html`
+            ${this._selectedPrompts.map(prompt => (window.GLM_html || function() { return ''; })`
               <div class="smart-prompt" @click=${() => this._useSmartPrompt(prompt)}>
                 <div class="smart-prompt-content">
                   <ha-icon class="smart-prompt-icon" icon="${prompt.icon}"></ha-icon>
@@ -1314,7 +1364,7 @@ class GLMAgentHaPanel extends LitElement {
                     <div class="smart-prompt-description">${prompt.description}</div>
                   </div>
                 </div>
-                ${prompt.requiresUpload ? html`
+                ${prompt.requiresUpload ? (window.GLM_html || function() { return ''; })`
                   <div class="smart-prompt-upload-indicator">
                     <ha-icon icon="mdi:upload"></ha-icon>
                   </div>
@@ -1324,9 +1374,9 @@ class GLMAgentHaPanel extends LitElement {
           </div>
         ` : ''}
 
-        ${this._showPromptHistory && this._promptHistory.length > 0 ? html`
+        ${this._showPromptHistory && this._promptHistory.length > 0 ? (window.GLM_html || function() { return ''; })`
           <div class="prompt-bubbles">
-            ${this._promptHistory.slice(-3).reverse().map((prompt, index) => html`
+            ${this._promptHistory.slice(-3).reverse().map((prompt, index) => (window.GLM_html || function() { return ''; })`
               <div class="history-bubble" @click=${(e) => this._useHistoryPrompt(e, prompt)}>
                 <span style="flex-grow: 1; overflow: hidden; text-overflow: ellipsis;">${prompt}</span>
                 <ha-icon
@@ -1469,8 +1519,8 @@ class GLMAgentHaPanel extends LitElement {
 
     if (!canUpload) return '';
 
-    return html`
-      ${!this._uploadedFile ? html`
+    return (window.GLM_html || function() { return ''; })`
+      ${!this._uploadedFile ? (window.GLM_html || function() { return ''; })`
         <div class="upload-area ${this._dragActive ? 'drag-active' : ''}"
              @dragover=${this._handleDragOver}
              @dragleave=${this._handleDragLeave}
@@ -1491,7 +1541,7 @@ class GLMAgentHaPanel extends LitElement {
                    @change=${this._handleFileChange}>
           </div>
         </div>
-      ` : html`
+      ` : (window.GLM_html || function() { return ''; })`
         <div class="file-preview">
           <ha-icon icon="mdi:file-image"></ha-icon>
           <div class="file-preview-info">
@@ -1583,7 +1633,7 @@ class GLMAgentHaPanel extends LitElement {
 
       // Error state fallback UI
       if (this._error && !this.hass) {
-        return html`
+        return (window.GLM_html || function() { return ''; })`
           <div style="padding: 20px; font-family: Arial, sans-serif; color: #333; text-align: center;">
             <h2>GLM Agent HA Dashboard Error</h2>
             <p>${this._error}</p>
@@ -1594,7 +1644,7 @@ class GLMAgentHaPanel extends LitElement {
         `;
       }
 
-      return html`
+      return (window.GLM_html || function() { return ''; })`
       <div class="header">
         <div class="header-title">
           <ha-icon icon="mdi:robot"></ha-icon>
@@ -1606,7 +1656,7 @@ class GLMAgentHaPanel extends LitElement {
           </div>
         </div>
         <div class="header-actions">
-          ${(this._userPlan === 'pro' || this._userPlan === 'max') ? html`
+          ${(this._userPlan === 'pro' || this._userPlan === 'max') ? (window.GLM_html || function() { return ''; })`
             <button class="icon-button" @click=${this._toggleAdvancedDashboard}
                     title="Advanced Dashboard">
               <ha-icon icon="mdi:chart-box"></ha-icon>
@@ -1622,10 +1672,10 @@ class GLMAgentHaPanel extends LitElement {
       <div class="content">
         <div class="chat-container">
           <div class="messages" id="messages">
-            ${this._messages.map(msg => html`
+            ${this._messages.map(msg => (window.GLM_html || function() { return ''; })`
               <div class="message ${msg.type}-message">
                 ${msg.text}
-                ${msg.attachment ? html`
+                ${msg.attachment ? (window.GLM_html || function() { return ''; })`
                   <div class="message-attachment">
                     <ha-icon icon="mdi:file-image"></ha-icon>
                     <span>${msg.attachment.name}</span>
@@ -1636,7 +1686,7 @@ class GLMAgentHaPanel extends LitElement {
               </div>
             `)}
             ${this._isLoading ? this._renderLoadingIndicator() : ''}
-            ${this._error ? html`<div class="error">${this._error}</div>` : ''}
+            ${this._error ? (window.GLM_html || function() { return ''; })`<div class="error">${this._error}</div>` : ''}
           </div>
 
           ${this._renderUploadArea()}
@@ -1664,7 +1714,7 @@ class GLMAgentHaPanel extends LitElement {
                     @change=${this._selectModel}
                     .value=${this._selectedModel}
                   >
-                    ${this._models.map(model => html`
+                    ${this._models.map(model => (window.GLM_html || function() { return ''; })`
                       <option value=${model} ?selected=${model === this._selectedModel}>
                         ${model}
                       </option>
@@ -1688,7 +1738,7 @@ class GLMAgentHaPanel extends LitElement {
     } catch (error) {
       console.error("Error in render method:", error);
       // Fallback minimal UI
-      return html`
+      return (window.GLM_html || function() { return ''; })`
         <div style="padding: 20px; font-family: Arial, sans-serif; color: #333;">
           <h2>GLM Agent HA Dashboard</h2>
           <p>A rendering error occurred. Basic functionality is still available.</p>
@@ -1709,7 +1759,7 @@ class GLMAgentHaPanel extends LitElement {
   }
 
   _renderLoadingIndicator() {
-    return html`
+    return (window.GLM_html || function() { return ''; })`
       <div class="loading">
         <span>AI Agent is thinking</span>
         <div class="loading-dots">
@@ -1722,7 +1772,7 @@ class GLMAgentHaPanel extends LitElement {
   }
 
   _renderAutomationSuggestion(automation) {
-    return html`
+    return (window.GLM_html || function() { return ''; })`
       <div class="automation-suggestion">
         <div class="automation-title">${automation.alias}</div>
         <div class="automation-description">${automation.description}</div>
@@ -1742,7 +1792,7 @@ class GLMAgentHaPanel extends LitElement {
   }
 
   _renderDashboardSuggestion(dashboard) {
-    return html`
+    return (window.GLM_html || function() { return ''; })`
       <div class="dashboard-suggestion">
         <div class="dashboard-title">${dashboard.title}</div>
         <div class="dashboard-description">Dashboard with ${dashboard.views ? dashboard.views.length : 0} view(s)</div>
@@ -1764,7 +1814,7 @@ class GLMAgentHaPanel extends LitElement {
   _renderAdvancedDashboard() {
     if (this._userPlan === 'lite') return '';
 
-    return html`
+    return (window.GLM_html || function() { return ''; })`
       <div class="advanced-dashboard ${this._showAdvancedDashboard ? 'open' : ''}">
         <div class="dashboard-header">
           <div class="dashboard-title">Advanced Dashboard</div>
@@ -1773,13 +1823,13 @@ class GLMAgentHaPanel extends LitElement {
           </button>
         </div>
         <div class="dashboard-content">
-          ${this._userPlan === 'pro' || this._userPlan === 'max' ? html`
+          ${this._userPlan === 'pro' || this._userPlan === 'max' ? (window.GLM_html || function() { return ''; })`
             <div class="dashboard-section">
               <div class="dashboard-section-title">
                 <ha-icon icon="mdi:pulse"></ha-icon>
                 Performance Metrics
               </div>
-              ${this._performanceMetrics ? html`
+              ${this._performanceMetrics ? (window.GLM_html || function() { return ''; })`
                 <div class="dashboard-metric">
                   <span class="dashboard-metric-label">Total Requests</span>
                   <span class="dashboard-metric-value">${this._performanceMetrics.total_requests || 0}</span>
@@ -1792,7 +1842,7 @@ class GLMAgentHaPanel extends LitElement {
                   <span class="dashboard-metric-label">Success Rate</span>
                   <span class="dashboard-metric-value">${this._performanceMetrics.success_rate || 0}%</span>
                 </div>
-              ` : html`
+              ` : (window.GLM_html || function() { return ''; })`
                 <div class="dashboard-metric">
                   <span class="dashboard-metric-label">Loading...</span>
                 </div>
@@ -1800,13 +1850,13 @@ class GLMAgentHaPanel extends LitElement {
             </div>
           ` : ''}
 
-          ${this._userPlan === 'max' ? html`
+          ${this._userPlan === 'max' ? (window.GLM_html || function() { return ''; })`
             <div class="dashboard-section">
               <div class="dashboard-section-title">
                 <ha-icon icon="mdi:shield"></ha-icon>
                 Security Report
               </div>
-              ${this._securityReport ? html`
+              ${this._securityReport ? (window.GLM_html || function() { return ''; })`
                 <div class="dashboard-metric">
                   <span class="dashboard-metric-label">Security Events</span>
                   <span class="dashboard-metric-value">${this._securityReport.total_events || 0}</span>
@@ -1819,7 +1869,7 @@ class GLMAgentHaPanel extends LitElement {
                   <span class="dashboard-metric-label">Blocked IPs</span>
                   <span class="dashboard-metric-value">${this._securityReport.blocked_ips?.length || 0}</span>
                 </div>
-              ` : html`
+              ` : (window.GLM_html || function() { return ''; })`
                 <div class="dashboard-metric">
                   <span class="dashboard-metric-label">Loading...</span>
                 </div>
@@ -2153,28 +2203,28 @@ class GLMAgentHaPanel extends LitElement {
   }
 
   disconnectedCallback() {
-  try {
-    super.disconnectedCallback();
-    console.debug("GLM Agent HA Modern Panel disconnected");
+    try {
+      super.disconnectedCallback();
+      console.debug("GLM Agent HA Modern Panel disconnected");
 
-    // Clear any timeouts
-    if (this._serviceCallTimeout) {
-      clearTimeout(this._serviceCallTimeout);
-      this._serviceCallTimeout = null;
+      // Clear any timeouts
+      if (this._serviceCallTimeout) {
+        clearTimeout(this._serviceCallTimeout);
+        this._serviceCallTimeout = null;
+      }
+
+      // Remove event listeners
+      document.removeEventListener('click', this._handleDocumentClick);
+
+      // Reset state
+      this._eventSubscriptionSetup = false;
+      this.providersLoaded = false;
+
+      console.debug("GLM Agent HA Panel cleanup completed");
+    } catch (error) {
+      console.error("Error in disconnectedCallback:", error);
     }
-
-    // Remove event listeners
-    document.removeEventListener('click', this._handleDocumentClick);
-
-    // Reset state
-    this._eventSubscriptionSetup = false;
-    this.providersLoaded = false;
-
-    console.debug("GLM Agent HA Panel cleanup completed");
-  } catch (error) {
-    console.error("Error in disconnectedCallback:", error);
   }
-}
 
   _handleDocumentClick = (e) => {
     if (!this.shadowRoot.querySelector('.provider-selector')?.contains(e.target)) {
@@ -2183,6 +2233,20 @@ class GLMAgentHaPanel extends LitElement {
   }
 }
 
-customElements.define("glm_agent_ha-panel", GLMAgentHaPanel);
+// Register the panel when dependencies are ready
+function registerPanel() {
+  if (window.GLM_LitElement && window.GLM_html && window.GLM_css && GLMAgentHaPanel) {
+    try {
+      customElements.define("glm_agent_ha-panel", GLMAgentHaPanel);
+      console.log("GLM Agent HA Modern Panel registered successfully");
+    } catch (error) {
+      console.error("Failed to register GLM Agent HA panel:", error);
+    }
+  } else {
+    console.warn("Dependencies not ready, retrying panel registration in 100ms...");
+    setTimeout(registerPanel, 100);
+  }
+}
 
-console.log("GLM Agent HA Modern Panel registered");
+// Start panel registration
+registerPanel();
