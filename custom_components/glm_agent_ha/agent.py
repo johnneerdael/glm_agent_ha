@@ -35,6 +35,8 @@ from .context.cache import ContextCacheManager
 from .context.area_topology import AreaTopologyService
 from .context.entity_relationships import EntityRelationshipService
 from .mcp_integration import MCPIntegrationManager
+from .websocket_manager import SecureWebSocketManager
+from .security_manager import GLMAgentSecurityManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -744,6 +746,14 @@ class AiAgentHaAgent:
         # Feature flags
         self._enable_entity_type_cache = config.get(CONF_ENABLE_ENTITY_TYPE_CACHE, True)
 
+        # Initialize security manager
+        self.security_manager = GLMAgentSecurityManager(hass)
+        _LOGGER.info("Security manager initialized with comprehensive threat protection")
+
+        # Initialize secure WebSocket manager
+        self.websocket_manager = SecureWebSocketManager(hass, self.security_manager)
+        _LOGGER.info("Secure WebSocket manager initialized")
+
         # Initialize MCP integration for Pro/Max plans
         self.mcp_manager = MCPIntegrationManager(hass, config)
         if self.mcp_manager.is_mcp_available():
@@ -837,6 +847,20 @@ class AiAgentHaAgent:
         except Exception as e:
             _LOGGER.error("Error processing image with MCP: %s", e)
             return None
+
+    async def broadcast_entity_update(self, entity_id: str, old_state=None, new_state=None) -> None:
+        """Broadcast entity state updates via secure WebSocket.
+
+        Args:
+            entity_id: Entity ID that was updated
+            old_state: Previous state
+            new_state: New state
+        """
+        try:
+            if hasattr(self, 'websocket_manager'):
+                await self.websocket_manager.broadcast_entity_update(entity_id, old_state, new_state)
+        except Exception as e:
+            _LOGGER.error("Error broadcasting entity update: %s", e)
 
     def _check_rate_limit(self) -> bool:
         """Check if we're within rate limits."""
@@ -1635,18 +1659,10 @@ class AiAgentHaAgent:
                 "Requesting dashboard config for: %s", dashboard_url or "default"
             )
 
-            # Import the websocket handler
-            from homeassistant.components.lovelace import websocket_api as lovelace_ws
-            from homeassistant.components.websocket_api import require_admin
-
-            # Create a mock websocket connection for internal use
-            class MockConnection:
-                def __init__(self, hass):
-                    self.hass = hass
-                    self.user = None
-
-                def send_message(self, message):
-                    pass
+            # SECURE: Removed vulnerable MockConnection class
+            # Previously created mock websocket connections without proper authentication
+            # This was a security vulnerability and has been removed
+            pass
 
             # Get dashboard configuration
             try:

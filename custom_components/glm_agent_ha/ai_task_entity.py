@@ -47,6 +47,7 @@ from homeassistant.components.media_source import async_resolve_media
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_LLM_HASS_API
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.typing import ConfigType
 
@@ -196,18 +197,14 @@ class GLMAgentAITaskEntity(AITaskEntity):
         self._attr_supported_features = AITaskEntityFeature.GENERATE_DATA
         self._attr_unique_id = f"{entry.entry_id}_ai_task"
 
-        # Create proper device info for GLM Coding Plan Device
+        # Create proper device info for GLM Agent HA
         plan_type = entry.data.get(CONF_PLAN, "lite").title()
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"glm_coding_plan_device_{entry.entry_id}")},
-            name="GLM Coding Plan Device",
-            manufacturer="GLM Agent HA",
-            model=f"GLM Coding Plan {plan_type}",
-            sw_version="1.11.1",
-            hw_version=None,
-            serial_number=None,
-            via_device=None,
-            configuration_url=None,
+            identifiers={(DOMAIN, entry.entry_id)},
+            name="GLM Agent HA",
+            manufacturer="Zhipu AI",
+            model=f"GLM Agent {plan_type}",
+            entry_type=dr.DeviceEntryType.SERVICE,
         )
 
         # Initialize agent
@@ -343,6 +340,9 @@ class GLMAgentAITaskEntity(AITaskEntity):
             _LOGGER.info("AI Task %s completed in %.2fs with %d/%d attachments processed",
                         task.task_name, processing_time, successful_attachments,
                         len(task.attachments or []))
+
+            # Broadcast task completion via secure WebSocket
+            await self._broadcast_task_update(task, result, processing_time, successful_attachments)
 
             return GenDataTaskResult(
                 conversation_id=chat_log.conversation_id,
@@ -566,8 +566,8 @@ class GLMAgentAITaskEntity(AITaskEntity):
             # Step 9: Generate public URL
             base_url = self._entry.options.get(CONF_HA_BASE_URL)
             if not base_url:
-                # Default to Home Assistant's local URL
-                base_url = f"http://{self.hass.config.location_name}.local:8123"
+                # Default to Home Assistant's local URL (localhost:8123)
+                base_url = "http://localhost:8123"
 
             # Validate base URL format
             if not base_url.startswith(('http://', 'https://')):
@@ -685,3 +685,55 @@ class GLMAgentAITaskEntity(AITaskEntity):
                 "www_directory_exists": False,
                 "www_directory_writable": False
             }
+
+    async def _broadcast_task_update(
+        self,
+        task: Any,
+        result: Any,
+        processing_time: float,
+        successful_attachments: int
+    ) -> None:
+        """Broadcast AI task update via secure WebSocket.
+
+        Args:
+            task: The AI task that was processed
+            result: The result of the task
+            processing_time: Time taken to process the task
+            successful_attachments: Number of successfully processed attachments
+        """
+        try:
+            if hasattr(self, '_agent') and hasattr(self._agent, 'websocket_manager'):
+                # Create task data for broadcasting
+                task_data = {
+                    "entity_id": self.entity_id,
+                    "attributes": {
+                        "task_name": task.task_name,
+                        "task_status": "completed",
+                        "processing_time": round(processing_time, 2),
+                        "attachments_processed": successful_attachments,
+                        "total_attachments": len(task.attachments or []),
+                        "timestamp": datetime.now().isoformat(),
+                        "has_result": result is not None,
+                        "result_type": type(result).__name__ if result else None
+                    },
+                    "state": "completed"
+                }
+
+                # Add result metadata if available
+                if isinstance(result, dict):
+                    task_data["attributes"].update({
+                        "result_keys": list(result.keys()) if result else [],
+                        "has_error": result.get("processing_error", False) or result.get("critical_error", False)
+                    })
+
+                # Broadcast via WebSocket manager
+                await self._agent.websocket_manager.broadcast_entity_update(
+                    self.entity_id,
+                    None,
+                    task_data
+                )
+
+                _LOGGER.debug("AI Task update broadcasted via WebSocket: %s", task.task_name)
+
+        except Exception as e:
+            _LOGGER.error("Error broadcasting AI task update: %s", e)

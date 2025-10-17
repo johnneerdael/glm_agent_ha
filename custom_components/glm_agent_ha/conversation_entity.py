@@ -10,8 +10,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from homeassistant.components.conversation import ConversationEntity, ConversationInput, ConversationResult
+from homeassistant.components import conversation as ha_conversation
+from homeassistant.components.conversation import ConversationInput, ConversationResult
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, Context
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import ulid
@@ -22,7 +25,7 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
-class GLMAgentConversationEntity(ConversationEntity):
+class GLMAgentConversationEntity(ha_conversation.AbstractConversationAgent, ha_conversation.ConversationEntity):
     """GLM Agent Conversation Entity that extends Home Assistant's ConversationEntity.
 
     This entity provides a proper conversation interface for the GLM AI Agent,
@@ -36,10 +39,21 @@ class GLMAgentConversationEntity(ConversationEntity):
         self.hass = hass
         self.config = config
         self.entry_id = entry_id
-        self._attr_unique_id = f"conversation_{entry_id}"
+        # Entity attributes
+        self._attr_has_entity_name = True
         self._attr_name = "GLM Agent"
+        self._attr_unique_id = f"conversation_{entry_id}"
         self._attr_should_poll = False
-        
+
+        # Device info for proper integration
+        self._attr_device_info = dr.DeviceInfo(
+            identifiers={(DOMAIN, entry_id)},
+            name="GLM Agent HA",
+            manufacturer="Zhipu AI",
+            model="GLM Agent",
+            entry_type=dr.DeviceEntryType.SERVICE,
+        )
+
         # Initialize the AI agent
         self._agent: Optional[AiAgentHaAgent] = None
         self._initialize_agent()
@@ -72,18 +86,29 @@ class GLMAgentConversationEntity(ConversationEntity):
         user_input: ConversationInput,
     ) -> ConversationResult:
         """Handle a conversation message.
-        
+
         This is the main method that processes user input through the GLM AI Agent
         and returns a conversation result that can be used by Home Assistant's
         conversation system.
-        
+
         Args:
             user_input: The conversation input containing the user's message,
                        context, and other metadata.
-            
+
         Returns:
             ConversationResult: The result of processing the message.
         """
+        # Comprehensive input validation
+        validation_result = self._validate_conversation_input(user_input)
+        if not validation_result["valid"]:
+            return ConversationResult(
+                response=self._create_error_response(
+                    validation_result["error"],
+                    error_type="validation_error"
+                ),
+                conversation_id=user_input.conversation_id,
+            )
+
         if not self._agent:
             # Return an error response if the agent is not initialized
             return ConversationResult(
@@ -98,7 +123,7 @@ class GLMAgentConversationEntity(ConversationEntity):
             # Get context information from Home Assistant
             context_info = await self._get_assistant_context(user_input)
 
-            # Extract message text
+            # Extract and validate message text
             message_text = user_input.text.strip()
             if not message_text:
                 return ConversationResult(
@@ -129,7 +154,12 @@ class GLMAgentConversationEntity(ConversationEntity):
                     response=self._create_success_response(response_text),
                     conversation_id=user_input.conversation_id,
                 )
-                
+
+                # Broadcast conversation update via secure WebSocket
+                await self._broadcast_conversation_update(
+                    message_text, response_text, user_input.conversation_id
+                )
+
                 _LOGGER.debug("Successfully processed conversation message")
                 return conversation_result
             else:
@@ -264,10 +294,77 @@ class GLMAgentConversationEntity(ConversationEntity):
         else:
             _LOGGER.warning("GLM Agent conversation entity preparation incomplete")
 
+    def _validate_conversation_input(self, user_input: ConversationInput) -> Dict[str, Any]:
+        """Validate conversation input parameters.
+
+        Args:
+            user_input: The conversation input to validate.
+
+        Returns:
+            Dictionary with validation result and error message if invalid.
+        """
+        try:
+            # Check if user_input is not None
+            if user_input is None:
+                return {"valid": False, "error": "No input provided"}
+
+            # Check if user_input has required attributes
+            if not hasattr(user_input, 'text'):
+                return {"valid": False, "error": "Invalid input: missing text attribute"}
+
+            if not hasattr(user_input, 'conversation_id'):
+                return {"valid": False, "error": "Invalid input: missing conversation_id"}
+
+            # Validate conversation_id
+            if not user_input.conversation_id:
+                return {"valid": False, "error": "Invalid input: empty conversation_id"}
+
+            # Validate text type and content
+            if not isinstance(user_input.text, str):
+                return {"valid": False, "error": "Invalid input: text must be a string"}
+
+            # Check text length (reasonable limits)
+            if len(user_input.text) > 10000:  # 10K character limit
+                return {"valid": False, "error": "Input too long (max 10,000 characters)"}
+
+            # Check for potentially harmful content patterns
+            import re
+            dangerous_patterns = [
+                r'<script[^>]*>.*?</script>',  # Script tags
+                r'javascript:',                # JavaScript URLs
+                r'data:text/html',           # Data URLs with HTML
+            ]
+
+            for pattern in dangerous_patterns:
+                if re.search(pattern, user_input.text, re.IGNORECASE | re.DOTALL):
+                    return {"valid": False, "error": "Input contains potentially unsafe content"}
+
+            # Validate language if provided
+            if hasattr(user_input, 'language') and user_input.language:
+                if not isinstance(user_input.language, str):
+                    return {"valid": False, "error": "Invalid input: language must be a string"}
+
+                # Check if language is in supported list
+                supported_languages = self.supported_languages
+                if (supported_languages != "*" and
+                    user_input.language not in supported_languages):
+                    return {"valid": False, "error": f"Unsupported language: {user_input.language}"}
+
+            # Validate context if provided
+            if hasattr(user_input, 'context') and user_input.context:
+                if not hasattr(user_input.context, 'user_id'):
+                    return {"valid": False, "error": "Invalid input: context missing user_id"}
+
+            return {"valid": True}
+
+        except Exception as e:
+            _LOGGER.error("Error validating conversation input: %s", e)
+            return {"valid": False, "error": f"Validation error: {str(e)}"}
+
     @property
     def attribution(self) -> Optional[Dict[str, str]]:
         """Return attribution information for this conversation agent.
-        
+
         Returns:
             Dictionary containing attribution information or None.
         """
@@ -275,3 +372,61 @@ class GLMAgentConversationEntity(ConversationEntity):
             "name": "GLM Agent",
             "url": "https://github.com/ZhipuAI/glm-agent-ha"
         }
+
+    async def _broadcast_conversation_update(
+        self,
+        message: str,
+        response: str,
+        conversation_id: str
+    ) -> None:
+        """Broadcast conversation update via secure WebSocket.
+
+        Args:
+            message: User message
+            response: AI response
+            conversation_id: Conversation ID
+        """
+        try:
+            if hasattr(self._agent, 'websocket_manager'):
+                # Create a temporary state-like object for broadcasting
+                import datetime
+                from homeassistant.helpers.typing import StateType
+
+                conversation_data = {
+                    "entity_id": self.entity_id,
+                    "attributes": {
+                        "conversation_id": conversation_id,
+                        "last_message": message,
+                        "last_response": response,
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "message_count": getattr(self, '_message_count', 0) + 1
+                    },
+                    "state": "conversing"
+                }
+
+                # Update message count
+                self._message_count = getattr(self, '_message_count', 0) + 1
+
+                # Broadcast via WebSocket manager
+                await self._agent.websocket_manager.broadcast_entity_update(
+                    self.entity_id,
+                    None,
+                    conversation_data
+                )
+
+                _LOGGER.debug("Conversation update broadcasted via WebSocket: %s", conversation_id)
+
+        except Exception as e:
+            _LOGGER.error("Error broadcasting conversation update: %s", e)
+    async def async_added_to_hass(self) -> None:
+        """When entity is added to Home Assistant."""
+        await super().async_added_to_hass()
+        # Platform-based conversation entities are automatically registered
+        # No manual registration needed
+        _LOGGER.info("GLM Agent conversation entity added to Home Assistant")
+
+    async def async_will_remove_from_hass(self) -> None:
+        """When entity will be removed from Home Assistant."""
+        # Platform-based conversation entities are automatically unregistered
+        await super().async_will_remove_from_hass()
+        _LOGGER.info("GLM Agent conversation entity removed from Home Assistant")
