@@ -30,7 +30,7 @@ except (ImportError, ModuleNotFoundError) as e:
     AI_TASK_COMPONENTS_AVAILABLE = False
     # Create placeholder classes to avoid import errors
     class AITaskEntity:
-        def __init__(self, hass):
+        def __init__(self):
             pass
 
     class AITaskEntityFeature:
@@ -190,7 +190,9 @@ class GLMAgentAITaskEntity(AITaskEntity):
             self._attr_available = False
             return
 
-        super().__init__(hass)
+        # Don't call super().__init__(hass) - AITaskEntity doesn't take hass parameter
+        # Just set the required attributes directly
+        self._hass = hass
         self._entry = entry
         self._attr_has_entity_name = True
         self._attr_name = "AI Task"

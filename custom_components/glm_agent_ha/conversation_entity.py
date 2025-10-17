@@ -33,21 +33,21 @@ class GLMAgentConversationEntity(ha_conversation.AbstractConversationAgent, ha_c
     and handle user queries through the standard conversation interface.
     """
 
-    def __init__(self, hass: HomeAssistant, config: ConfigType, entry_id: str) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: Any) -> None:
         """Initialize the GLM Agent conversation entity."""
         super().__init__(hass)
         self.hass = hass
-        self.config = config
-        self.entry_id = entry_id
+        self.entry = entry
+        self.client = client
         # Entity attributes
         self._attr_has_entity_name = True
         self._attr_name = "GLM Agent"
-        self._attr_unique_id = f"conversation_{entry_id}"
+        self._attr_unique_id = entry.entry_id
         self._attr_should_poll = False
 
         # Device info for proper integration
         self._attr_device_info = dr.DeviceInfo(
-            identifiers={(DOMAIN, entry_id)},
+            identifiers={(DOMAIN, entry.entry_id)},
             name="GLM Agent HA",
             manufacturer="Zhipu AI",
             model="GLM Agent",
@@ -61,8 +61,8 @@ class GLMAgentConversationEntity(ha_conversation.AbstractConversationAgent, ha_c
     def _initialize_agent(self) -> None:
         """Initialize the AI agent."""
         try:
-            self._agent = AiAgentHaAgent(self.hass, self.config)
-            _LOGGER.info("GLM Agent conversation entity initialized for entry: %s", self.entry_id)
+            self._agent = AiAgentHaAgent(self.hass, self.entry.data)
+            _LOGGER.info("GLM Agent conversation entity initialized for entry: %s", self.entry.entry_id)
         except Exception as e:
             _LOGGER.error("Failed to initialize GLM Agent conversation entity: %s", e)
             self._agent = None
@@ -81,7 +81,7 @@ class GLMAgentConversationEntity(ha_conversation.AbstractConversationAgent, ha_c
         """Return True if the conversation entity is available."""
         return self._agent is not None
 
-    async def _async_handle_message(
+    async def async_process(
         self,
         user_input: ConversationInput,
     ) -> ConversationResult:
@@ -421,12 +421,26 @@ class GLMAgentConversationEntity(ha_conversation.AbstractConversationAgent, ha_c
     async def async_added_to_hass(self) -> None:
         """When entity is added to Home Assistant."""
         await super().async_added_to_hass()
-        # Platform-based conversation entities are automatically registered
-        # No manual registration needed
-        _LOGGER.info("GLM Agent conversation entity added to Home Assistant")
+        # Register the conversation entity with Home Assistant
+        from homeassistant.components import conversation
+        conversation.async_set_agent(self.hass, self.entry, self)
+        # Set up update listener
+        self.entry.async_on_unload(
+            self.entry.add_update_listener(self._async_entry_update_listener)
+        )
+        _LOGGER.info("GLM Agent conversation entity added to Home Assistant and registered")
 
     async def async_will_remove_from_hass(self) -> None:
         """When entity will be removed from Home Assistant."""
-        # Platform-based conversation entities are automatically unregistered
+        # Unregister the conversation entity
+        from homeassistant.components import conversation
+        conversation.async_unset_agent(self.hass, self.entry)
         await super().async_will_remove_from_hass()
-        _LOGGER.info("GLM Agent conversation entity removed from Home Assistant")
+        _LOGGER.info("GLM Agent conversation entity removed from Home Assistant and unregistered")
+
+    async def _async_entry_update_listener(
+        self, hass: HomeAssistant, entry: ConfigEntry
+    ) -> None:
+        """Handle options update."""
+        # Reload as we update device info + entity name + supported features
+        await hass.config_entries.async_reload(entry.entry_id)

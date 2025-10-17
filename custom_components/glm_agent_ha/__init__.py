@@ -313,10 +313,12 @@ async def _setup_pipeline_integrations(
             from .conversation_entity import GLMAgentConversationEntity
 
             # Validate required parameters before creating entity
-            if not all([hass, config_data, entry, entry.entry_id]):
+            if not all([hass, entry]):
                 raise ValueError("Missing required parameters for ConversationEntity")
 
-            conversation_entity = GLMAgentConversationEntity(hass, config_data, entry.entry_id)
+            # Create a dummy client object for compatibility - the actual AI work is done by the agent
+            client = None  # We don't need an external client as the agent handles everything
+            conversation_entity = GLMAgentConversationEntity(hass, entry, client)
 
             # Register the conversation entity with Home Assistant using the proper API
             from homeassistant.components import conversation
@@ -348,27 +350,7 @@ async def _setup_pipeline_integrations(
     except Exception as e:
         _LOGGER.error("Error setting up conversation platform: %s", e)
 
-    # Set up AI Task platform (runtime check)
-    try:
-        # Check if AI task component is available
-        try:
-            from homeassistant.components import ai_task
-            # If this import succeeds, AI task is available
-            from .ai_task import async_setup_ai_task_entity
-            ai_task_success = await async_setup_ai_task_entity(hass, config_data, entry)
-            if ai_task_success:
-                _LOGGER.info("AI Task platform setup completed")
-                # Verify entity was created by checking hass.data
-                if hasattr(hass, 'data') and 'entity_platform' in hass.data:
-                    platform_data = hass.data.get('entity_platform', {})
-                    ai_task_entities = platform_data.get('ai_task', {}).get('glm_agent_ha', [])
-                    _LOGGER.info("AI Task entities created: %d", len(ai_task_entities))
-            else:
-                _LOGGER.debug("AI Task platform setup failed")
-        except ImportError:
-            _LOGGER.debug("AI Task platform not available in this HA version")
-    except Exception as e:
-        _LOGGER.error("Error setting up AI Task platform: %s", e)
+    # AI Task platform is now handled by standard platform forwarding in PLATFORMS
 
     _LOGGER.info("All pipeline integrations setup completed")
 
