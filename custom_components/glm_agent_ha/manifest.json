@@ -23,6 +23,6 @@
         "aiohttp>=3.8.0",
         "openai~=1.55.0"
     ],
-    "version": "1.10.5",
+    "version": "1.10.6",
     "frontend_module_url": "/frontend/glm_agent_ha/glm_agent_ha-panel.js"
 }

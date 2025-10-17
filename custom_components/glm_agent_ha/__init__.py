@@ -124,7 +124,7 @@ async def _setup_pipeline_integrations(
     # Set up AI Task platform
     try:
         from .ai_task import async_setup_ai_task_entity
-        ai_task_success = await async_setup_ai_task_entity(hass, config_data)
+        ai_task_success = await async_setup_ai_task_entity(hass, config_data, entry)
         if ai_task_success:
             _LOGGER.info("AI Task platform setup completed")
         else:
@@ -185,7 +185,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         structured_logger = get_logger(hass, DOMAIN)
         hass.data[DOMAIN]["structured_logger"] = structured_logger
         structured_logger.info("GLM Agent HA integration setup started", LogCategory.SYSTEM,
-                             version="1.06.0", config_entry_id=entry.entry_id, setup_start_time=setup_start_time)
+                             version="1.10.6", config_entry_id=entry.entry_id, setup_start_time=setup_start_time)
 
         # Initialize debug service
         debug_service = GLMAgentDebugService(hass)

@@ -8,7 +8,8 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 
-from .llm_integration import GLMConversationAgent
+from ..llm_integration import GLMConversationAgent
+from ..const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -16,8 +17,6 @@ async def async_setup_conversation(hass: HomeAssistant, config: ConfigType) -> b
     """Set up GLM Agent HA conversation."""
     try:
         # Check if GLM Agent HA is loaded
-        from .const import DOMAIN
-
         if DOMAIN not in hass.data:
             _LOGGER.warning("GLM Agent HA not loaded, cannot set up conversation")
             return False

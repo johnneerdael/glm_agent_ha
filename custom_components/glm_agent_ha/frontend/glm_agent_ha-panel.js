@@ -1,8 +1,35 @@
-import {
-  LitElement,
-  html,
-  css,
-} from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
+// Error handling for dashboard initialization
+try {
+  import {
+    LitElement,
+    html,
+    css,
+  } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
+} catch (error) {
+  console.error("Failed to load lit-element dependency:", error);
+  // Fallback loading with alternative CDN
+  try {
+    import {
+      LitElement,
+      html,
+      css,
+    } from "https://cdn.skypack.dev/lit-element@2.4.0";
+  } catch (fallbackError) {
+    console.error("Failed to load lit-element from fallback CDN:", fallbackError);
+    // Display error message to user
+    document.body.innerHTML = `
+      <div style="padding: 20px; font-family: Arial, sans-serif; color: #333;">
+        <h2>GLM Agent HA Dashboard Loading Error</h2>
+        <p>Unable to load dashboard components due to network issues.</p>
+        <p>Please try refreshing the page or check your internet connection.</p>
+        <button onclick="window.location.reload()" style="padding: 10px 20px; background: #03a9f4; color: white; border: none; border-radius: 4px; cursor: pointer;">
+          Refresh Page
+        </button>
+      </div>
+    `;
+    throw new Error("Dashboard initialization failed - unable to load required dependencies");
+  }
+}
 
 console.log("GLM Agent HA Modern Panel loading...");
 
@@ -1066,27 +1093,53 @@ class GLMAgentHaPanel extends LitElement {
   }
 
   async connectedCallback() {
-    super.connectedCallback();
-    console.debug("GLM Agent HA Modern Panel connected");
+    try {
+      super.connectedCallback();
+      console.debug("GLM Agent HA Modern Panel connected");
 
-    if (this.hass && !this._eventSubscriptionSetup) {
-      this._eventSubscriptionSetup = true;
-      this.hass.connection.subscribeEvents(
-        (event) => this._handleResponse(event),
-        'glm_agent_ha_response'
-      );
-      console.debug("Event subscription set up in connectedCallback()");
-      await this._loadPromptHistory();
-      await this._detectUserPlan();
-      await this._loadAdvancedData();
-    }
+      if (this.hass && !this._eventSubscriptionSetup) {
+        this._eventSubscriptionSetup = true;
+        this.hass.connection.subscribeEvents(
+          (event) => this._handleResponse(event),
+          'glm_agent_ha_response'
+        );
+        console.debug("Event subscription set up in connectedCallback()");
 
-    // Close dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-      if (!this.shadowRoot.querySelector('.provider-selector')?.contains(e.target)) {
-        this._showProviderDropdown = false;
+        // Load data with error handling
+        try {
+          await this._loadPromptHistory();
+        } catch (error) {
+          console.warn("Failed to load prompt history:", error);
+          // Continue without prompt history
+        }
+
+        try {
+          await this._detectUserPlan();
+        } catch (error) {
+          console.warn("Failed to detect user plan:", error);
+          this._userPlan = 'lite'; // Default fallback
+        }
+
+        try {
+          await this._loadAdvancedData();
+        } catch (error) {
+          console.warn("Failed to load advanced data:", error);
+          // Continue without advanced data
+        }
       }
-    });
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!this.shadowRoot.querySelector('.provider-selector')?.contains(e.target)) {
+          this._showProviderDropdown = false;
+        }
+      });
+    } catch (error) {
+      console.error("Error in connectedCallback:", error);
+      // Display error state to user
+      this._error = "Dashboard initialization failed. Please refresh the page.";
+      this.requestUpdate();
+    }
   }
 
   async _detectUserPlan() {
@@ -1519,15 +1572,29 @@ class GLMAgentHaPanel extends LitElement {
   }
 
   render() {
-    console.debug("Rendering with state:", {
-      messages: this._messages,
-      isLoading: this._isLoading,
-      error: this._error,
-      userPlan: this._userPlan,
-      uploadedFile: this._uploadedFile
-    });
+    try {
+      console.debug("Rendering with state:", {
+        messages: this._messages,
+        isLoading: this._isLoading,
+        error: this._error,
+        userPlan: this._userPlan,
+        uploadedFile: this._uploadedFile
+      });
 
-    return html`
+      // Error state fallback UI
+      if (this._error && !this.hass) {
+        return html`
+          <div style="padding: 20px; font-family: Arial, sans-serif; color: #333; text-align: center;">
+            <h2>GLM Agent HA Dashboard Error</h2>
+            <p>${this._error}</p>
+            <button onclick="window.location.reload()" style="padding: 10px 20px; background: #03a9f4; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;">
+              Refresh Page
+            </button>
+          </div>
+        `;
+      }
+
+      return html`
       <div class="header">
         <div class="header-title">
           <ha-icon icon="mdi:robot"></ha-icon>
@@ -1618,6 +1685,27 @@ class GLMAgentHaPanel extends LitElement {
 
       ${this._renderAdvancedDashboard()}
     `;
+    } catch (error) {
+      console.error("Error in render method:", error);
+      // Fallback minimal UI
+      return html`
+        <div style="padding: 20px; font-family: Arial, sans-serif; color: #333;">
+          <h2>GLM Agent HA Dashboard</h2>
+          <p>A rendering error occurred. Basic functionality is still available.</p>
+          <p>Please refresh the page to restore full functionality.</p>
+          <div style="margin-top: 20px;">
+            <textarea
+              placeholder="Ask me about your Home Assistant..."
+              style="width: 100%; height: 100px; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+            </textarea>
+            <br><br>
+            <button style="padding: 10px 20px; background: #03a9f4; color: white; border: none; border-radius: 4px; cursor: pointer;">
+              Send
+            </button>
+          </div>
+        </div>
+      `;
+    }
   }
 
   _renderLoadingIndicator() {
@@ -2062,6 +2150,36 @@ class GLMAgentHaPanel extends LitElement {
 
   _hasProviders() {
     return this._availableProviders && this._availableProviders.length > 0;
+  }
+
+  disconnectedCallback() {
+  try {
+    super.disconnectedCallback();
+    console.debug("GLM Agent HA Modern Panel disconnected");
+
+    // Clear any timeouts
+    if (this._serviceCallTimeout) {
+      clearTimeout(this._serviceCallTimeout);
+      this._serviceCallTimeout = null;
+    }
+
+    // Remove event listeners
+    document.removeEventListener('click', this._handleDocumentClick);
+
+    // Reset state
+    this._eventSubscriptionSetup = false;
+    this.providersLoaded = false;
+
+    console.debug("GLM Agent HA Panel cleanup completed");
+  } catch (error) {
+    console.error("Error in disconnectedCallback:", error);
+  }
+}
+
+  _handleDocumentClick = (e) => {
+    if (!this.shadowRoot.querySelector('.provider-selector')?.contains(e.target)) {
+      this._showProviderDropdown = false;
+    }
   }
 }
 
