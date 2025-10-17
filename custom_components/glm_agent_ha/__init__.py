@@ -17,6 +17,9 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
+# Define platforms for proper Home Assistant integration
+PLATFORMS = ["conversation", "ai_task"]
+
 from .agent import AiAgentHaAgent
 from .const import (
     DOMAIN,
@@ -308,17 +311,26 @@ async def _setup_pipeline_integrations(
         # Try to use the new ConversationEntity approach first
         try:
             from .conversation_entity import GLMAgentConversationEntity
+
+            # Validate required parameters before creating entity
+            if not all([hass, config_data, entry, entry.entry_id]):
+                raise ValueError("Missing required parameters for ConversationEntity")
+
             conversation_entity = GLMAgentConversationEntity(hass, config_data, entry.entry_id)
 
             # Register the conversation entity with Home Assistant using the proper API
+            from homeassistant.components import conversation
             conversation.async_set_agent(hass, entry, conversation_entity)
             _LOGGER.info("Conversation entity registered with Home Assistant using conversation.async_set_agent")
 
             # Store reference for cleanup
             hass.data[DOMAIN]["conversation_entity"] = conversation_entity
 
-        except Exception as e:
+        except (ImportError, ValueError, TypeError, AttributeError) as e:
             _LOGGER.warning("Failed to set up conversation entity, falling back to agent approach: %s", e)
+            # Clear any partially created entity reference
+            if "conversation_entity" in hass.data[DOMAIN]:
+                del hass.data[DOMAIN]["conversation_entity"]
 
             # Fallback to the original agent approach
             from .llm_integration import GLMConversationAgent
@@ -467,8 +479,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             except Exception as e:
                 _LOGGER.warning("MCP integration failed - continuing without enhanced features: %s", e)
 
-        # Set up pipeline integrations
-        await _setup_pipeline_integrations(hass, config_data, entry)
+        # Set up conversation and AI task platforms
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
         # Log successful setup
         setup_duration_ms = (time.time() - setup_start_time) * 1000
@@ -1352,18 +1364,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
 
-    # Unregister conversation agent using the proper API
-    try:
-        from homeassistant.components import conversation
+    # Unload platforms first
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
-        # Try to unregister the conversation agent
-        conversation.async_unset_agent(hass, entry)
-        _LOGGER.info("Conversation agent unregistered from Home Assistant")
+    if unload_ok:
+        # Unregister conversation agent using the proper API
+        try:
+            from homeassistant.components import conversation
 
-    except ImportError:
-        _LOGGER.debug("Conversation component not available for unregistration")
-    except Exception as e:
-        _LOGGER.warning("Failed to unregister conversation agent: %s", e)
+            # Try to unregister the conversation agent
+            conversation.async_unset_agent(hass, entry)
+            _LOGGER.info("Conversation agent unregistered from Home Assistant")
+
+        except ImportError:
+            _LOGGER.debug("Conversation component not available for unregistration")
+        except Exception as e:
+            _LOGGER.warning("Failed to unregister conversation agent: %s", e)
 
     if await _panel_exists(hass, "glm_agent_ha"):
         try:
@@ -1414,11 +1430,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_remove(DOMAIN, "get_templates")
     hass.services.async_remove(DOMAIN, "apply_template")
 
-    # Remove data
-    if DOMAIN in hass.data:
-        hass.data.pop(DOMAIN)
+    # Remove data only if platforms unloaded successfully
+    if unload_ok and DOMAIN in hass.data:
+        # Only remove the data for this entry, keep others
+        if entry.entry_id in hass.data[DOMAIN].get("configs", {}):
+            del hass.data[DOMAIN]["configs"][entry.entry_id]
+        if entry.entry_id in hass.data[DOMAIN].get("agents", {}):
+            del hass.data[DOMAIN]["agents"][entry.entry_id]
 
-    return True
+    return unload_ok
 
 
 async def _panel_exists(hass: HomeAssistant, panel_name: str) -> bool:

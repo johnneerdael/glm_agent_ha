@@ -8,7 +8,7 @@ import os
 import sys
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
@@ -149,7 +149,7 @@ class GLMAgentStructuredLogger:
                          message: str, **kwargs) -> Dict[str, Any]:
         """Create a structured log entry."""
         log_entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "level": level.value,
             "category": category.value,
             "logger": self.name,

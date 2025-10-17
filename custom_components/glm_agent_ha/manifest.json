@@ -23,7 +23,7 @@
     "requirements": [
         "aiohttp>=3.8.0"
     ],
-    "version": "1.12.0",
+    "version": "1.13.0",
     "frontend_module_url": "/frontend/glm_agent_ha/glm_agent_ha-panel.js",
     "icon": "mdi:robot"
 }

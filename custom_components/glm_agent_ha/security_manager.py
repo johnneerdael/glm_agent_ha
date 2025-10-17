@@ -10,7 +10,7 @@ import os
 import re
 import secrets
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Union
 from urllib.parse import urlparse
@@ -46,7 +46,7 @@ class SecurityEvent:
 
     def __init__(self, event_type: ThreatType, severity: SecurityLevel,
                  source: str, description: str, **kwargs):
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.now(timezone.utc)
         self.event_type = event_type
         self.severity = severity
         self.source = source
@@ -656,7 +656,7 @@ class GLMAgentSecurityManager:
         Returns:
             Security report data
         """
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
 
         # Filter recent events
         recent_events = [
@@ -693,7 +693,7 @@ class GLMAgentSecurityManager:
             recommendations.append("✅ No significant security issues detected")
 
         return {
-            "report_timestamp": datetime.utcnow().isoformat(),
+            "report_timestamp": datetime.now(timezone.utc).isoformat(),
             "period_hours": hours,
             "total_events": len(recent_events),
             "event_counts": event_counts,
