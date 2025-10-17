@@ -9,6 +9,14 @@ from typing import Any, Dict, List, Optional, Union
 import aiohttp
 from homeassistant.core import HomeAssistant
 
+# Try to import FastMCP for native Python MCP support
+try:
+    from fastmcp import Client as FastMCPClient
+    FASTMCP_AVAILABLE = True
+except ImportError:
+    FASTMCP_AVAILABLE = False
+    FastMCPClient = None
+
 from .const import (
     CONF_MCP_SERVERS,
     CONF_ENABLE_MCP_INTEGRATION,
@@ -25,6 +33,216 @@ CONNECTION_TIMEOUT = 30  # Connection timeout in seconds
 REQUEST_TIMEOUT = 60  # Request timeout in seconds
 
 
+class NativeMCPServer:
+    """Base class for native Python MCP servers."""
+
+    def __init__(self, config: Dict[str, Any]):
+        """Initialize the native MCP server."""
+        self.config = config
+        self.is_connected = False
+
+    async def connect(self) -> bool:
+        """Connect to the MCP server."""
+        try:
+            # Native Python MCP servers connect directly
+            self.is_connected = True
+            return True
+        except Exception as e:
+            _LOGGER.error("Failed to connect to native MCP server: %s", e)
+            return False
+
+    async def disconnect(self):
+        """Disconnect from the MCP server."""
+        self.is_connected = False
+
+    async def call_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Call a tool on the MCP server."""
+        raise NotImplementedError("Subclasses must implement call_tool")
+
+
+class ZAIMCPServer(NativeMCPServer):
+    """Native Python implementation of Z.AI MCP server."""
+
+    async def call_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Call a Z.AI MCP tool."""
+        try:
+            api_key = self.config.get("api_key")
+            if not api_key:
+                return {
+                    "success": False,
+                    "error": "API key not configured"
+                }
+
+            if tool_name == "image_analysis":
+                return await self._analyze_image(parameters, api_key)
+            elif tool_name == "video_analysis":
+                return await self._analyze_video(parameters, api_key)
+            else:
+                return {
+                    "success": False,
+                    "error": f"Unknown tool: {tool_name}"
+                }
+        except Exception as e:
+            _LOGGER.error("Error in Z.AI MCP server: %s", e)
+            return {
+                "success": False,
+                "error": f"Z.AI server error: {str(e)}"
+            }
+
+    async def _analyze_image(self, parameters: Dict[str, Any], api_key: str) -> Dict[str, Any]:
+        """Analyze an image using Z.AI API."""
+        try:
+            image_source = parameters.get("image_source")
+            prompt = parameters.get("prompt", "Analyze this image")
+
+            if not image_source:
+                return {
+                    "success": False,
+                    "error": "image_source parameter is required"
+                }
+
+            url = "https://api.z.ai/api/v1/analyze_image"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+
+            payload = {
+                "image_source": image_source,
+                "prompt": prompt
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        return {"success": True, "result": result}
+                    else:
+                        error_text = await response.text()
+                        _LOGGER.error("Z.AI image analysis API error %d: %s", response.status, error_text)
+                        return {
+                            "success": False,
+                            "error": f"API error {response.status}: {error_text}"
+                        }
+        except Exception as e:
+            _LOGGER.error("Error in native image analysis: %s", e)
+            return {
+                "success": False,
+                "error": f"Image analysis error: {str(e)}"
+            }
+
+    async def _analyze_video(self, parameters: Dict[str, Any], api_key: str) -> Dict[str, Any]:
+        """Analyze a video using Z.AI API."""
+        try:
+            video_source = parameters.get("video_source")
+            prompt = parameters.get("prompt", "Analyze this video")
+
+            if not video_source:
+                return {
+                    "success": False,
+                    "error": "video_source parameter is required"
+                }
+
+            url = "https://api.z.ai/api/v1/analyze_video"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+
+            payload = {
+                "video_source": video_source,
+                "prompt": prompt
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        return {"success": True, "result": result}
+                    else:
+                        error_text = await response.text()
+                        _LOGGER.error("Z.AI video analysis API error %d: %s", response.status, error_text)
+                        return {
+                            "success": False,
+                            "error": f"API error {response.status}: {error_text}"
+                        }
+        except Exception as e:
+            _LOGGER.error("Error in native video analysis: %s", e)
+            return {
+                "success": False,
+                "error": f"Video analysis error: {str(e)}"
+            }
+
+
+class WebSearchMCPServer(NativeMCPServer):
+    """Native Python implementation of Web Search MCP server."""
+
+    async def call_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Call a web search tool."""
+        try:
+            api_key = self.config.get("api_key")
+            if not api_key:
+                return {
+                    "success": False,
+                    "error": "API key not configured"
+                }
+
+            if tool_name == "webSearchPrime":
+                return await self._web_search(parameters, api_key)
+            else:
+                return {
+                    "success": False,
+                    "error": f"Unknown tool: {tool_name}"
+                }
+        except Exception as e:
+            _LOGGER.error("Error in Web Search MCP server: %s", e)
+            return {
+                "success": False,
+                "error": f"Web search server error: {str(e)}"
+            }
+
+    async def _web_search(self, parameters: Dict[str, Any], api_key: str) -> Dict[str, Any]:
+        """Perform web search using Z.AI API."""
+        try:
+            search_query = parameters.get("query")
+            if not search_query:
+                return {
+                    "success": False,
+                    "error": "query parameter is required"
+                }
+
+            url = "https://api.z.ai/api/mcp/web_search_prime/search"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+
+            payload = {
+                "search_query": search_query,
+                "count": parameters.get("count", 5),
+                "search_recency_filter": parameters.get("search_recency_filter", "noLimit")
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        return {"success": True, "result": result}
+                    else:
+                        error_text = await response.text()
+                        _LOGGER.error("Z.AI web search API error %d: %s", response.status, error_text)
+                        return {
+                            "success": False,
+                            "error": f"API error {response.status}: {error_text}"
+                        }
+        except Exception as e:
+            _LOGGER.error("Error in native web search: %s", e)
+            return {
+                "success": False,
+                "error": f"Web search error: {str(e)}"
+            }
+
+
 class MCPIntegrationManager:
     """Manages MCP server integrations for GLM AI Agent HA."""
 
@@ -38,18 +256,34 @@ class MCPIntegrationManager:
         self.plan_capabilities = config.get("plan_capabilities", {})
         self.enable_mcp = config.get(CONF_ENABLE_MCP_INTEGRATION, True)
 
-        # MCP server configurations
+        # MCP server configurations with native Python FastMCP support
         self.mcp_configs = {
             "zai-mcp-server": {
-                "type": "stdio",
-                "command": "npx",
-                "args": ["-y", "@z_ai/mcp-server"],
-                "env": {"Z_AI_API_KEY": self.api_token, "Z_AI_MODE": "ZAI"}
+                "type": "native-python",
+                "server_class": "ZAIMCPServer",
+                "config": {
+                    "api_key": self.api_token,
+                    "mode": "ZAI"
+                },
+                "fallback": {
+                    "type": "stdio",
+                    "command": "npx",
+                    "args": ["-y", "@z_ai/mcp-server"],
+                    "env": {"Z_AI_API_KEY": self.api_token, "Z_AI_MODE": "ZAI"}
+                }
             },
             "web-search-prime": {
-                "type": "streamable-http",
-                "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
-                "headers": {"Authorization": f"Bearer {self.api_token}"}
+                "type": "native-python",
+                "server_class": "WebSearchMCPServer",
+                "config": {
+                    "api_key": self.api_token,
+                    "base_url": "https://api.z.ai/api/mcp/web_search_prime/mcp"
+                },
+                "fallback": {
+                    "type": "streamable-http",
+                    "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
+                    "headers": {"Authorization": f"Bearer {self.api_token}"}
+                }
             }
         }
 
@@ -255,25 +489,85 @@ class MCPIntegrationManager:
             _LOGGER.error("Error reconnecting MCP server %s: %s", server_name, e)
 
     async def _connect_mcp_server(self, server_name: str) -> bool:
-        """Connect to a specific MCP server."""
+        """Connect to a specific MCP server with native Python preference and fallback support."""
         if server_name not in self.mcp_configs:
             _LOGGER.error("Unknown MCP server: %s", server_name)
             return False
 
         config = self.mcp_configs[server_name]
-        
+
         try:
-            if config["type"] == "stdio":
-                # Handle stdio MCP server (zai-mcp-server)
+            # Try native Python implementation first
+            if config["type"] == "native-python":
+                return await self._connect_native_server(server_name, config)
+            elif config["type"] == "stdio":
+                # Handle stdio MCP server (fallback)
                 return await self._connect_stdio_server(server_name, config)
             elif config["type"] == "streamable-http":
-                # Handle HTTP MCP server (web-search-prime)
+                # Handle HTTP MCP server (fallback)
                 return await self._connect_http_server(server_name, config)
             else:
                 _LOGGER.error("Unsupported MCP server type: %s", config["type"])
                 return False
         except Exception as e:
             _LOGGER.error("Error connecting to MCP server %s: %s", server_name, e)
+            return False
+
+    async def _connect_native_server(self, server_name: str, config: Dict[str, Any]) -> bool:
+        """Connect to a native Python MCP server."""
+        try:
+            server_class_name = config.get("server_class")
+            server_config = config.get("config", {})
+
+            # Create the appropriate server instance
+            if server_class_name == "ZAIMCPServer":
+                server = ZAIMCPServer(server_config)
+            elif server_class_name == "WebSearchMCPServer":
+                server = WebSearchMCPServer(server_config)
+            else:
+                _LOGGER.error("Unknown native MCP server class: %s", server_class_name)
+                return False
+
+            # Try to connect
+            if await server.connect():
+                self.active_connections[server_name] = {
+                    "type": "native-python",
+                    "server": server,
+                    "config": config,
+                    "status": "connected"
+                }
+                _LOGGER.info("Successfully connected to native Python MCP server: %s", server_name)
+                return True
+            else:
+                _LOGGER.warning("Failed to connect to native Python MCP server: %s", server_name)
+                return False
+
+        except Exception as e:
+            _LOGGER.error("Error connecting to native Python MCP server %s: %s", server_name, e)
+
+            # Try fallback if available
+            fallback_config = config.get("fallback")
+            if fallback_config:
+                _LOGGER.info("Attempting fallback connection for MCP server: %s", server_name)
+                return await self._connect_fallback_server(server_name, fallback_config)
+
+            return False
+
+    async def _connect_fallback_server(self, server_name: str, fallback_config: Dict[str, Any]) -> bool:
+        """Connect to a fallback MCP server configuration."""
+        try:
+            fallback_type = fallback_config.get("type")
+
+            if fallback_type == "stdio":
+                return await self._connect_stdio_server(server_name, fallback_config)
+            elif fallback_type == "streamable-http":
+                return await self._connect_http_server(server_name, fallback_config)
+            else:
+                _LOGGER.error("Unsupported fallback MCP server type: %s", fallback_type)
+                return False
+
+        except Exception as e:
+            _LOGGER.error("Error connecting to fallback MCP server %s: %s", server_name, e)
             return False
 
     async def _connect_stdio_server(self, server_name: str, config: Dict[str, Any]) -> bool:
@@ -392,11 +686,26 @@ class MCPIntegrationManager:
             }
 
     async def _call_mcp_tool_with_retry(self, tool_name: str, parameters: Dict[str, Any], server_name: str) -> Dict[str, Any]:
-        """Call MCP tool with retry logic."""
+        """Call MCP tool with retry logic using native Python servers when available."""
         last_error = None
 
         for attempt in range(MAX_RETRY_ATTEMPTS):
             try:
+                # Get the connection for this server
+                connection = self.active_connections.get(server_name)
+                if not connection:
+                    return {
+                        "success": False,
+                        "error": f"MCP server not connected: {server_name}"
+                    }
+
+                # Use native Python server if available
+                if connection.get("type") == "native-python":
+                    server = connection.get("server")
+                    if server:
+                        return await server.call_tool(tool_name, parameters)
+
+                # Fallback to direct API calls
                 if tool_name in ["image_analysis", "video_analysis"]:
                     return await self._call_zai_mcp_tool(tool_name, parameters)
                 elif tool_name == "webSearchPrime":
@@ -417,8 +726,9 @@ class MCPIntegrationManager:
                         _LOGGER.info("Connection issue detected, attempting to reconnect server: %s", server_name)
                         await self._reconnect_server(server_name)
 
-                    # Exponential backoff
-                    delay = min(RETRY_DELAY_BASE * (2 ** attempt), MAX_RETRY_DELAY)
+                    # Exponential backoff with jitter
+                    jitter = hash(server_name) % 1000 / 1000  # 0-1 second jitter
+                    delay = min(RETRY_DELAY_BASE * (2 ** attempt) + jitter, MAX_RETRY_DELAY)
                     await asyncio.sleep(delay)
 
         # All attempts failed
@@ -609,9 +919,18 @@ class MCPIntegrationManager:
         # Disconnect all active connections
         for server_name, connection in self.active_connections.items():
             try:
-                if connection.get("type") == "http" and "session" in connection:
+                connection_type = connection.get("type")
+
+                if connection_type == "native-python":
+                    # Disconnect native Python servers
+                    server = connection.get("server")
+                    if server and hasattr(server, "disconnect"):
+                        await server.disconnect()
+                elif connection_type == "http" and "session" in connection:
+                    # Close HTTP sessions
                     await connection["session"].close()
-                _LOGGER.debug("Disconnected MCP server: %s", server_name)
+
+                _LOGGER.debug("Disconnected MCP server: %s (type: %s)", server_name, connection_type)
             except Exception as e:
                 _LOGGER.error("Error disconnecting MCP server %s: %s", server_name, e)
 

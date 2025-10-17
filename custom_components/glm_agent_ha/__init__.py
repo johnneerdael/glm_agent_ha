@@ -6,6 +6,7 @@ import logging
 import time
 from datetime import datetime
 from types import SimpleNamespace
+from typing import Dict, List, Optional, Set
 
 import voluptuous as vol
 from homeassistant.components.frontend import async_register_built_in_panel
@@ -51,6 +52,164 @@ _LOGGER = logging.getLogger(__name__)
 
 # Config schema - this integration only supports config entries
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+class HTTPRouteRegistry:
+    """Registry for managing HTTP static routes to prevent duplicates."""
+
+    def __init__(self):
+        """Initialize the route registry."""
+        self._registered_routes: Dict[str, SimpleNamespace] = {}
+        self._static_paths: Set[str] = set()
+
+    def is_route_registered(self, url_path: str) -> bool:
+        """Check if a route is already registered."""
+        return url_path in self._registered_routes
+
+    def register_route(self, url_path: str, route_info: SimpleNamespace) -> bool:
+        """Register a route if not already registered.
+
+        Returns True if route was registered, False if it was already registered.
+        """
+        if self.is_route_registered(url_path):
+            _LOGGER.warning("Route %s already registered, skipping registration", url_path)
+            return False
+
+        self._registered_routes[url_path] = route_info
+        _LOGGER.debug("Registered HTTP route: %s", url_path)
+        return True
+
+    def unregister_route(self, url_path: str) -> bool:
+        """Unregister a route.
+
+        Returns True if route was unregistered, False if it wasn't found.
+        """
+        if url_path in self._registered_routes:
+            del self._registered_routes[url_path]
+            _LOGGER.debug("Unregistered HTTP route: %s", url_path)
+            return True
+        return False
+
+    def is_static_path_registered(self, path: str) -> bool:
+        """Check if a static path is already registered."""
+        return path in self._static_paths
+
+    def register_static_path(self, path: str) -> bool:
+        """Register a static path if not already registered.
+
+        Returns True if path was registered, False if it was already registered.
+        """
+        if self.is_static_path_registered(path):
+            _LOGGER.warning("Static path %s already registered, skipping registration", path)
+            return False
+
+        self._static_paths.add(path)
+        _LOGGER.debug("Registered static path: %s", path)
+        return True
+
+    def unregister_static_path(self, path: str) -> bool:
+        """Unregister a static path.
+
+        Returns True if path was unregistered, False if it wasn't found.
+        """
+        if path in self._static_paths:
+            self._static_paths.remove(path)
+            _LOGGER.debug("Unregistered static path: %s", path)
+            return True
+        return False
+
+    def cleanup_all(self):
+        """Clean up all registered routes and paths."""
+        self._registered_routes.clear()
+        self._static_paths.clear()
+        _LOGGER.debug("Cleaned up all HTTP routes and static paths")
+
+    def get_registered_routes(self) -> Dict[str, SimpleNamespace]:
+        """Get all registered routes."""
+        return dict(self._registered_routes)
+
+    def get_registered_static_paths(self) -> Set[str]:
+        """Get all registered static paths."""
+        return set(self._static_paths)
+
+
+# Global route registry instance
+_ROUTE_REGISTRY: Optional[HTTPRouteRegistry] = None
+
+
+def get_route_registry() -> HTTPRouteRegistry:
+    """Get the global route registry instance."""
+    global _ROUTE_REGISTRY
+    if _ROUTE_REGISTRY is None:
+        _ROUTE_REGISTRY = HTTPRouteRegistry()
+    return _ROUTE_REGISTRY
+
+
+async def async_register_static_route_with_validation(
+    hass: HomeAssistant,
+    url_path: str,
+    file_path: str,
+    cache_headers: bool = False
+) -> bool:
+    """Register a static route with validation and deduplication.
+
+    Returns True if route was registered successfully, False otherwise.
+    """
+    try:
+        # Validate file path exists
+        import os
+        if not os.path.exists(file_path):
+            _LOGGER.error("Static file does not exist: %s", file_path)
+            return False
+
+        # Check if route already registered
+        registry = get_route_registry()
+        if registry.is_route_registered(url_path):
+            _LOGGER.warning("Static route %s already registered, reusing existing route", url_path)
+            return True
+
+        # Create route info
+        route_info = SimpleNamespace(
+            url_path=url_path,
+            path=file_path,
+            cache_headers=cache_headers,
+            registered_at=time.time()
+        )
+
+        # Register in our registry first
+        if not registry.register_route(url_path, route_info):
+            return False
+
+        # Register with Home Assistant
+        try:
+            await hass.http.async_register_static_paths([route_info])
+            _LOGGER.info("Successfully registered static route: %s -> %s", url_path, file_path)
+            return True
+        except Exception as e:
+            # Rollback registration in our registry if HA registration failed
+            registry.unregister_route(url_path)
+            _LOGGER.error("Failed to register static route %s with Home Assistant: %s", url_path, e)
+            return False
+
+    except Exception as e:
+        _LOGGER.error("Error registering static route %s: %s", url_path, e)
+        return False
+
+
+async def async_cleanup_registered_routes(hass: HomeAssistant):
+    """Clean up all registered routes for this integration."""
+    try:
+        registry = get_route_registry()
+        registered_routes = registry.get_registered_routes()
+
+        # Note: Home Assistant doesn't provide a direct way to unregister static routes
+        # but we clean up our registry to prevent accumulation
+        registry.cleanup_all()
+
+        _LOGGER.info("Cleaned up %d registered HTTP routes", len(registered_routes))
+
+    except Exception as e:
+        _LOGGER.error("Error cleaning up registered routes: %s", e)
 
 # Define service schema to accept a custom prompt and optional attachment
 SERVICE_SCHEMA = vol.Schema(
@@ -1048,14 +1207,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _LOGGER.debug("Debug, performance, logging, and security services registered successfully")
 
-    # Register static path for frontend
-    await hass.http.async_register_static_paths([
-        SimpleNamespace(
-            url_path="/frontend/glm_agent_ha/glm_agent_ha-panel.js",
-            path=hass.config.path("custom_components/glm_agent_ha/frontend/glm_agent_ha-panel.js"),
-            cache_headers=False,
-        )
-    ])
+    # Register static path for frontend with validation and deduplication
+    static_route_success = await async_register_static_route_with_validation(
+        hass,
+        "/frontend/glm_agent_ha/glm_agent_ha-panel.js",
+        hass.config.path("custom_components/glm_agent_ha/frontend/glm_agent_ha-panel.js"),
+        cache_headers=False,
+    )
+
+    if not static_route_success:
+        _LOGGER.warning("Failed to register static route for frontend panel - dashboard features may be unavailable")
 
     # Panel registration with proper error handling
     panel_name = "glm_agent_ha"
@@ -1096,6 +1257,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.debug("GLM Coding Plan Agent HA panel removed successfully")
         except Exception as e:
             _LOGGER.debug("Error removing panel: %s", str(e))
+
+    # Clean up registered HTTP routes
+    await async_cleanup_registered_routes(hass)
 
     # Remove services
     hass.services.async_remove(DOMAIN, "query")

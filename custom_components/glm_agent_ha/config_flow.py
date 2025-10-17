@@ -5,6 +5,7 @@ from __future__ import annotations
 __all__ = ["AiAgentHaConfigFlow"]
 
 import logging
+from typing import Dict, Optional
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -16,6 +17,35 @@ from homeassistant.helpers.selector import (
     TextSelector,
     TextSelectorConfig,
 )
+
+
+def _validate_and_prepare_description_placeholders(
+    placeholders: Dict[str, str],
+    fallback_values: Optional[Dict[str, str]] = None
+) -> Dict[str, str]:
+    """Validate and prepare description placeholders with fallback values."""
+    if fallback_values is None:
+        fallback_values = {}
+
+    validated_placeholders = {}
+    missing_variables = []
+
+    for key, value in placeholders.items():
+        if value is None or value == "":
+            if key in fallback_values:
+                validated_placeholders[key] = fallback_values[key]
+                _LOGGER.warning("Translation variable '%s' was missing, using fallback: %s", key, fallback_values[key])
+            else:
+                validated_placeholders[key] = f"[{key.upper()}]"
+                missing_variables.append(key)
+                _LOGGER.error("Translation variable '%s' is missing and no fallback provided", key)
+        else:
+            validated_placeholders[key] = value
+
+    if missing_variables:
+        _LOGGER.warning("Missing translation variables: %s", ", ".join(missing_variables))
+
+    return validated_placeholders
 
 from .const import (
     CONF_CACHE_TTL,
@@ -245,12 +275,19 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
                     ),
                 }
             ),
-            description_placeholders={
-                "current_model": GLM_MODELS.get(
-                    self.config_entry.data.get("models", {}).get("openai", DEFAULT_MODEL),
-                    self.config_entry.data.get("models", {}).get("openai", DEFAULT_MODEL)
-                )
-            },
+            description_placeholders=_validate_and_prepare_description_placeholders(
+                {
+                    "current_provider": PROVIDER_NAME,
+                    "current_model": GLM_MODELS.get(
+                        self.config_entry.data.get("models", {}).get("openai", DEFAULT_MODEL),
+                        self.config_entry.data.get("models", {}).get("openai", DEFAULT_MODEL)
+                    )
+                },
+                fallback_values={
+                    "current_provider": "GLM Coding Plan API",
+                    "current_model": DEFAULT_MODEL
+                }
+            ),
         )
 
     async def async_step_model(self, user_input=None):
@@ -286,14 +323,20 @@ class AiAgentHaOptionsFlowHandler(config_entries.OptionsFlow):
                     ),
                 }
             ),
-            description_placeholders={
-                "current_model": GLM_MODELS.get(current_model, current_model),
-                "model_descriptions": (
-                    "GLM-4.6: Latest model with best performance\n"
-                    "GLM-4.5: Balanced model for most tasks\n"
-                    "GLM-4.5-air: Fast responses for real-time applications"
-                )
-            },
+            description_placeholders=_validate_and_prepare_description_placeholders(
+                {
+                    "current_model": GLM_MODELS.get(current_model, current_model),
+                    "model_descriptions": (
+                        "GLM-4.6: Latest model with best performance\n"
+                        "GLM-4.5: Balanced model for most tasks\n"
+                        "GLM-4.5-air: Fast responses for real-time applications"
+                    )
+                },
+                fallback_values={
+                    "current_model": DEFAULT_MODEL,
+                    "model_descriptions": "GLM-4.6: Latest model with best performance"
+                }
+            ),
         )
 
     async def async_step_api_key(self, user_input=None):
