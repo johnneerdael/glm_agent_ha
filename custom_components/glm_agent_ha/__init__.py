@@ -300,14 +300,15 @@ async def _setup_pipeline_integrations(
         except Exception as e:
             _LOGGER.error("Error setting up voice integration: %s", e)
 
-    # Set up conversation platform for Assist
+    # Set up conversation platform for Assist (runtime check)
     try:
-        from .conversations import async_setup_conversation
-        conversation_success = await async_setup_conversation(hass, config_data)
-        if conversation_success:
-            _LOGGER.info("Conversation platform setup completed")
-            # Also register directly with Home Assistant's conversation component if available
-            if hasattr(hass.components, 'conversation'):
+        # Check if conversation component is available
+        if hasattr(hass.components, 'conversation'):
+            from .conversations import async_setup_conversation
+            conversation_success = await async_setup_conversation(hass, config_data)
+            if conversation_success:
+                _LOGGER.info("Conversation platform setup completed")
+                # Also register directly with Home Assistant's conversation component
                 try:
                     from .llm_integration import GLMConversationAgent
                     agent = GLMConversationAgent(hass, config_data, entry.entry_id)
@@ -315,28 +316,34 @@ async def _setup_pipeline_integrations(
                     _LOGGER.info("Conversation agent registered with Home Assistant")
                 except Exception as e:
                     _LOGGER.warning("Failed to register conversation agent with HA: %s", e)
+            else:
+                _LOGGER.debug("Conversation platform setup failed")
         else:
-            _LOGGER.debug("Conversation platform not available")
+            _LOGGER.debug("Conversation component not available in this HA version")
     except ImportError:
         _LOGGER.debug("Conversation platform not available in this HA version")
     except Exception as e:
         _LOGGER.error("Error setting up conversation platform: %s", e)
 
-    # Set up AI Task platform
+    # Set up AI Task platform (runtime check)
     try:
-        from .ai_task import async_setup_ai_task_entity
-        ai_task_success = await async_setup_ai_task_entity(hass, config_data, entry)
-        if ai_task_success:
-            _LOGGER.info("AI Task platform setup completed")
-            # Verify entity was created by checking hass.data
-            if hasattr(hass, 'data') and 'entity_platform' in hass.data:
-                platform_data = hass.data.get('entity_platform', {})
-                ai_task_entities = platform_data.get('ai_task', {}).get('glm_agent_ha', [])
-                _LOGGER.info("AI Task entities created: %d", len(ai_task_entities))
-        else:
-            _LOGGER.debug("AI Task platform not available")
-    except ImportError:
-        _LOGGER.debug("AI Task platform not available in this HA version")
+        # Check if AI task component is available
+        try:
+            from homeassistant.components import ai_task
+            # If this import succeeds, AI task is available
+            from .ai_task import async_setup_ai_task_entity
+            ai_task_success = await async_setup_ai_task_entity(hass, config_data, entry)
+            if ai_task_success:
+                _LOGGER.info("AI Task platform setup completed")
+                # Verify entity was created by checking hass.data
+                if hasattr(hass, 'data') and 'entity_platform' in hass.data:
+                    platform_data = hass.data.get('entity_platform', {})
+                    ai_task_entities = platform_data.get('ai_task', {}).get('glm_agent_ha', [])
+                    _LOGGER.info("AI Task entities created: %d", len(ai_task_entities))
+            else:
+                _LOGGER.debug("AI Task platform setup failed")
+        except ImportError:
+            _LOGGER.debug("AI Task platform not available in this HA version")
     except Exception as e:
         _LOGGER.error("Error setting up AI Task platform: %s", e)
 
