@@ -49,24 +49,30 @@ async def async_setup_ai_task_entity(
             _LOGGER.error("No AI provider configured for AI Task entity")
             return False
 
-        # Create AI Task entity description
+        # Create AI Task entity description with model information
+        model = entry.data.get("models", {}).get("openai", "GLM-4.6")
+        plan = entry.data.get("plan", "lite")
+
         ai_task_entity_description = AITaskEntityDescription(
             key="glm_agent_ai_task",
-            name="GLM Agent AI Task",
+            name=f"GLM Agent AI Task ({model})",
             supported_features=AITaskEntityFeature.GENERATE_DATA,
             has_entity_name=True,
         )
+
+        # Create entity setup function with discovery info
+        async def setup_entities(hass, config, async_add_entities, discovery_info=None):
+            await _setup_ai_task_entities(hass, config, async_add_entities, entry, discovery_info)
 
         # Register AI Task platform
         await async_setup_ai_task_platform(
             hass,
             DOMAIN,
             ai_task_entity_description,
-            lambda hass, config, async_add_entities, discovery_info=None:
-                _setup_ai_task_entities(hass, config, async_add_entities, entry)
+            setup_entities
         )
 
-        _LOGGER.info("AI Task platform setup completed for GLM Agent HA")
+        _LOGGER.info("AI Task platform setup completed for GLM Agent HA (plan: %s, model: %s)", plan, model)
         return True
 
     except Exception as e:
@@ -78,6 +84,7 @@ async def _setup_ai_task_entities(
     config: ConfigType,
     async_add_entities: AddEntitiesCallback,
     entry: ConfigEntry,
+    discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
     """Set up AI Task entities."""
     try:

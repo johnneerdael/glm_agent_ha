@@ -33,11 +33,14 @@ async def async_setup_conversation(hass: HomeAssistant, config: ConfigType) -> b
         # Create conversation agent
         agent = GLMConversationAgent(hass, config_data, entry.entry_id)
 
-        # Register conversation agent
+        # Register conversation agent using Home Assistant's conversation component
+        hass.components.conversation.async_set_agent(DOMAIN, agent)
+
+        # Also register in our own data structure for compatibility
         hass.data.setdefault("conversation_agents", {})
         hass.data["conversation_agents"][DOMAIN] = agent
 
-        _LOGGER.info("GLM Agent HA conversation agent registered")
+        _LOGGER.info("GLM Agent HA conversation agent registered successfully")
         return True
 
     except Exception as e:
