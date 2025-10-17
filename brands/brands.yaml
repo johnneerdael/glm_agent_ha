@@ -1,0 +1,15 @@
+# Brand icons configuration for GLM Agent HA
+# This file defines brand icons to prevent 404 errors
+# when Home Assistant tries to fetch brand icons
+
+glm_agent_ha:
+  name: "GLM Agent HA"
+  icon: "mdi:robot"
+  website: "https://github.com/johnneerdael/glm_agent_ha"
+  docs: "https://github.com/johnneerdael/glm_agent_ha/wiki"
+
+wled_liveviewproxy:
+  name: "WLED Live View Proxy"
+  icon: "mdi:led-strip-variant"
+  website: ""
+  docs: ""

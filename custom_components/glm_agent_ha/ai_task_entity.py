@@ -192,14 +192,22 @@ class GLMAgentAITaskEntity(AITaskEntity):
         super().__init__(hass)
         self._entry = entry
         self._attr_has_entity_name = True
-        self._attr_name = "GLM Agent AI Task"
+        self._attr_name = "AI Task"
         self._attr_supported_features = AITaskEntityFeature.GENERATE_DATA
         self._attr_unique_id = f"{entry.entry_id}_ai_task"
+
+        # Create proper device info for GLM Coding Plan Device
+        plan_type = entry.data.get(CONF_PLAN, "lite").title()
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name="GLM Agent HA",
+            identifiers={(DOMAIN, f"glm_coding_plan_device_{entry.entry_id}")},
+            name="GLM Coding Plan Device",
             manufacturer="GLM Agent HA",
-            model=entry.data.get(CONF_PLAN, "lite"),
+            model=f"GLM Coding Plan {plan_type}",
+            sw_version="1.11.1",
+            hw_version=None,
+            serial_number=None,
+            via_device=None,
+            configuration_url=None,
         )
 
         # Initialize agent

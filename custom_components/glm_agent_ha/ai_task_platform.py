@@ -23,7 +23,7 @@ _LOGGER = logging.getLogger(__name__)
 # AI Task entity description
 AI_TASK_ENTITY_DESCRIPTION = AITaskEntityDescription(
     key="glm_agent_ai_task",
-    name="GLM Agent AI Task",
+    name="AI Task",
     supported_features=AITaskEntityFeature.GENERATE_DATA,
     has_entity_name=True,
 )

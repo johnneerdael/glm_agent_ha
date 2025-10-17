@@ -8,6 +8,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 
+from ..conversation_entity import GLMAgentConversationEntity
 from ..llm_integration import GLMConversationAgent
 from ..const import DOMAIN
 
@@ -30,7 +31,22 @@ async def async_setup_conversation(hass: HomeAssistant, config: ConfigType) -> b
         entry = entries[0]
         config_data = dict(entry.data)
 
-        # Create conversation agent
+        # Try to use the new ConversationEntity approach first
+        try:
+            conversation_entity = GLMAgentConversationEntity(hass, config_data, entry.entry_id)
+
+            # Register the conversation entity with Home Assistant
+            if hasattr(hass.components, 'conversation'):
+                hass.components.conversation.async_set_agent(DOMAIN, conversation_entity)
+                _LOGGER.info("GLM Agent HA conversation entity registered successfully")
+                return True
+            else:
+                _LOGGER.warning("Conversation component not available, falling back to agent approach")
+
+        except Exception as e:
+            _LOGGER.warning("Failed to set up conversation entity, falling back to agent approach: %s", e)
+
+        # Fallback to the original agent approach
         agent = GLMConversationAgent(hass, config_data, entry.entry_id)
 
         # Register conversation agent using Home Assistant's conversation component
@@ -45,7 +61,7 @@ async def async_setup_conversation(hass: HomeAssistant, config: ConfigType) -> b
         hass.data.setdefault("conversation_agents", {})
         hass.data["conversation_agents"][DOMAIN] = agent
 
-        _LOGGER.info("GLM Agent HA conversation agent registered successfully")
+        _LOGGER.info("GLM Agent HA conversation agent registered successfully (fallback)")
         return True
 
     except Exception as e:

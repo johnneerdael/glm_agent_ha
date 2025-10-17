@@ -302,26 +302,37 @@ async def _setup_pipeline_integrations(
 
     # Set up conversation platform for Assist (runtime check)
     try:
-        # Check if conversation component is available
-        if hasattr(hass.components, 'conversation'):
-            from .conversations import async_setup_conversation
-            conversation_success = await async_setup_conversation(hass, config_data)
-            if conversation_success:
-                _LOGGER.info("Conversation platform setup completed")
-                # Also register directly with Home Assistant's conversation component
-                try:
-                    from .llm_integration import GLMConversationAgent
-                    agent = GLMConversationAgent(hass, config_data, entry.entry_id)
-                    hass.components.conversation.async_set_agent(DOMAIN, agent)
-                    _LOGGER.info("Conversation agent registered with Home Assistant")
-                except Exception as e:
-                    _LOGGER.warning("Failed to register conversation agent with HA: %s", e)
-            else:
-                _LOGGER.debug("Conversation platform setup failed")
-        else:
-            _LOGGER.debug("Conversation component not available in this HA version")
+        # Import conversation module
+        from homeassistant.components import conversation
+
+        # Try to use the new ConversationEntity approach first
+        try:
+            from .conversation_entity import GLMAgentConversationEntity
+            conversation_entity = GLMAgentConversationEntity(hass, config_data, entry.entry_id)
+
+            # Register the conversation entity with Home Assistant using the proper API
+            conversation.async_set_agent(hass, entry, conversation_entity)
+            _LOGGER.info("Conversation entity registered with Home Assistant using conversation.async_set_agent")
+
+            # Store reference for cleanup
+            hass.data[DOMAIN]["conversation_entity"] = conversation_entity
+
+        except Exception as e:
+            _LOGGER.warning("Failed to set up conversation entity, falling back to agent approach: %s", e)
+
+            # Fallback to the original agent approach
+            from .llm_integration import GLMConversationAgent
+            agent = GLMConversationAgent(hass, config_data, entry.entry_id)
+
+            # Register the conversation agent with Home Assistant using the proper API
+            conversation.async_set_agent(hass, entry, agent)
+            _LOGGER.info("Conversation agent registered with Home Assistant using conversation.async_set_agent")
+
+            # Store reference for cleanup
+            hass.data[DOMAIN]["conversation_agent"] = agent
+
     except ImportError:
-        _LOGGER.debug("Conversation platform not available in this HA version")
+        _LOGGER.debug("Conversation component not available in this HA version")
     except Exception as e:
         _LOGGER.error("Error setting up conversation platform: %s", e)
 
@@ -1340,6 +1351,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+
+    # Unregister conversation agent using the proper API
+    try:
+        from homeassistant.components import conversation
+
+        # Try to unregister the conversation agent
+        conversation.async_unset_agent(hass, entry)
+        _LOGGER.info("Conversation agent unregistered from Home Assistant")
+
+    except ImportError:
+        _LOGGER.debug("Conversation component not available for unregistration")
+    except Exception as e:
+        _LOGGER.warning("Failed to unregister conversation agent: %s", e)
+
     if await _panel_exists(hass, "glm_agent_ha"):
         try:
             from homeassistant.components.frontend import async_remove_panel
@@ -1366,6 +1391,29 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_remove(DOMAIN, "debug_api")
     hass.services.async_remove(DOMAIN, "debug_logs")
     hass.services.async_remove(DOMAIN, "debug_report")
+
+    # Remove performance monitoring services
+    hass.services.async_remove(DOMAIN, "performance_current")
+    hass.services.async_remove(DOMAIN, "performance_aggregated")
+    hass.services.async_remove(DOMAIN, "performance_trends")
+    hass.services.async_remove(DOMAIN, "performance_slow_requests")
+    hass.services.async_remove(DOMAIN, "performance_export")
+    hass.services.async_remove(DOMAIN, "performance_reset")
+
+    # Remove structured logging services
+    hass.services.async_remove(DOMAIN, "logging_stats")
+    hass.services.async_remove(DOMAIN, "logging_search")
+
+    # Remove security services
+    hass.services.async_remove(DOMAIN, "security_report")
+    hass.services.async_remove(DOMAIN, "security_validate")
+    hass.services.async_remove(DOMAIN, "security_block")
+    hass.services.async_remove(DOMAIN, "security_domains")
+
+    # Remove template services
+    hass.services.async_remove(DOMAIN, "get_templates")
+    hass.services.async_remove(DOMAIN, "apply_template")
+
     # Remove data
     if DOMAIN in hass.data:
         hass.data.pop(DOMAIN)

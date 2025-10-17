@@ -256,7 +256,8 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
       _dragActive: { type: Boolean, reflect: false, attribute: false },
       _performanceMetrics: { type: Object, reflect: false, attribute: false },
       _securityReport: { type: Object, reflect: false, attribute: false },
-      _mcpStatus: { type: Object, reflect: false, attribute: false }
+      _mcpStatus: { type: Object, reflect: false, attribute: false },
+      _initializationComplete: { type: Boolean, reflect: false, attribute: false }
     };
   }
 
@@ -466,6 +467,31 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
         gap: 8px;
       }
 
+      .prompts-toggle {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        background: var(--primary-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 16px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--secondary-text-color);
+      }
+
+      .prompts-toggle:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+        background: rgba(var(--primary-color-rgb), 0.1);
+      }
+
+      .prompts-toggle ha-icon {
+        --ha-icon-size: 16px;
+      }
+
       .prompts-categories {
         display: flex;
         gap: 8px;
@@ -535,7 +561,7 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
       }
 
       .smart-prompt-icon {
-        --mdc-icon-size: 20px;
+        --ha-icon-size: 20px;
         flex-shrink: 0;
         margin-top: 2px;
       }
@@ -600,7 +626,7 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
         transition: opacity 0.2s ease;
         color: var(--error-color);
         cursor: pointer;
-        --mdc-icon-size: 14px;
+        --ha-icon-size: 14px;
       }
 
       .history-bubble:hover .history-delete {
@@ -636,7 +662,7 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
       }
 
       .upload-icon {
-        --mdc-icon-size: 48px;
+        --ha-icon-size: 48px;
         color: var(--secondary-text-color);
       }
 
@@ -1000,23 +1026,23 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
       }
 
       .automation-actions ha-button, .dashboard-actions ha-button {
-        --mdc-button-height: 40px;
-        --mdc-button-padding: 0 20px;
-        --mdc-typography-button-font-size: 14px;
-        --mdc-typography-button-font-weight: 600;
+        --ha-button-height: 40px;
+        --ha-button-padding: 0 20px;
+        --ha-button-font-size: 14px;
+        --ha-button-font-weight: 600;
         border-radius: 20px;
       }
 
       .automation-actions ha-button:first-child,
       .dashboard-actions ha-button:first-child {
-        --mdc-theme-primary: var(--success-color, #4caf50);
-        --mdc-theme-on-primary: #fff;
+        --ha-primary-color: var(--success-color, #4caf50);
+        --ha-on-primary-color: #fff;
       }
 
       .automation-actions ha-button:last-child,
       .dashboard-actions ha-button:last-child {
-        --mdc-theme-primary: var(--error-color);
-        --mdc-theme-on-primary: #fff;
+        --ha-primary-color: var(--error-color);
+        --ha-on-primary-color: #fff;
       }
 
       .automation-details, .dashboard-details {
@@ -1096,7 +1122,6 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
     this._promptHistoryLoaded = false;
     this._showPredefinedPrompts = true;
     this._showPromptHistory = true;
-    this._selectedPrompts = [];
     this._selectedProvider = null;
     this._selectedModel = 'GLM-4.6';
     this._models = ['GLM-4.6', 'GLM-4.5', 'GLM-4.5-air'];
@@ -1116,6 +1141,11 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
     this._mcpStatus = null;
     this._activeCategory = 'basic';
 
+    // FIX: Initialize default prompts immediately to ensure actions display on load
+    this._selectedPrompts = this._getRandomPrompts('basic');
+    this._initializationComplete = false;
+    this._renderRequested = false;
+
     console.debug("GLM Agent HA Modern Panel constructor called");
   }
 
@@ -1130,12 +1160,38 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
   }
 
   _getRandomPrompts(category = null) {
+    // FIX: Ensure we always have prompts to display, even during initialization
     const categories = category ? [category] : PLAN_FEATURES[this._userPlan]?.smartCategories || ['basic'];
     const allPrompts = [];
 
     categories.forEach(cat => {
       allPrompts.push(...this._getSmartPromptsForCategory(cat));
     });
+
+    // If no prompts found (edge case), provide fallback basic prompts
+    if (allPrompts.length === 0) {
+      const fallbackPrompts = [
+        {
+          text: "🏠 Help me set up home automation",
+          icon: "mdi:home",
+          tools: ["basic_query"],
+          description: "Get started with home automation"
+        },
+        {
+          text: "📊 Create a dashboard for my devices",
+          icon: "mdi:chart-box",
+          tools: ["dashboard_creation"],
+          description: "Build a custom dashboard"
+        },
+        {
+          text: "🔒 Check my system security",
+          icon: "mdi:shield",
+          tools: ["basic_query"],
+          description: "Security analysis and recommendations"
+        }
+      ];
+      return fallbackPrompts;
+    }
 
     // Shuffle and take 3-5 prompts
     const shuffled = [...allPrompts].sort(() => 0.5 - Math.random());
@@ -1146,6 +1202,9 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
     try {
       super.connectedCallback();
       console.debug("GLM Agent HA Modern Panel connected");
+
+      // FIX: Request immediate update to show default actions
+      this.requestUpdate();
 
       if (this.hass && !this._eventSubscriptionSetup) {
         this._eventSubscriptionSetup = true;
@@ -1176,6 +1235,10 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
           console.warn("Failed to load advanced data:", error);
           // Continue without advanced data
         }
+
+        // FIX: Mark initialization as complete and trigger update
+        this._initializationComplete = true;
+        this.requestUpdate();
       }
 
       // Close dropdown when clicking outside
@@ -1272,8 +1335,11 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
             // Detect plan from entry
             const plan = entry.data?.plan || entry.options?.plan || 'lite';
             if (plan !== this._userPlan) {
+              const previousPlan = this._userPlan;
               this._userPlan = plan;
-              this._selectedPrompts = this._getRandomPrompts();
+              // FIX: Update prompts when plan changes
+              this._selectedPrompts = this._getRandomPrompts(this._activeCategory);
+              console.debug(`Plan changed from ${previousPlan} to ${plan}, updated prompts`);
             }
 
             return {
@@ -1298,6 +1364,7 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
         this._error = error.message || 'Failed to load AI provider configurations.';
         this._availableProviders = [];
       }
+      // FIX: Request update after providers are loaded to refresh actions
       this.requestUpdate();
     }
 
@@ -1312,15 +1379,29 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
       await this._loadPromptHistory();
     }
 
+    // FIX: Request update when initialization completes to ensure actions are visible
+    if (changedProps.has('_initializationComplete') && this._initializationComplete) {
+      this.requestUpdate();
+    }
+
     if (changedProps.has('_messages') || changedProps.has('_isLoading')) {
       this._scrollToBottom();
     }
   }
 
   _renderPromptsSection() {
+    // FIX: Ensure categories are always available, even during initialization
     const categories = Object.keys(SMART_PROMPTS).filter(cat =>
       PLAN_FEATURES[this._userPlan]?.smartCategories.includes(cat)
     );
+
+    // FIX: Always show at least basic category
+    const availableCategories = categories.length > 0 ? categories : ['basic'];
+
+    // FIX: Ensure we have prompts to display
+    const promptsToShow = this._selectedPrompts && this._selectedPrompts.length > 0
+      ? this._selectedPrompts
+      : this._getRandomPrompts(this._activeCategory);
 
     return (window.GLM_html || function() { return ''; })`
       <div class="prompts-section">
@@ -1345,7 +1426,7 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
 
         ${this._showPredefinedPrompts ? (window.GLM_html || function() { return ''; })`
           <div class="prompts-categories">
-            ${categories.map(category => (window.GLM_html || function() { return ''; })`
+            ${availableCategories.map(category => (window.GLM_html || function() { return ''; })`
               <div class="category-tab ${this._activeCategory === category ? 'active' : ''}"
                    @click=${() => this._selectCategory(category)}>
                 <ha-icon icon="mdi:${this._getCategoryIcon(category)}"></ha-icon>
@@ -1355,7 +1436,7 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
           </div>
 
           <div class="prompt-bubbles">
-            ${this._selectedPrompts.map(prompt => (window.GLM_html || function() { return ''; })`
+            ${promptsToShow.map(prompt => (window.GLM_html || function() { return ''; })`
               <div class="smart-prompt" @click=${() => this._useSmartPrompt(prompt)}>
                 <div class="smart-prompt-content">
                   <ha-icon class="smart-prompt-icon" icon="${prompt.icon}"></ha-icon>
@@ -1411,6 +1492,7 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
   _selectCategory(category) {
     this._activeCategory = category;
     this._selectedPrompts = this._getRandomPrompts(category);
+    // FIX: Ensure UI updates immediately when category changes
     this.requestUpdate();
   }
 
@@ -1419,10 +1501,14 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
     if (this._showPredefinedPrompts) {
       this._selectedPrompts = this._getRandomPrompts(this._activeCategory);
     }
+    // FIX: Ensure UI updates immediately when toggling prompts
+    this.requestUpdate();
   }
 
   _togglePromptHistory() {
     this._showPromptHistory = !this._showPromptHistory;
+    // FIX: Ensure UI updates immediately when toggling history
+    this.requestUpdate();
   }
 
   _useSmartPrompt(prompt) {
@@ -1628,7 +1714,9 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
         isLoading: this._isLoading,
         error: this._error,
         userPlan: this._userPlan,
-        uploadedFile: this._uploadedFile
+        uploadedFile: this._uploadedFile,
+        selectedPrompts: this._selectedPrompts,
+        initializationComplete: this._initializationComplete
       });
 
       // Error state fallback UI
@@ -2183,7 +2271,9 @@ class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
            changedProps.has('_showAdvancedDashboard') ||
            changedProps.has('_uploadedFile') ||
            changedProps.has('_activeCategory') ||
-           changedProps.has('_dragActive');
+           changedProps.has('_dragActive') ||
+           changedProps.has('_initializationComplete') ||
+           changedProps.has('_selectedPrompts');
   }
 
   _clearChat() {
