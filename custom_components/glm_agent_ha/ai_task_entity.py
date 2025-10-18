@@ -60,6 +60,8 @@ from .const import (
     DOMAIN,
     PLAN_PRO,
     PLAN_MAX,
+    SERVICES_DEVICE_IDENTIFIERS,
+    SERVICES_DEVICE_NAME,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -199,38 +201,71 @@ class GLMAgentAITaskEntity(AITaskEntity):
         self._attr_supported_features = AITaskEntityFeature.GENERATE_DATA
         self._attr_unique_id = f"{entry.entry_id}_ai_task"
 
-        # Create proper device info for GLM Agent HA
-        plan_type = entry.data.get(CONF_PLAN, "lite").title()
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name="GLM Agent HA",
-            manufacturer="Zhipu AI",
-            model=f"GLM Agent {plan_type}",
-            entry_type=dr.DeviceEntryType.SERVICE,
-        )
-
-        # Initialize agent
-        self._agent = AiAgentHaAgent(hass, entry.data)
-        self._mcp_manager = None
-
-        # Check if MCP integration is available and enabled
-        if (entry.options.get(CONF_ENABLE_MCP_INTEGRATION, True) and
-            entry.data.get(CONF_PLAN) in [PLAN_PRO, PLAN_MAX]):
-            # Get MCP manager from agent after it's initialized
-            self._mcp_manager = getattr(self._agent, '_mcp_manager', None)
-            if self._mcp_manager:
-                _LOGGER.info("MCP integration available for AI Task entity")
-            else:
-                _LOGGER.debug("MCP manager not available in agent")
+        # Use services device info from main module if available, otherwise create it
+        if (DOMAIN in hass.data and
+            "services_device_info" in hass.data[DOMAIN]):
+            self._attr_device_info = hass.data[DOMAIN]["services_device_info"]
         else:
-            _LOGGER.debug("MCP integration disabled or plan not supported")
+            # Fallback: Create proper device info for GLM Agent HA Services
+            plan_type = entry.data.get(CONF_PLAN, "lite").title()
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"{SERVICES_DEVICE_IDENTIFIERS}_{entry.entry_id}")},
+                name=SERVICES_DEVICE_NAME,
+                manufacturer="Zhipu AI",
+                model=f"GLM Agent Services ({plan_type})",
+                entry_type=dr.DeviceEntryType.SERVICE,
+            )
+
+        # Connect to shared agent from main integration
+        self._agent = None
+        self._mcp_manager = None
+        self._connect_to_shared_agent()
+
+    def _connect_to_shared_agent(self) -> None:
+        """Connect to the shared AI agent from the main integration."""
+        try:
+            # Get the shared agent from the main integration
+            if (DOMAIN in self._hass.data and
+                "agents" in self._hass.data[DOMAIN] and
+                self._hass.data[DOMAIN]["agents"]):
+
+                # Get the first available provider (usually "openai")
+                available_providers = list(self._hass.data[DOMAIN]["agents"].keys())
+                if available_providers:
+                    provider = available_providers[0]
+                    self._agent = self._hass.data[DOMAIN]["agents"][provider]
+                    _LOGGER.info("Connected GLM Agent AI Task entity to shared agent (provider: %s) for entry: %s",
+                               provider, self._entry.entry_id)
+
+                    # Check if MCP integration is available and enabled
+                    if (self._entry.options.get(CONF_ENABLE_MCP_INTEGRATION, True) and
+                        self._entry.data.get(CONF_PLAN) in [PLAN_PRO, PLAN_MAX]):
+                        # Get MCP manager from agent after it's initialized
+                        self._mcp_manager = getattr(self._agent, '_mcp_manager', None)
+                        if self._mcp_manager:
+                            _LOGGER.info("MCP integration available for AI Task entity")
+                        else:
+                            _LOGGER.debug("MCP manager not available in agent")
+                    else:
+                        _LOGGER.debug("MCP integration disabled or plan not supported")
+
+                else:
+                    _LOGGER.error("No AI agents found in main integration for entry: %s", self._entry.entry_id)
+                    self._agent = None
+            else:
+                _LOGGER.error("GLM Agent integration not properly initialized for entry: %s", self._entry.entry_id)
+                self._agent = None
+
+        except Exception as e:
+            _LOGGER.error("Failed to connect GLM Agent AI Task entity to shared agent: %s", e)
+            self._agent = None
 
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
         if not AI_TASK_COMPONENTS_AVAILABLE:
             return False
-        return True
+        return self._agent is not None
 
     async def _async_generate_data(
         self, task: GenDataTask, chat_log: Any

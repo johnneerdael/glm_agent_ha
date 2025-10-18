@@ -18,11 +18,19 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 # Define platforms for proper Home Assistant integration
-PLATFORMS = ["conversation", "ai_task"]
+PLATFORMS = ["frontend", "conversation", "ai_task"]
 
 from .agent import AiAgentHaAgent
 from .const import (
     DOMAIN,
+    DEVICE_TYPE_FRONTEND,
+    DEVICE_TYPE_SERVICES,
+    FRONTEND_DEVICE_ID_PREFIX,
+    SERVICES_DEVICE_ID_PREFIX,
+    FRONTEND_DEVICE_NAME,
+    SERVICES_DEVICE_NAME,
+    FRONTEND_DEVICE_IDENTIFIERS,
+    SERVICES_DEVICE_IDENTIFIERS,
 )
 from .debug_service import GLMAgentDebugService
 from .performance_monitor import GLMAgentPerformanceMonitor
@@ -139,6 +147,45 @@ class HTTPRouteRegistry:
 
 # Global route registry instance
 _ROUTE_REGISTRY: Optional[HTTPRouteRegistry] = None
+
+
+def create_frontend_device_info(hass: HomeAssistant, entry: ConfigEntry) -> dr.DeviceInfo:
+    """Create device info for the GLM Agent HA Frontend device.
+
+    This device handles the frontend panel functionality only.
+    """
+    plan_type = entry.data.get("plan", "lite").title()
+
+    return dr.DeviceInfo(
+        identifiers={(DOMAIN, f"{FRONTEND_DEVICE_IDENTIFIERS}_{entry.entry_id}")},
+        name=FRONTEND_DEVICE_NAME,
+        manufacturer="Zhipu AI",
+        model=f"GLM Agent Frontend ({plan_type})",
+        entry_type=dr.DeviceEntryType.SERVICE,
+        sw_version="1.14.0",
+        hw_version="Virtual",
+        configuration_url=f"{hass.config.api.base_url}/config/integrations/integration?domain=glm_agent_ha&config_entry={entry.entry_id}",
+    )
+
+
+def create_services_device_info(hass: HomeAssistant, entry: ConfigEntry) -> dr.DeviceInfo:
+    """Create device info for the GLM Agent HA Services device.
+
+    This device handles conversation agent and AI task functionality.
+    """
+    plan_type = entry.data.get("plan", "lite").title()
+    provider = entry.data.get("ai_provider", "openai").title()
+
+    return dr.DeviceInfo(
+        identifiers={(DOMAIN, f"{SERVICES_DEVICE_IDENTIFIERS}_{entry.entry_id}")},
+        name=SERVICES_DEVICE_NAME,
+        manufacturer="Zhipu AI",
+        model=f"GLM Agent Services ({provider}, {plan_type})",
+        entry_type=dr.DeviceEntryType.SERVICE,
+        sw_version="1.14.0",
+        hw_version="Virtual",
+        configuration_url=f"{hass.config.api.base_url}/config/integrations/integration?domain=glm_agent_ha&config_entry={entry.entry_id}",
+    )
 
 
 def get_route_registry() -> HTTPRouteRegistry:
@@ -267,7 +314,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def _setup_pipeline_integrations(
     hass: HomeAssistant, config_data: Dict[str, Any], entry: ConfigEntry
 ) -> None:
-    """Set up LLM and AI Task pipeline integrations."""
+    """Set up LLM and AI Task pipeline integrations with separate device architecture."""
+
+    # Store device info for entities to use
+    hass.data[DOMAIN]["frontend_device_info"] = create_frontend_device_info(hass, entry)
+    hass.data[DOMAIN]["services_device_info"] = create_services_device_info(hass, entry)
 
     # Set up AI Task pipeline integration
     if AI_TASK_PIPELINE_AVAILABLE:
@@ -303,56 +354,13 @@ async def _setup_pipeline_integrations(
         except Exception as e:
             _LOGGER.error("Error setting up voice integration: %s", e)
 
-    # Set up conversation platform for Assist (runtime check)
-    try:
-        # Import conversation module
-        from homeassistant.components import conversation
-
-        # Try to use the new ConversationEntity approach first
-        try:
-            from .conversation_entity import GLMAgentConversationEntity
-
-            # Validate required parameters before creating entity
-            if not all([hass, entry]):
-                raise ValueError("Missing required parameters for ConversationEntity")
-
-            # Create a dummy client object for compatibility - the actual AI work is done by the agent
-            client = None  # We don't need an external client as the agent handles everything
-            conversation_entity = GLMAgentConversationEntity(hass, entry, client)
-
-            # Register the conversation entity with Home Assistant using the proper API
-            from homeassistant.components import conversation
-            conversation.async_set_agent(hass, entry, conversation_entity)
-            _LOGGER.info("Conversation entity registered with Home Assistant using conversation.async_set_agent")
-
-            # Store reference for cleanup
-            hass.data[DOMAIN]["conversation_entity"] = conversation_entity
-
-        except (ImportError, ValueError, TypeError, AttributeError) as e:
-            _LOGGER.warning("Failed to set up conversation entity, falling back to agent approach: %s", e)
-            # Clear any partially created entity reference
-            if "conversation_entity" in hass.data[DOMAIN]:
-                del hass.data[DOMAIN]["conversation_entity"]
-
-            # Fallback to the original agent approach
-            from .llm_integration import GLMConversationAgent
-            agent = GLMConversationAgent(hass, config_data, entry.entry_id)
-
-            # Register the conversation agent with Home Assistant using the proper API
-            conversation.async_set_agent(hass, entry, agent)
-            _LOGGER.info("Conversation agent registered with Home Assistant using conversation.async_set_agent")
-
-            # Store reference for cleanup
-            hass.data[DOMAIN]["conversation_agent"] = agent
-
-    except ImportError:
-        _LOGGER.debug("Conversation component not available in this HA version")
-    except Exception as e:
-        _LOGGER.error("Error setting up conversation platform: %s", e)
+    # Note: Conversation and AI Task entities are now handled by the platform registration in PLATFORMS
+    # This avoids duplicate registration conflicts and ensures proper device architecture
+    _LOGGER.debug("Conversation and AI Task entities will be set up by platform registration")
 
     # AI Task platform is now handled by standard platform forwarding in PLATFORMS
 
-    _LOGGER.info("All pipeline integrations setup completed")
+    _LOGGER.info("All pipeline integrations setup completed with separate device architecture")
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -460,6 +468,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     _LOGGER.warning("MCP integration not available - features will work without enhanced capabilities")
             except Exception as e:
                 _LOGGER.warning("MCP integration failed - continuing without enhanced features: %s", e)
+
+        # Set up separate device architecture first
+        await _setup_pipeline_integrations(hass, config_data, entry)
 
         # Set up conversation and AI task platforms
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

@@ -20,7 +20,11 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import ulid
 
 from .agent import AiAgentHaAgent
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    SERVICES_DEVICE_IDENTIFIERS,
+    SERVICES_DEVICE_NAME,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,26 +49,48 @@ class GLMAgentConversationEntity(ha_conversation.AbstractConversationAgent, ha_c
         self._attr_unique_id = entry.entry_id
         self._attr_should_poll = False
 
-        # Device info for proper integration
-        self._attr_device_info = dr.DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name="GLM Agent HA",
-            manufacturer="Zhipu AI",
-            model="GLM Agent",
-            entry_type=dr.DeviceEntryType.SERVICE,
-        )
+        # Use services device info from main module if available, otherwise create it
+        if (DOMAIN in hass.data and
+            "services_device_info" in hass.data[DOMAIN]):
+            self._attr_device_info = hass.data[DOMAIN]["services_device_info"]
+        else:
+            # Fallback device info for proper integration - use services device
+            self._attr_device_info = dr.DeviceInfo(
+                identifiers={(DOMAIN, f"{SERVICES_DEVICE_IDENTIFIERS}_{entry.entry_id}")},
+                name=SERVICES_DEVICE_NAME,
+                manufacturer="Zhipu AI",
+                model="GLM Agent Services",
+                entry_type=dr.DeviceEntryType.SERVICE,
+            )
 
-        # Initialize the AI agent
+        # Initialize the AI agent by connecting to the shared agent from main integration
         self._agent: Optional[AiAgentHaAgent] = None
-        self._initialize_agent()
+        self._connect_to_shared_agent()
 
-    def _initialize_agent(self) -> None:
-        """Initialize the AI agent."""
+    def _connect_to_shared_agent(self) -> None:
+        """Connect to the shared AI agent from the main integration."""
         try:
-            self._agent = AiAgentHaAgent(self.hass, self.entry.data)
-            _LOGGER.info("GLM Agent conversation entity initialized for entry: %s", self.entry.entry_id)
+            # Get the shared agent from the main integration
+            if (DOMAIN in self.hass.data and
+                "agents" in self.hass.data[DOMAIN] and
+                self.hass.data[DOMAIN]["agents"]):
+
+                # Get the first available provider (usually "openai")
+                available_providers = list(self.hass.data[DOMAIN]["agents"].keys())
+                if available_providers:
+                    provider = available_providers[0]
+                    self._agent = self.hass.data[DOMAIN]["agents"][provider]
+                    _LOGGER.info("Connected GLM Agent conversation entity to shared agent (provider: %s) for entry: %s",
+                               provider, self.entry.entry_id)
+                else:
+                    _LOGGER.error("No AI agents found in main integration for entry: %s", self.entry.entry_id)
+                    self._agent = None
+            else:
+                _LOGGER.error("GLM Agent integration not properly initialized for entry: %s", self.entry.entry_id)
+                self._agent = None
+
         except Exception as e:
-            _LOGGER.error("Failed to initialize GLM Agent conversation entity: %s", e)
+            _LOGGER.error("Failed to connect GLM Agent conversation entity to shared agent: %s", e)
             self._agent = None
 
     @property
@@ -261,15 +287,15 @@ class GLMAgentConversationEntity(ha_conversation.AbstractConversationAgent, ha_c
 
     async def async_reload(self, language: str | None = None) -> None:
         """Reload the conversation entity.
-        
+
         This method is called when the conversation entity should be reloaded,
         for example when the language changes or configuration is updated.
         """
         _LOGGER.debug("Reloading GLM Agent conversation entity (language: %s)", language)
-        
-        # Reinitialize the agent
-        self._initialize_agent()
-        
+
+        # Reconnect to the shared agent
+        self._connect_to_shared_agent()
+
         if self._agent:
             _LOGGER.info("GLM Agent conversation entity reloaded successfully")
         else:
@@ -277,17 +303,17 @@ class GLMAgentConversationEntity(ha_conversation.AbstractConversationAgent, ha_c
 
     async def async_prepare(self, language: str | None = None) -> None:
         """Prepare the conversation entity for use.
-        
+
         This method is called when the conversation entity should be prepared
         for use, for example when Home Assistant starts or when the language
         changes.
         """
         _LOGGER.debug("Preparing GLM Agent conversation entity (language: %s)", language)
-        
-        # Ensure the agent is initialized
+
+        # Ensure the agent is connected
         if not self._agent:
-            self._initialize_agent()
-        
+            self._connect_to_shared_agent()
+
         # Additional preparation can be done here if needed
         if self._agent:
             _LOGGER.debug("GLM Agent conversation entity prepared successfully")

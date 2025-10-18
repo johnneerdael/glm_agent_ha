@@ -56,3 +56,19 @@ CONF_HA_BASE_URL = "ha_base_url"
 
 # Entity configuration
 CONF_AI_PROVIDER = "ai_provider"
+
+# Separate device architecture constants
+DEVICE_TYPE_FRONTEND = "frontend"
+DEVICE_TYPE_SERVICES = "services"
+
+# Device identifiers for separation
+FRONTEND_DEVICE_ID_PREFIX = "frontend_"
+SERVICES_DEVICE_ID_PREFIX = "services_"
+
+# Device names for display
+FRONTEND_DEVICE_NAME = "GLM Agent HA Frontend"
+SERVICES_DEVICE_NAME = "GLM Agent HA Services"
+
+# Device identifiers for device registry
+FRONTEND_DEVICE_IDENTIFIERS = "frontend_device"
+SERVICES_DEVICE_IDENTIFIERS = "services_device"
