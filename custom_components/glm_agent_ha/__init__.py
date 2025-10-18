@@ -156,13 +156,24 @@ def create_frontend_device_info(hass: HomeAssistant, entry: ConfigEntry) -> dr.D
     """
     plan_type = entry.data.get("plan", "lite").title()
 
+    # Get version from manifest
+    try:
+        import os
+        manifest_path = os.path.join(os.path.dirname(__file__), "manifest.json")
+        import json
+        with open(manifest_path, 'r') as f:
+            manifest = json.load(f)
+        version = manifest.get("version", "1.15.1")
+    except Exception:
+        version = "1.15.1"  # Fallback version
+
     return dr.DeviceInfo(
         identifiers={(DOMAIN, f"{FRONTEND_DEVICE_IDENTIFIERS}_{entry.entry_id}")},
         name=FRONTEND_DEVICE_NAME,
         manufacturer="Zhipu AI",
         model=f"GLM Agent Frontend ({plan_type})",
         entry_type=dr.DeviceEntryType.SERVICE,
-        sw_version="1.14.0",
+        sw_version=version,
         hw_version="Virtual",
         configuration_url=f"{hass.config.api.base_url}/config/integrations/integration?domain=glm_agent_ha&config_entry={entry.entry_id}",
     )
@@ -176,13 +187,24 @@ def create_services_device_info(hass: HomeAssistant, entry: ConfigEntry) -> dr.D
     plan_type = entry.data.get("plan", "lite").title()
     provider = entry.data.get("ai_provider", "openai").title()
 
+    # Get version from manifest
+    try:
+        import os
+        manifest_path = os.path.join(os.path.dirname(__file__), "manifest.json")
+        import json
+        with open(manifest_path, 'r') as f:
+            manifest = json.load(f)
+        version = manifest.get("version", "1.15.1")
+    except Exception:
+        version = "1.15.1"  # Fallback version
+
     return dr.DeviceInfo(
         identifiers={(DOMAIN, f"{SERVICES_DEVICE_IDENTIFIERS}_{entry.entry_id}")},
         name=SERVICES_DEVICE_NAME,
         manufacturer="Zhipu AI",
         model=f"GLM Agent Services ({provider}, {plan_type})",
         entry_type=dr.DeviceEntryType.SERVICE,
-        sw_version="1.14.0",
+        sw_version=version,
         hw_version="Virtual",
         configuration_url=f"{hass.config.api.base_url}/config/integrations/integration?domain=glm_agent_ha&config_entry={entry.entry_id}",
     )
