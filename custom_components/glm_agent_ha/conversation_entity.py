@@ -39,7 +39,7 @@ class GLMAgentConversationEntity(ha_conversation.AbstractConversationAgent, ha_c
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: Any) -> None:
         """Initialize the GLM Agent conversation entity."""
-        super().__init__(hass)
+        ha_conversation.ConversationEntity.__init__(self)
         self.hass = hass
         self.entry = entry
         self.client = client

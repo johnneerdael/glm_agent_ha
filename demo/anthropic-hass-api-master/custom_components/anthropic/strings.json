@@ -1,0 +1,46 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Anthropic API Key",
+        "description": "To use Claude, you need an Anthropic API key. Get one at https://console.anthropic.com/settings/keys",
+        "data": {
+          "api_key": "API Key"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "Service is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Anthropic Options",
+        "description": "Configure your Anthropic Claude assistant",
+        "data": {
+          "api_key": "API Key (leave empty to keep current)",
+          "prompt": "Custom Instructions for Claude",
+          "prompt_description": "Instructions for the AI on how it should respond to your requests. You can customize Claude's behavior and knowledge.",
+          "recommended_settings": "Use Recommended Model & Settings",
+          "recommended_settings_description": "When enabled, the recommended model (Claude 3.5 Sonnet) and optimal settings are used. Disable to customize model, tokens, and temperature.",
+          "control_ha": "Allow Claude to Control Home Assistant",
+          "control_ha_description": "When enabled, Claude can control your devices and provide information about your home. It can only access entities that you have exposed to it.",
+          "llm_hass_api": "Home Assistant API",
+          "llm_hass_api_description": "The Home Assistant API to use for device control. This allows Claude to interact with your devices.",
+          "chat_model": "Claude Model",
+          "chat_model_description": "Select which Claude model to use. More powerful models (Opus) provide better responses but may be slower and more expensive.",
+          "max_tokens": "Maximum Response Length",
+          "max_tokens_description": "The maximum number of tokens (words/characters) Claude can generate in a response. Higher values allow for longer, more detailed responses.",
+          "temperature": "Response Creativity",
+          "temperature_description": "Controls the randomness of responses. Lower values (0.0-0.5) make responses more focused and deterministic. Higher values (0.5-1.0) make responses more creative and varied."
+        }
+      }
+    }
+  }
+}

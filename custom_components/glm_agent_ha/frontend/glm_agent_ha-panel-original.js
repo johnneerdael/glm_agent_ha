@@ -1,0 +1,2342 @@
+// GLM Agent HA Modern Panel - Safe initialization with fallback loading
+console.log("GLM Agent HA Modern Panel loading...");
+
+// Load LitElement safely with proper error handling
+(function() {
+  let loadAttempts = 0;
+  const maxAttempts = 2;
+
+  function loadLitElement(source) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.type = 'module';
+
+      if (source === 'primary') {
+        script.textContent = `
+          import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
+          window.GLM_LitElement = LitElement;
+          window.GLM_html = html;
+          window.GLM_css = css;
+          console.log("LitElement loaded from primary CDN");
+        `;
+      } else {
+        script.textContent = `
+          import { LitElement, html, css } from "https://cdn.skypack.dev/lit-element@2.4.0";
+          window.GLM_LitElement = LitElement;
+          window.GLM_html = html;
+          window.GLM_css = css;
+          console.log("LitElement loaded from fallback CDN");
+        `;
+      }
+
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+
+  async function initializePanel() {
+    try {
+      await loadLitElement('primary');
+      setupPanel();
+    } catch (primaryError) {
+      console.warn("Failed to load from primary CDN, trying fallback:", primaryError);
+      try {
+        await loadLitElement('fallback');
+        setupPanel();
+      } catch (fallbackError) {
+        console.error("Failed to load LitElement from all sources:", fallbackError);
+        showErrorScreen();
+      }
+    }
+  }
+
+  function showErrorScreen() {
+    document.body.innerHTML = `
+      <div style="padding: 20px; font-family: Arial, sans-serif; color: #333; text-align: center; max-width: 500px; margin: 50px auto;">
+        <h2>GLM Agent HA Dashboard Loading Error</h2>
+        <p>Unable to load dashboard components due to network issues.</p>
+        <p>Please try refreshing the page or check your internet connection.</p>
+        <button onclick="window.location.reload()" style="padding: 10px 20px; background: #03a9f4; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;">
+          Refresh Page
+        </button>
+        <p style="font-size: 12px; color: #666; margin-top: 20px;">If the problem persists, please check your browser's JavaScript console for more details.</p>
+      </div>
+    `;
+  }
+
+  function setupPanel() {
+    // Wait a brief moment for globals to be available
+    setTimeout(() => {
+      if (window.GLM_LitElement && window.GLM_html && window.GLM_css) {
+        console.log("All dependencies loaded, setting up panel...");
+        // The panel class definition will be loaded below
+      } else {
+        console.error("Dependencies not available after loading");
+        showErrorScreen();
+      }
+    }, 100);
+  }
+
+  // Start the initialization process
+  initializePanel();
+})();
+
+const PROVIDERS = {
+  openai: "GLM Coding Plan OpenAI",
+};
+
+const PLAN_FEATURES = {
+  lite: {
+    maxFileSize: 5 * 1024 * 1024, // 5MB
+    allowedTools: ['basic_query', 'automation_creation', 'dashboard_creation'],
+    smartCategories: ['basic', 'automation']
+  },
+  pro: {
+    maxFileSize: 25 * 1024 * 1024, // 25MB
+    allowedTools: ['basic_query', 'automation_creation', 'dashboard_creation', 'image_analysis', 'performance_monitoring'],
+    smartCategories: ['basic', 'automation', 'visual', 'diagnostics']
+  },
+  max: {
+    maxFileSize: 50 * 1024 * 1024, // 50MB
+    allowedTools: ['basic_query', 'automation_creation', 'dashboard_creation', 'image_analysis', 'video_analysis', 'performance_monitoring', 'security_analysis', 'web_search'],
+    smartCategories: ['basic', 'automation', 'visual', 'diagnostics', 'security', 'advanced']
+  }
+};
+
+// Smart Quick Questions organized by capability and complexity
+const SMART_PROMPTS = {
+  basic: [
+    {
+      text: "🏠 Generate comprehensive home automation blueprint based on my devices",
+      icon: "mdi:home-analytics",
+      tools: ["basic_query", "automation_creation"],
+      description: "Analyze all devices and create complete automation strategy"
+    },
+    {
+      text: "📊 Create custom energy monitoring dashboard with optimization alerts",
+      icon: "mdi:chart-box",
+      tools: ["basic_query", "dashboard_creation"],
+      description: "Build real-time energy tracking with intelligent suggestions"
+    },
+    {
+      text: "🔒 Design whole-home security system with threat detection",
+      icon: "mdi:shield-home",
+      tools: ["basic_query", "automation_creation"],
+      description: "Create comprehensive security coverage with smart responses"
+    }
+  ],
+  automation: [
+    {
+      text: "🧠 Implement AI-powered presence simulation with learning algorithms",
+      icon: "mdi:brain-circuit",
+      tools: ["automation_creation", "performance_monitoring"],
+      description: "Advanced occupancy simulation that adapts to your patterns"
+    },
+    {
+      text: "🌐 Build ecosystem integrations (HA ↔ Alexa ↔ Google ↔ SmartThings)",
+      icon: "mdi:link-variant",
+      tools: ["automation_creation", "basic_query"],
+      description: "Create seamless multi-platform automation orchestration"
+    },
+    {
+      text: "⚡ Design intelligent load shedding and backup power management",
+      icon: "mdi:lightning-bolt",
+      tools: ["automation_creation", "performance_monitoring"],
+      description: "Automated power management with UPS/generator integration"
+    }
+  ],
+  visual: [
+    {
+      text: "📷 Analyze security camera snapshot",
+      icon: "mdi:camera",
+      tools: ["image_analysis"],
+      requiresUpload: true,
+      description: "Upload photo for AI analysis"
+    },
+    {
+      text: "🏠 Room optimization from photo",
+      icon: "mdi:home-analytics",
+      tools: ["image_analysis", "automation_creation"],
+      requiresUpload: true,
+      description: "Suggest improvements from room photo"
+    },
+    {
+      text: "📸 Decode appliance error message",
+      icon: "mdi:wrench",
+      tools: ["image_analysis"],
+      requiresUpload: true,
+      description: "Analyze error displays and codes"
+    }
+  ],
+  diagnostics: [
+    {
+      text: "🔍 Complete system health check",
+      icon: "mdi:pulse",
+      tools: ["performance_monitoring", "basic_query"],
+      description: "Comprehensive performance analysis"
+    },
+    {
+      text: "📊 Performance bottleneck analysis",
+      icon: "mdi:speedometer",
+      tools: ["performance_monitoring"],
+      description: "Identify and fix slow operations"
+    },
+    {
+      text: "🔧 Entity relationship diagnostics",
+      icon: "mdi:connection",
+      tools: ["basic_query"],
+      description: "Find device conflicts and issues"
+    }
+  ],
+  security: [
+    {
+      text: "🛡️ Security threat assessment",
+      icon: "mdi:shield-alert",
+      tools: ["security_analysis", "performance_monitoring"],
+      description: "Analyze security logs and patterns"
+    },
+    {
+      text: "🚨 Suspicious activity detection",
+      icon: "mdi:eye-check",
+      tools: ["security_analysis"],
+      description: "Review unusual access patterns"
+    },
+    {
+      text: "🔐 Access control optimization",
+      icon: "mdi:lock",
+      tools: ["security_analysis", "automation_creation"],
+      description: "Improve security automations"
+    }
+  ],
+  advanced: [
+    {
+      text: "🧠 Teach me advanced HA techniques",
+      icon: "mdi:school",
+      tools: ["web_search", "basic_query"],
+      description: "Learn from your setup patterns"
+    },
+    {
+      text: "🎯 Custom AI agent training",
+      icon: "mdi:robot",
+      tools: ["basic_query", "performance_monitoring"],
+      description: "Optimize AI for your home"
+    },
+    {
+      text: "📹 Video analysis for security",
+      icon: "mdi:video",
+      tools: ["video_analysis"],
+      requiresUpload: true,
+      description: "Analyze security footage"
+    }
+  ]
+};
+
+// Define the panel class using the loaded dependencies
+class GLMAgentHaPanel extends (window.GLM_LitElement || class {}) {
+  static get properties() {
+    return {
+      hass: { type: Object, reflect: false, attribute: false },
+      narrow: { type: Boolean, reflect: false, attribute: false },
+      panel: { type: Object, reflect: false, attribute: false },
+      _messages: { type: Array, reflect: false, attribute: false },
+      _isLoading: { type: Boolean, reflect: false, attribute: false },
+      _error: { type: String, reflect: false, attribute: false },
+      _pendingAutomation: { type: Object, reflect: false, attribute: false },
+      _promptHistory: { type: Array, reflect: false, attribute: false },
+      _showPredefinedPrompts: { type: Boolean, reflect: false, attribute: false },
+      _showPromptHistory: { type: Boolean, reflect: false, attribute: false },
+      _selectedPrompts: { type: Array, reflect: false, attribute: false },
+      _selectedProvider: { type: String, reflect: false, attribute: false },
+      _availableProviders: { type: Array, reflect: false, attribute: false },
+      _selectedModel: { type: String, reflect: false, attribute: false },
+      _userPlan: { type: String, reflect: false, attribute: false },
+      _showAdvancedDashboard: { type: Boolean, reflect: false, attribute: false },
+      _uploadedFile: { type: Object, reflect: false, attribute: false },
+      _dragActive: { type: Boolean, reflect: false, attribute: false },
+      _performanceMetrics: { type: Object, reflect: false, attribute: false },
+      _securityReport: { type: Object, reflect: false, attribute: false },
+      _mcpStatus: { type: Object, reflect: false, attribute: false },
+      _initializationComplete: { type: Boolean, reflect: false, attribute: false }
+    };
+  }
+
+  static get styles() {
+    return (window.GLM_css || function() { return ''; })`
+      :host {
+        background: var(--primary-background-color);
+        -webkit-font-smoothing: antialiased;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+
+      /* Header Styles */
+      .header {
+        background: var(--app-header-background-color);
+        color: var(--app-header-text-color);
+        padding: 16px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 20px;
+        font-weight: 500;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        position: relative;
+        min-height: 64px;
+      }
+
+      .header-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-grow: 1;
+        min-width: 0;
+      }
+
+      .header-badges {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .plan-badge {
+        background: var(--primary-color);
+        color: var(--text-primary-color);
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+
+      .plan-badge.pro {
+        background: var(--success-color, #4caf50);
+      }
+
+      .plan-badge.max {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .icon-button {
+        appearance: none;
+        border: none;
+        background: transparent;
+        color: var(--app-header-text-color);
+        cursor: pointer;
+        padding: 8px;
+        border-radius: 8px;
+        transition: background-color 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .icon-button:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .clear-button {
+        appearance: none;
+        border: none;
+        border-radius: 16px;
+        background: var(--error-color);
+        color: white;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 12px;
+        font-weight: 500;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        height: 32px;
+        flex-shrink: 0;
+        margin-left: 12px;
+      }
+
+      .clear-button[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .clear-button:hover:not([disabled]) {
+        opacity: 0.9;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.13);
+      }
+
+      /* Content Area */
+      .content {
+        flex-grow: 1;
+        padding: 24px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+      }
+
+      .chat-container {
+        width: 100%;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+        height: 100%;
+      }
+
+      /* Messages */
+      .messages {
+        overflow-y: auto;
+        border: 1px solid var(--divider-color);
+        border-radius: 12px;
+        margin-bottom: 24px;
+        padding: 0;
+        background: var(--primary-background-color);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        flex-grow: 1;
+        width: 100%;
+      }
+
+      .message {
+        margin-bottom: 16px;
+        padding: 12px 16px;
+        border-radius: 12px;
+        max-width: 80%;
+        line-height: 1.5;
+        animation: fadeIn 0.3s ease-out;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        word-wrap: break-word;
+      }
+
+      .user-message {
+        background: var(--primary-color);
+        color: var(--text-primary-color);
+        margin-left: auto;
+        border-bottom-right-radius: 4px;
+      }
+
+      .assistant-message {
+        background: var(--secondary-background-color);
+        margin-right: auto;
+        border-bottom-left-radius: 4px;
+      }
+
+      .message-attachment {
+        margin-top: 8px;
+        padding: 8px;
+        background: rgba(0, 0, 0, 0.05);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .message-attachment ha-icon {
+        color: var(--primary-color);
+      }
+
+      /* Smart Prompts Section */
+      .prompts-section {
+        margin-bottom: 12px;
+        padding: 16px;
+        background: var(--secondary-background-color);
+        border-radius: 16px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+        border: 1px solid var(--divider-color);
+      }
+
+      .prompts-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+
+      .prompts-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--primary-text-color);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .prompts-toggle {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        background: var(--primary-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 16px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--secondary-text-color);
+      }
+
+      .prompts-toggle:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+        background: rgba(var(--primary-color-rgb), 0.1);
+      }
+
+      .prompts-toggle ha-icon {
+        --ha-icon-size: 16px;
+      }
+
+      .prompts-categories {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+
+      .category-tab {
+        background: var(--primary-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 20px;
+        padding: 6px 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--secondary-text-color);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .category-tab.active {
+        background: var(--primary-color);
+        color: var(--text-primary-color);
+        border-color: var(--primary-color);
+      }
+
+      .category-tab:hover:not(.active) {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+      }
+
+      .prompt-bubbles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .smart-prompt {
+        background: var(--primary-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 12px;
+        padding: 12px 16px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 13px;
+        line-height: 1.4;
+        color: var(--primary-text-color);
+        max-width: 300px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .smart-prompt:hover {
+        border-color: var(--primary-color);
+        background: var(--primary-color);
+        color: var(--text-primary-color);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+
+      .smart-prompt-content {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .smart-prompt-icon {
+        --ha-icon-size: 20px;
+        flex-shrink: 0;
+        margin-top: 2px;
+      }
+
+      .smart-prompt-text {
+        flex-grow: 1;
+        font-weight: 500;
+      }
+
+      .smart-prompt-description {
+        font-size: 11px;
+        opacity: 0.8;
+        margin-top: 4px;
+        font-weight: 400;
+      }
+
+      .smart-prompt-upload-indicator {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        background: var(--warning-color, #ff9800);
+        color: white;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 600;
+      }
+
+      /* History Section */
+      .history-bubble {
+        background: var(--primary-background-color);
+        border: 1px solid var(--accent-color);
+        border-radius: 20px;
+        padding: 6px 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 12px;
+        line-height: 1.3;
+        color: var(--accent-color);
+        white-space: nowrap;
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .history-bubble:hover {
+        background: var(--accent-color);
+        color: var(--text-primary-color);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .history-delete {
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        color: var(--error-color);
+        cursor: pointer;
+        --ha-icon-size: 14px;
+      }
+
+      .history-bubble:hover .history-delete {
+        opacity: 1;
+        color: var(--text-primary-color);
+      }
+
+      /* File Upload Area */
+      .upload-area {
+        border: 2px dashed var(--divider-color);
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 16px;
+        text-align: center;
+        transition: all 0.2s ease;
+        background: var(--secondary-background-color);
+      }
+
+      .upload-area.drag-active {
+        border-color: var(--primary-color);
+        background: rgba(var(--primary-color-rgb), 0.05);
+      }
+
+      .upload-area:hover {
+        border-color: var(--primary-color);
+      }
+
+      .upload-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .upload-icon {
+        --ha-icon-size: 48px;
+        color: var(--secondary-text-color);
+      }
+
+      .upload-text {
+        color: var(--primary-text-color);
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .upload-subtext {
+        color: var(--secondary-text-color);
+        font-size: 12px;
+      }
+
+      .upload-button {
+        background: var(--primary-color);
+        color: var(--text-primary-color);
+        border: none;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .upload-button:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+      }
+
+      /* File Preview */
+      .file-preview {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        background: var(--secondary-background-color);
+        border-radius: 8px;
+        margin-bottom: 12px;
+        border: 1px solid var(--divider-color);
+      }
+
+      .file-preview-info {
+        flex-grow: 1;
+      }
+
+      .file-preview-name {
+        font-weight: 500;
+        color: var(--primary-text-color);
+        font-size: 14px;
+      }
+
+      .file-preview-size {
+        color: var(--secondary-text-color);
+        font-size: 12px;
+      }
+
+      .file-preview-remove {
+        background: var(--error-color);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* Input Container */
+      .input-container {
+        position: relative;
+        width: 100%;
+        background: var(--card-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        margin-bottom: 24px;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .input-container:focus-within {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.1);
+      }
+
+      .input-main {
+        display: flex;
+        align-items: flex-end;
+        padding: 12px;
+        gap: 12px;
+      }
+
+      .input-wrapper {
+        flex-grow: 1;
+        position: relative;
+        border: 1px solid var(--divider-color);
+        border-radius: 8px;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 24px;
+        max-height: 200px;
+        padding: 12px 16px;
+        border: none;
+        outline: none;
+        resize: none;
+        font-size: 16px;
+        line-height: 1.5;
+        background: transparent;
+        color: var(--primary-text-color);
+        font-family: inherit;
+        border-radius: 8px;
+      }
+
+      textarea::placeholder {
+        color: var(--secondary-text-color);
+      }
+
+      .input-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 16px 12px 16px;
+        border-top: 1px solid var(--divider-color);
+        background: var(--card-background-color);
+        border-radius: 0 0 12px 12px;
+      }
+
+      .input-controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .model-selector {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .model-label {
+        font-size: 12px;
+        color: var(--secondary-text-color);
+        white-space: nowrap;
+      }
+
+      .model-button {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        background: var(--secondary-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--primary-text-color);
+        transition: all 0.2s ease;
+        min-width: 120px;
+      }
+
+      .model-button:hover {
+        background-color: var(--primary-background-color);
+        border-color: var(--primary-color);
+      }
+
+      .send-button {
+        background: var(--primary-color);
+        color: var(--text-primary-color);
+        border: none;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .send-button:hover:not(:disabled) {
+        opacity: 0.9;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      .send-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      /* Loading States */
+      .loading {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+        padding: 16px;
+        border-radius: 12px;
+        background: var(--secondary-background-color);
+        margin-right: auto;
+        max-width: 80%;
+        animation: fadeIn 0.3s ease-out;
+      }
+
+      .loading-dots {
+        display: flex;
+        gap: 4px;
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        background: var(--primary-color);
+        border-radius: 50%;
+        animation: bounce 1.4s infinite ease-in-out;
+      }
+
+      .dot:nth-child(1) { animation-delay: -0.32s; }
+      .dot:nth-child(2) { animation-delay: -0.16s; }
+
+      @keyframes bounce {
+        0%, 80%, 100% {
+          transform: scale(0);
+        }
+        40% {
+          transform: scale(1.0);
+        }
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Error State */
+      .error {
+        color: var(--error-color);
+        padding: 16px;
+        margin: 8px 0;
+        border-radius: 12px;
+        background: var(--error-background-color);
+        border: 1px solid var(--error-color);
+        animation: fadeIn 0.3s ease-out;
+      }
+
+      /* Advanced Dashboard */
+      .advanced-dashboard {
+        position: fixed;
+        top: 0;
+        right: -400px;
+        width: 400px;
+        height: 100vh;
+        background: var(--primary-background-color);
+        box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+        transition: right 0.3s ease;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .advanced-dashboard.open {
+        right: 0;
+      }
+
+      .dashboard-header {
+        padding: 16px;
+        border-bottom: 1px solid var(--divider-color);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .dashboard-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--primary-text-color);
+      }
+
+      .dashboard-content {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding: 16px;
+      }
+
+      .dashboard-section {
+        margin-bottom: 24px;
+      }
+
+      .dashboard-section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--primary-text-color);
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .dashboard-metric {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--divider-color);
+      }
+
+      .dashboard-metric-label {
+        font-size: 13px;
+        color: var(--secondary-text-color);
+      }
+
+      .dashboard-metric-value {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--primary-text-color);
+      }
+
+      /* Automation and Dashboard Suggestions */
+      .automation-suggestion, .dashboard-suggestion {
+        background: var(--secondary-background-color);
+        border: 1px solid var(--primary-color);
+        border-radius: 12px;
+        padding: 16px;
+        margin: 8px 0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        position: relative;
+        z-index: 10;
+      }
+
+      .automation-title, .dashboard-title {
+        font-weight: 500;
+        margin-bottom: 8px;
+        color: var(--primary-color);
+        font-size: 16px;
+      }
+
+      .automation-description, .dashboard-description {
+        margin-bottom: 16px;
+        color: var(--secondary-text-color);
+        line-height: 1.4;
+      }
+
+      .automation-actions, .dashboard-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+        justify-content: flex-end;
+      }
+
+      .automation-actions ha-button, .dashboard-actions ha-button {
+        --ha-button-height: 40px;
+        --ha-button-padding: 0 20px;
+        --ha-button-font-size: 14px;
+        --ha-button-font-weight: 600;
+        border-radius: 20px;
+      }
+
+      .automation-actions ha-button:first-child,
+      .dashboard-actions ha-button:first-child {
+        --ha-primary-color: var(--success-color, #4caf50);
+        --ha-on-primary-color: #fff;
+      }
+
+      .automation-actions ha-button:last-child,
+      .dashboard-actions ha-button:last-child {
+        --ha-primary-color: var(--error-color);
+        --ha-on-primary-color: #fff;
+      }
+
+      .automation-details, .dashboard-details {
+        margin-top: 8px;
+        padding: 8px;
+        background: var(--primary-background-color);
+        border-radius: 8px;
+        font-family: monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+        overflow-x: auto;
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid var(--divider-color);
+      }
+
+      /* Responsive Design */
+      @media (max-width: 768px) {
+        .header {
+          padding: 12px 16px;
+          font-size: 18px;
+          min-height: 56px;
+        }
+
+        .content {
+          padding: 16px;
+        }
+
+        .smart-prompt {
+          max-width: 100%;
+        }
+
+        .advanced-dashboard {
+          width: 100vw;
+          right: -100vw;
+        }
+
+        .prompts-categories {
+          gap: 4px;
+        }
+
+        .category-tab {
+          font-size: 11px;
+          padding: 4px 8px;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .header {
+          padding: 10px 12px;
+          font-size: 16px;
+          min-height: 48px;
+        }
+
+        .content {
+          padding: 12px;
+        }
+
+        .clear-button span {
+          display: none;
+        }
+
+        .header-badges {
+          display: none;
+        }
+      }
+    `;
+  }
+
+  constructor() {
+    super();
+    this._messages = [];
+    this._isLoading = false;
+    this._error = null;
+    this._pendingAutomation = null;
+    this._promptHistory = [];
+    this._promptHistoryLoaded = false;
+    this._showPredefinedPrompts = true;
+    this._showPromptHistory = true;
+    this._selectedProvider = null;
+    this._selectedModel = 'GLM-4.6';
+    this._models = ['GLM-4.6', 'GLM-4.5', 'GLM-4.5-air'];
+    this._availableProviders = [];
+    this._showProviderDropdown = false;
+    this.providersLoaded = false;
+    this._eventSubscriptionSetup = false;
+    this._serviceCallTimeout = null;
+
+    // New properties for modern features
+    this._userPlan = 'lite';
+    this._showAdvancedDashboard = false;
+    this._uploadedFile = null;
+    this._dragActive = false;
+    this._performanceMetrics = null;
+    this._securityReport = null;
+    this._mcpStatus = null;
+    this._activeCategory = 'basic';
+
+    // FIX: Initialize default prompts immediately to ensure actions display on load
+    this._selectedPrompts = this._getRandomPrompts('basic');
+    this._initializationComplete = false;
+    this._renderRequested = false;
+
+    console.debug("GLM Agent HA Modern Panel constructor called");
+  }
+
+  _getSmartPromptsForCategory(category) {
+    const prompts = SMART_PROMPTS[category] || [];
+    const userFeatures = PLAN_FEATURES[this._userPlan] || PLAN_FEATURES.lite;
+
+    // Filter prompts based on user's plan capabilities
+    return prompts.filter(prompt => {
+      return prompt.tools.some(tool => userFeatures.allowedTools.includes(tool));
+    });
+  }
+
+  _getRandomPrompts(category = null) {
+    // FIX: Ensure we always have prompts to display, even during initialization
+    const categories = category ? [category] : PLAN_FEATURES[this._userPlan]?.smartCategories || ['basic'];
+    const allPrompts = [];
+
+    categories.forEach(cat => {
+      allPrompts.push(...this._getSmartPromptsForCategory(cat));
+    });
+
+    // If no prompts found (edge case), provide fallback basic prompts
+    if (allPrompts.length === 0) {
+      const fallbackPrompts = [
+        {
+          text: "🏠 Help me set up home automation",
+          icon: "mdi:home",
+          tools: ["basic_query"],
+          description: "Get started with home automation"
+        },
+        {
+          text: "📊 Create a dashboard for my devices",
+          icon: "mdi:chart-box",
+          tools: ["dashboard_creation"],
+          description: "Build a custom dashboard"
+        },
+        {
+          text: "🔒 Check my system security",
+          icon: "mdi:shield",
+          tools: ["basic_query"],
+          description: "Security analysis and recommendations"
+        }
+      ];
+      return fallbackPrompts;
+    }
+
+    // Shuffle and take 3-5 prompts
+    const shuffled = [...allPrompts].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, Math.min(3, shuffled.length));
+  }
+
+  async connectedCallback() {
+    try {
+      super.connectedCallback();
+      console.debug("GLM Agent HA Modern Panel connected");
+
+      // FIX: Request immediate update to show default actions
+      this.requestUpdate();
+
+      if (this.hass && !this._eventSubscriptionSetup) {
+        this._eventSubscriptionSetup = true;
+        this.hass.connection.subscribeEvents(
+          (event) => this._handleResponse(event),
+          'glm_agent_ha_response'
+        );
+        console.debug("Event subscription set up in connectedCallback()");
+
+        // Load data with error handling
+        try {
+          await this._loadPromptHistory();
+        } catch (error) {
+          console.warn("Failed to load prompt history:", error);
+          // Continue without prompt history
+        }
+
+        try {
+          await this._detectUserPlan();
+        } catch (error) {
+          console.warn("Failed to detect user plan:", error);
+          this._userPlan = 'lite'; // Default fallback
+        }
+
+        try {
+          await this._loadAdvancedData();
+        } catch (error) {
+          console.warn("Failed to load advanced data:", error);
+          // Continue without advanced data
+        }
+
+        // FIX: Mark initialization as complete and trigger update
+        this._initializationComplete = true;
+        this.requestUpdate();
+      }
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!this.shadowRoot.querySelector('.provider-selector')?.contains(e.target)) {
+          this._showProviderDropdown = false;
+        }
+      });
+    } catch (error) {
+      console.error("Error in connectedCallback:", error);
+      // Display error state to user
+      this._error = "Dashboard initialization failed. Please refresh the page.";
+      this.requestUpdate();
+    }
+  }
+
+  async _detectUserPlan() {
+    try {
+      // Try to detect user plan from config entries
+      const allEntries = await this.hass.callWS({ type: 'config_entries/get' });
+      const aiAgentEntries = allEntries.filter(entry => entry.domain === 'glm_agent_ha');
+
+      if (aiAgentEntries.length > 0) {
+        const entry = aiAgentEntries[0];
+        const plan = entry.data?.plan || entry.options?.plan || 'lite';
+        this._userPlan = plan;
+        console.debug("Detected user plan:", plan);
+
+        // Update selected prompts based on plan
+        this._selectedPrompts = this._getRandomPrompts();
+      }
+    } catch (error) {
+      console.error("Error detecting user plan:", error);
+      this._userPlan = 'lite';
+    }
+  }
+
+  async _loadAdvancedData() {
+    if (this._userPlan === 'pro' || this._userPlan === 'max') {
+      try {
+        // Load performance metrics
+        const perfResult = await this.hass.callService('glm_agent_ha', 'performance_current');
+        if (perfResult && !perfResult.error) {
+          this._performanceMetrics = perfResult;
+        }
+
+        // Load security report
+        const secResult = await this.hass.callService('glm_agent_ha', 'security_report', { hours: 24 });
+        if (secResult && !secResult.error) {
+          this._securityReport = secResult;
+        }
+      } catch (error) {
+        console.debug("Error loading advanced data:", error);
+      }
+    }
+  }
+
+  async updated(changedProps) {
+    console.debug("Updated called with:", changedProps);
+
+    // Set up event subscription when hass becomes available
+    if (changedProps.has('hass') && this.hass && !this._eventSubscriptionSetup) {
+      this._eventSubscriptionSetup = true;
+      this.hass.connection.subscribeEvents(
+        (event) => this._handleResponse(event),
+        'glm_agent_ha_response'
+      );
+      console.debug("Event subscription set up in updated()");
+    }
+
+    // Load providers when hass becomes available
+    if (changedProps.has('hass') && this.hass && !this.providersLoaded) {
+      this.providersLoaded = true;
+
+      try {
+        console.debug("Loading AI providers...");
+        const allEntries = await this.hass.callWS({ type: 'config_entries/get' });
+        const aiAgentEntries = allEntries.filter(entry => entry.domain === 'glm_agent_ha');
+
+        if (aiAgentEntries.length > 0) {
+          this._availableProviders = aiAgentEntries.map(entry => {
+            let provider = "unknown";
+
+            if (entry.data && entry.data.ai_provider) {
+              provider = entry.data.ai_provider;
+            } else {
+              const titleToProviderMap = {
+                "GLM Coding Plan Agent HA (GLM Coding Plan OpenAI Endpoint)": "openai",
+                "GLM Coding Plan Agent HA (GLM Coding Plan API)": "openai",
+              };
+              provider = titleToProviderMap[entry.title] || "unknown";
+            }
+
+            // Detect plan from entry
+            const plan = entry.data?.plan || entry.options?.plan || 'lite';
+            if (plan !== this._userPlan) {
+              const previousPlan = this._userPlan;
+              this._userPlan = plan;
+              // FIX: Update prompts when plan changes
+              this._selectedPrompts = this._getRandomPrompts(this._activeCategory);
+              console.debug(`Plan changed from ${previousPlan} to ${plan}, updated prompts`);
+            }
+
+            return {
+              value: provider,
+              label: PROVIDERS[provider] || provider,
+              plan: plan
+            };
+          });
+
+          console.debug("Available AI providers:", this._availableProviders);
+
+          if (!this._selectedProvider && this._availableProviders.length > 0) {
+            this._selectedProvider = this._availableProviders[0].value;
+            console.debug("Auto-selected first provider:", this._selectedProvider);
+          }
+        } else {
+          console.debug("No 'glm_agent_ha' config entries found via WebSocket.");
+          this._availableProviders = [];
+        }
+      } catch (error) {
+        console.error("Error fetching config entries via WebSocket:", error);
+        this._error = error.message || 'Failed to load AI provider configurations.';
+        this._availableProviders = [];
+      }
+      // FIX: Request update after providers are loaded to refresh actions
+      this.requestUpdate();
+    }
+
+    // Load prompt history when hass becomes available
+    if (changedProps.has('hass') && this.hass && !this._promptHistoryLoaded) {
+      this._promptHistoryLoaded = true;
+      await this._loadPromptHistory();
+    }
+
+    // Load prompt history when provider changes
+    if (changedProps.has('_selectedProvider') && this._selectedProvider && this.hass) {
+      await this._loadPromptHistory();
+    }
+
+    // FIX: Request update when initialization completes to ensure actions are visible
+    if (changedProps.has('_initializationComplete') && this._initializationComplete) {
+      this.requestUpdate();
+    }
+
+    if (changedProps.has('_messages') || changedProps.has('_isLoading')) {
+      this._scrollToBottom();
+    }
+  }
+
+  _renderPromptsSection() {
+    // FIX: Ensure categories are always available, even during initialization
+    const categories = Object.keys(SMART_PROMPTS).filter(cat =>
+      PLAN_FEATURES[this._userPlan]?.smartCategories.includes(cat)
+    );
+
+    // FIX: Always show at least basic category
+    const availableCategories = categories.length > 0 ? categories : ['basic'];
+
+    // FIX: Ensure we have prompts to display
+    const promptsToShow = this._selectedPrompts && this._selectedPrompts.length > 0
+      ? this._selectedPrompts
+      : this._getRandomPrompts(this._activeCategory);
+
+    return (window.GLM_html || function() { return ''; })`
+      <div class="prompts-section">
+        <div class="prompts-header">
+          <div class="prompts-title">
+            <ha-icon icon="mdi:lightbulb"></ha-icon>
+            Smart Actions
+          </div>
+          <div style="display: flex; gap: 12px;">
+            <div class="prompts-toggle" @click=${() => this._togglePredefinedPrompts()}>
+              <ha-icon icon="${this._showPredefinedPrompts ? 'mdi:chevron-up' : 'mdi:chevron-down'}"></ha-icon>
+              <span>Actions</span>
+            </div>
+            ${this._promptHistory.length > 0 ? (window.GLM_html || function() { return ''; })`
+              <div class="prompts-toggle" @click=${() => this._togglePromptHistory()}>
+                <ha-icon icon="${this._showPromptHistory ? 'mdi:chevron-up' : 'mdi:chevron-down'}"></ha-icon>
+                <span>Recent</span>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+
+        ${this._showPredefinedPrompts ? (window.GLM_html || function() { return ''; })`
+          <div class="prompts-categories">
+            ${availableCategories.map(category => (window.GLM_html || function() { return ''; })`
+              <div class="category-tab ${this._activeCategory === category ? 'active' : ''}"
+                   @click=${() => this._selectCategory(category)}>
+                <ha-icon icon="mdi:${this._getCategoryIcon(category)}"></ha-icon>
+                ${this._capitalizeFirst(category)}
+              </div>
+            `)}
+          </div>
+
+          <div class="prompt-bubbles">
+            ${promptsToShow.map(prompt => (window.GLM_html || function() { return ''; })`
+              <div class="smart-prompt" @click=${() => this._useSmartPrompt(prompt)}>
+                <div class="smart-prompt-content">
+                  <ha-icon class="smart-prompt-icon" icon="${prompt.icon}"></ha-icon>
+                  <div>
+                    <div class="smart-prompt-text">${prompt.text}</div>
+                    <div class="smart-prompt-description">${prompt.description}</div>
+                  </div>
+                </div>
+                ${prompt.requiresUpload ? (window.GLM_html || function() { return ''; })`
+                  <div class="smart-prompt-upload-indicator">
+                    <ha-icon icon="mdi:upload"></ha-icon>
+                  </div>
+                ` : ''}
+              </div>
+            `)}
+          </div>
+        ` : ''}
+
+        ${this._showPromptHistory && this._promptHistory.length > 0 ? (window.GLM_html || function() { return ''; })`
+          <div class="prompt-bubbles">
+            ${this._promptHistory.slice(-3).reverse().map((prompt, index) => (window.GLM_html || function() { return ''; })`
+              <div class="history-bubble" @click=${(e) => this._useHistoryPrompt(e, prompt)}>
+                <span style="flex-grow: 1; overflow: hidden; text-overflow: ellipsis;">${prompt}</span>
+                <ha-icon
+                  class="history-delete"
+                  icon="mdi:close"
+                  @click=${(e) => this._deleteHistoryItem(e, prompt)}
+                ></ha-icon>
+              </div>
+            `)}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  _getCategoryIcon(category) {
+    const icons = {
+      basic: 'star',
+      automation: 'robot',
+      visual: 'image',
+      diagnostics: 'pulse',
+      security: 'shield',
+      advanced: 'brain'
+    };
+    return icons[category] || 'help-circle';
+  }
+
+  _capitalizeFirst(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  _selectCategory(category) {
+    this._activeCategory = category;
+    this._selectedPrompts = this._getRandomPrompts(category);
+    // FIX: Ensure UI updates immediately when category changes
+    this.requestUpdate();
+  }
+
+  _togglePredefinedPrompts() {
+    this._showPredefinedPrompts = !this._showPredefinedPrompts;
+    if (this._showPredefinedPrompts) {
+      this._selectedPrompts = this._getRandomPrompts(this._activeCategory);
+    }
+    // FIX: Ensure UI updates immediately when toggling prompts
+    this.requestUpdate();
+  }
+
+  _togglePromptHistory() {
+    this._showPromptHistory = !this._showPromptHistory;
+    // FIX: Ensure UI updates immediately when toggling history
+    this.requestUpdate();
+  }
+
+  _useSmartPrompt(prompt) {
+    if (this._isLoading) return;
+
+    if (prompt.requiresUpload && !this._uploadedFile) {
+      // Focus on upload area
+      this.shadowRoot.querySelector('.upload-area')?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+
+    const promptEl = this.shadowRoot.querySelector('#prompt');
+    if (promptEl) {
+      promptEl.value = prompt.text;
+      promptEl.focus();
+    }
+  }
+
+  _usePrompt(prompt) {
+    if (this._isLoading) return;
+    const promptEl = this.shadowRoot.querySelector('#prompt');
+    if (promptEl) {
+      promptEl.value = prompt;
+      promptEl.focus();
+    }
+  }
+
+  _useHistoryPrompt(event, prompt) {
+    event.stopPropagation();
+    if (this._isLoading) return;
+    const promptEl = this.shadowRoot.querySelector('#prompt');
+    if (promptEl) {
+      promptEl.value = prompt;
+      promptEl.focus();
+    }
+  }
+
+  async _deleteHistoryItem(event, prompt) {
+    event.stopPropagation();
+    this._promptHistory = this._promptHistory.filter(p => p !== prompt);
+    await this._savePromptHistory();
+    this.requestUpdate();
+  }
+
+  async _addToHistory(prompt) {
+    if (!prompt || prompt.trim().length === 0) return;
+
+    this._promptHistory = this._promptHistory.filter(p => p !== prompt);
+    this._promptHistory.push(prompt);
+
+    if (this._promptHistory.length > 20) {
+      this._promptHistory = this._promptHistory.slice(-20);
+    }
+
+    await this._savePromptHistory();
+    this.requestUpdate();
+  }
+
+  async _loadPromptHistory() {
+    // Implementation remains the same as original
+    if (!this.hass) return;
+
+    console.debug('Loading prompt history...');
+    try {
+      const result = await this.hass.callService('glm_agent_ha', 'load_prompt_history', {
+        provider: this._selectedProvider
+      });
+
+      if (result && result.response && result.response.history) {
+        this._promptHistory = result.response.history;
+        this.requestUpdate();
+      }
+    } catch (error) {
+      console.error('Error loading prompt history:', error);
+    }
+  }
+
+  async _savePromptHistory() {
+    if (!this.hass) return;
+
+    try {
+      await this.hass.callService('glm_agent_ha', 'save_prompt_history', {
+        history: this._promptHistory,
+        provider: this._selectedProvider
+      });
+    } catch (error) {
+      console.error('Error saving prompt history:', error);
+    }
+  }
+
+  _renderUploadArea() {
+    const userFeatures = PLAN_FEATURES[this._userPlan] || PLAN_FEATURES.lite;
+    const canUpload = userFeatures.allowedTools.includes('image_analysis');
+
+    if (!canUpload) return '';
+
+    return (window.GLM_html || function() { return ''; })`
+      ${!this._uploadedFile ? (window.GLM_html || function() { return ''; })`
+        <div class="upload-area ${this._dragActive ? 'drag-active' : ''}"
+             @dragover=${this._handleDragOver}
+             @dragleave=${this._handleDragLeave}
+             @drop=${this._handleDrop}>
+          <div class="upload-content">
+            <ha-icon class="upload-icon" icon="mdi:cloud-upload"></ha-icon>
+            <div class="upload-text">Drop image here or click to upload</div>
+            <div class="upload-subtext">
+              Max size: ${Math.round(userFeatures.maxFileSize / (1024 * 1024))}MB
+            </div>
+            <button class="upload-button" @click=${this._handleFileSelect}>
+              Choose File
+            </button>
+            <input type="file"
+                   id="file-input"
+                   style="display: none"
+                   accept="image/*,video/*"
+                   @change=${this._handleFileChange}>
+          </div>
+        </div>
+      ` : (window.GLM_html || function() { return ''; })`
+        <div class="file-preview">
+          <ha-icon icon="mdi:file-image"></ha-icon>
+          <div class="file-preview-info">
+            <div class="file-preview-name">${this._uploadedFile.name}</div>
+            <div class="file-preview-size">${this._formatFileSize(this._uploadedFile.size)}</div>
+          </div>
+          <button class="file-preview-remove" @click=${this._removeUploadedFile}>
+            <ha-icon icon="mdi:close"></ha-icon>
+          </button>
+        </div>
+      `}
+    `;
+  }
+
+  _handleDragOver(e) {
+    e.preventDefault();
+    this._dragActive = true;
+  }
+
+  _handleDragLeave(e) {
+    e.preventDefault();
+    this._dragActive = false;
+  }
+
+  _handleDrop(e) {
+    e.preventDefault();
+    this._dragActive = false;
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      this._processFile(files[0]);
+    }
+  }
+
+  _handleFileSelect() {
+    const fileInput = this.shadowRoot.querySelector('#file-input');
+    if (fileInput) {
+      fileInput.click();
+    }
+  }
+
+  _handleFileChange(e) {
+    const files = e.target.files;
+    if (files.length > 0) {
+      this._processFile(files[0]);
+    }
+  }
+
+  async _processFile(file) {
+    const userFeatures = PLAN_FEATURES[this._userPlan] || PLAN_FEATURES.lite;
+
+    if (file.size > userFeatures.maxFileSize) {
+      this._error = `File too large. Maximum size is ${Math.round(userFeatures.maxFileSize / (1024 * 1024))}MB`;
+      this.requestUpdate();
+      return;
+    }
+
+    this._uploadedFile = file;
+    this._error = null;
+    this.requestUpdate();
+  }
+
+  _removeUploadedFile() {
+    this._uploadedFile = null;
+    const fileInput = this.shadowRoot.querySelector('#file-input');
+    if (fileInput) {
+      fileInput.value = '';
+    }
+    this.requestUpdate();
+  }
+
+  _formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  render() {
+    try {
+      console.debug("Rendering with state:", {
+        messages: this._messages,
+        isLoading: this._isLoading,
+        error: this._error,
+        userPlan: this._userPlan,
+        uploadedFile: this._uploadedFile,
+        selectedPrompts: this._selectedPrompts,
+        initializationComplete: this._initializationComplete
+      });
+
+      // Error state fallback UI
+      if (this._error && !this.hass) {
+        return (window.GLM_html || function() { return ''; })`
+          <div style="padding: 20px; font-family: Arial, sans-serif; color: #333; text-align: center;">
+            <h2>GLM Agent HA Dashboard Error</h2>
+            <p>${this._error}</p>
+            <button onclick="window.location.reload()" style="padding: 10px 20px; background: #03a9f4; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;">
+              Refresh Page
+            </button>
+          </div>
+        `;
+      }
+
+      return (window.GLM_html || function() { return ''; })`
+      <div class="header">
+        <div class="header-title">
+          <ha-icon icon="mdi:robot"></ha-icon>
+          GLM Agent HA
+          <div class="header-badges">
+            <div class="plan-badge ${this._userPlan}">
+              ${this._userPlan.toUpperCase()}
+            </div>
+          </div>
+        </div>
+        <div class="header-actions">
+          ${(this._userPlan === 'pro' || this._userPlan === 'max') ? (window.GLM_html || function() { return ''; })`
+            <button class="icon-button" @click=${this._toggleAdvancedDashboard}
+                    title="Advanced Dashboard">
+              <ha-icon icon="mdi:chart-box"></ha-icon>
+            </button>
+          ` : ''}
+          <button class="clear-button" @click=${this._clearChat} ?disabled=${this._isLoading}>
+            <ha-icon icon="mdi:delete-sweep"></ha-icon>
+            <span>Clear</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="chat-container">
+          <div class="messages" id="messages">
+            ${this._messages.map(msg => (window.GLM_html || function() { return ''; })`
+              <div class="message ${msg.type}-message">
+                ${msg.text}
+                ${msg.attachment ? (window.GLM_html || function() { return ''; })`
+                  <div class="message-attachment">
+                    <ha-icon icon="mdi:file-image"></ha-icon>
+                    <span>${msg.attachment.name}</span>
+                  </div>
+                ` : ''}
+                ${msg.automation ? this._renderAutomationSuggestion(msg.automation) : ''}
+                ${msg.dashboard ? this._renderDashboardSuggestion(msg.dashboard) : ''}
+              </div>
+            `)}
+            ${this._isLoading ? this._renderLoadingIndicator() : ''}
+            ${this._error ? (window.GLM_html || function() { return ''; })`<div class="error">${this._error}</div>` : ''}
+          </div>
+
+          ${this._renderUploadArea()}
+          ${this._renderPromptsSection()}
+
+          <div class="input-container">
+            <div class="input-main">
+              <div class="input-wrapper">
+                <textarea
+                  id="prompt"
+                  placeholder="Ask me anything about your Home Assistant... ${this._uploadedFile ? '(with attached file)' : ''}"
+                  ?disabled=${this._isLoading}
+                  @keydown=${this._handleKeyDown}
+                  @input=${this._autoResize}
+                ></textarea>
+              </div>
+            </div>
+
+            <div class="input-footer">
+              <div class="input-controls">
+                <div class="model-selector">
+                  <span class="model-label">Model:</span>
+                  <select
+                    class="model-button"
+                    @change=${this._selectModel}
+                    .value=${this._selectedModel}
+                  >
+                    ${this._models.map(model => (window.GLM_html || function() { return ''; })`
+                      <option value=${model} ?selected=${model === this._selectedModel}>
+                        ${model}
+                      </option>
+                    `)}
+                  </select>
+                </div>
+              </div>
+
+              <button class="send-button" @click=${this._sendMessage}
+                      ?disabled=${this._isLoading}>
+                <ha-icon icon="mdi:send"></ha-icon>
+                Send
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      ${this._renderAdvancedDashboard()}
+    `;
+    } catch (error) {
+      console.error("Error in render method:", error);
+      // Fallback minimal UI
+      return (window.GLM_html || function() { return ''; })`
+        <div style="padding: 20px; font-family: Arial, sans-serif; color: #333;">
+          <h2>GLM Agent HA Dashboard</h2>
+          <p>A rendering error occurred. Basic functionality is still available.</p>
+          <p>Please refresh the page to restore full functionality.</p>
+          <div style="margin-top: 20px;">
+            <textarea
+              placeholder="Ask me about your Home Assistant..."
+              style="width: 100%; height: 100px; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+            </textarea>
+            <br><br>
+            <button style="padding: 10px 20px; background: #03a9f4; color: white; border: none; border-radius: 4px; cursor: pointer;">
+              Send
+            </button>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  _renderLoadingIndicator() {
+    return (window.GLM_html || function() { return ''; })`
+      <div class="loading">
+        <span>AI Agent is thinking</span>
+        <div class="loading-dots">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderAutomationSuggestion(automation) {
+    return (window.GLM_html || function() { return ''; })`
+      <div class="automation-suggestion">
+        <div class="automation-title">${automation.alias}</div>
+        <div class="automation-description">${automation.description}</div>
+        <div class="automation-details">
+          ${JSON.stringify(automation, null, 2)}
+        </div>
+        <div class="automation-actions">
+          <ha-button @click=${() => this._approveAutomation(automation)} .disabled=${this._isLoading}>
+            Approve
+          </ha-button>
+          <ha-button @click=${() => this._rejectAutomation()} .disabled=${this._isLoading}>
+            Reject
+          </ha-button>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderDashboardSuggestion(dashboard) {
+    return (window.GLM_html || function() { return ''; })`
+      <div class="dashboard-suggestion">
+        <div class="dashboard-title">${dashboard.title}</div>
+        <div class="dashboard-description">Dashboard with ${dashboard.views ? dashboard.views.length : 0} view(s)</div>
+        <div class="dashboard-details">
+          ${JSON.stringify(dashboard, null, 2)}
+        </div>
+        <div class="dashboard-actions">
+          <ha-button @click=${() => this._approveDashboard(dashboard)} .disabled=${this._isLoading}>
+            Create Dashboard
+          </ha-button>
+          <ha-button @click=${() => this._rejectDashboard()} .disabled=${this._isLoading}>
+            Cancel
+          </ha-button>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderAdvancedDashboard() {
+    if (this._userPlan === 'lite') return '';
+
+    return (window.GLM_html || function() { return ''; })`
+      <div class="advanced-dashboard ${this._showAdvancedDashboard ? 'open' : ''}">
+        <div class="dashboard-header">
+          <div class="dashboard-title">Advanced Dashboard</div>
+          <button class="icon-button" @click=${this._toggleAdvancedDashboard}>
+            <ha-icon icon="mdi:close"></ha-icon>
+          </button>
+        </div>
+        <div class="dashboard-content">
+          ${this._userPlan === 'pro' || this._userPlan === 'max' ? (window.GLM_html || function() { return ''; })`
+            <div class="dashboard-section">
+              <div class="dashboard-section-title">
+                <ha-icon icon="mdi:pulse"></ha-icon>
+                Performance Metrics
+              </div>
+              ${this._performanceMetrics ? (window.GLM_html || function() { return ''; })`
+                <div class="dashboard-metric">
+                  <span class="dashboard-metric-label">Total Requests</span>
+                  <span class="dashboard-metric-value">${this._performanceMetrics.total_requests || 0}</span>
+                </div>
+                <div class="dashboard-metric">
+                  <span class="dashboard-metric-label">Average Response Time</span>
+                  <span class="dashboard-metric-value">${this._performanceMetrics.avg_response_time || 0}ms</span>
+                </div>
+                <div class="dashboard-metric">
+                  <span class="dashboard-metric-label">Success Rate</span>
+                  <span class="dashboard-metric-value">${this._performanceMetrics.success_rate || 0}%</span>
+                </div>
+              ` : (window.GLM_html || function() { return ''; })`
+                <div class="dashboard-metric">
+                  <span class="dashboard-metric-label">Loading...</span>
+                </div>
+              `}
+            </div>
+          ` : ''}
+
+          ${this._userPlan === 'max' ? (window.GLM_html || function() { return ''; })`
+            <div class="dashboard-section">
+              <div class="dashboard-section-title">
+                <ha-icon icon="mdi:shield"></ha-icon>
+                Security Report
+              </div>
+              ${this._securityReport ? (window.GLM_html || function() { return ''; })`
+                <div class="dashboard-metric">
+                  <span class="dashboard-metric-label">Security Events</span>
+                  <span class="dashboard-metric-value">${this._securityReport.total_events || 0}</span>
+                </div>
+                <div class="dashboard-metric">
+                  <span class="dashboard-metric-label">Threats Detected</span>
+                  <span class="dashboard-metric-value">${this._securityReport.event_counts?.injection || 0}</span>
+                </div>
+                <div class="dashboard-metric">
+                  <span class="dashboard-metric-label">Blocked IPs</span>
+                  <span class="dashboard-metric-value">${this._securityReport.blocked_ips?.length || 0}</span>
+                </div>
+              ` : (window.GLM_html || function() { return ''; })`
+                <div class="dashboard-metric">
+                  <span class="dashboard-metric-label">Loading...</span>
+                </div>
+              `}
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  _toggleAdvancedDashboard() {
+    this._showAdvancedDashboard = !this._showAdvancedDashboard;
+    if (this._showAdvancedDashboard) {
+      this._loadAdvancedData();
+    }
+    this.requestUpdate();
+  }
+
+  _scrollToBottom() {
+    const messages = this.shadowRoot.querySelector('#messages');
+    if (messages) {
+      messages.scrollTop = messages.scrollHeight;
+    }
+  }
+
+  _autoResize(e) {
+    const textarea = e.target;
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+  }
+
+  _handleKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey && !this._isLoading) {
+      e.preventDefault();
+      this._sendMessage();
+    }
+  }
+
+  async _selectProvider(provider) {
+    const previousProvider = this._selectedProvider;
+    this._selectedProvider = provider;
+    console.debug("Provider changed from:", previousProvider, "to:", provider);
+    await this._loadPromptHistory();
+    this.requestUpdate();
+  }
+
+  _selectModel(e) {
+    this._selectedModel = e.target.value;
+  }
+
+  async _sendMessage() {
+    const promptEl = this.shadowRoot.querySelector('#prompt');
+    const prompt = promptEl.value.trim();
+    if (!prompt || this._isLoading) return;
+
+    console.debug("Sending message:", prompt);
+    console.debug("With uploaded file:", this._uploadedFile);
+
+    await this._addToHistory(prompt);
+
+    // Add user message
+    const userMessage = { type: 'user', text: prompt };
+    if (this._uploadedFile) {
+      userMessage.attachment = {
+        name: this._uploadedFile.name,
+        size: this._uploadedFile.size,
+        type: this._uploadedFile.type
+      };
+    }
+    this._messages = [...this._messages, userMessage];
+
+    promptEl.value = '';
+    promptEl.style.height = 'auto';
+    this._isLoading = true;
+    this._error = null;
+
+    // Clear any existing timeout
+    if (this._serviceCallTimeout) {
+      clearTimeout(this._serviceCallTimeout);
+    }
+
+    // Set timeout
+    this._serviceCallTimeout = setTimeout(() => {
+      if (this._isLoading) {
+        console.warn("Service call timeout - clearing loading state");
+        this._isLoading = false;
+        this._error = 'Request timed out. Please try again.';
+        this._messages = [...this._messages, {
+          type: 'assistant',
+          text: 'Sorry, the request timed out. Please try again.'
+        }];
+        this.requestUpdate();
+      }
+    }, 60000);
+
+    try {
+      console.debug("Calling glm_agent_ha service");
+
+      const serviceData = {
+        prompt: prompt,
+        provider: "openai",  // Fixed provider since only one is supported
+        model: this._selectedModel
+      };
+
+      // Add file data if available
+      if (this._uploadedFile) {
+        serviceData.attachment = {
+          name: this._uploadedFile.name,
+          size: this._uploadedFile.size,
+          type: this._uploadedFile.type,
+          data: await this._fileToBase64(this._uploadedFile)
+        };
+      }
+
+      await this.hass.callService('glm_agent_ha', 'query', serviceData);
+
+      // Clear uploaded file after sending
+      this._removeUploadedFile();
+
+    } catch (error) {
+      console.error("Error calling service:", error);
+      this._clearLoadingState();
+      this._error = error.message || 'An error occurred while processing your request';
+      this._messages = [...this._messages, {
+        type: 'assistant',
+        text: `Error: ${this._error}`
+      }];
+    }
+  }
+
+  async _fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+    });
+  }
+
+  _clearLoadingState() {
+    this._isLoading = false;
+    if (this._serviceCallTimeout) {
+      clearTimeout(this._serviceCallTimeout);
+      this._serviceCallTimeout = null;
+    }
+  }
+
+  _handleResponse(event) {
+    console.debug("Received response:", event);
+
+    try {
+      this._clearLoadingState();
+      if (event.data.success) {
+        if (!event.data.answer || event.data.answer.trim() === '') {
+          console.warn("AI agent returned empty response");
+          this._messages = [
+            ...this._messages,
+            { type: 'assistant', text: 'I received your message but I\'m not sure how to respond. Could you please try rephrasing your question?' }
+          ];
+          return;
+        }
+
+        let message = { type: 'assistant', text: event.data.answer };
+
+        try {
+          console.debug("Attempting to parse response as JSON:", event.data.answer);
+          let jsonText = event.data.answer;
+
+          const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+          if (jsonMatch && jsonMatch[0] !== jsonText.trim()) {
+            console.debug("Found JSON within mixed response, extracting:", jsonMatch[0]);
+            jsonText = jsonMatch[0];
+          }
+
+          const response = JSON.parse(jsonText);
+          console.debug("Parsed JSON response:", response);
+
+          if (response.request_type === 'automation_suggestion') {
+            console.debug("Found automation suggestion");
+            message.automation = response.automation;
+            message.text = response.message || 'I found an automation that might help you. Would you like me to create it?';
+          } else if (response.request_type === 'dashboard_suggestion') {
+            console.debug("Found dashboard suggestion:", response.dashboard);
+            message.dashboard = response.dashboard;
+            message.text = response.message || 'I created a dashboard configuration for you. Would you like me to create it?';
+          } else if (response.request_type === 'final_response') {
+            message.text = response.response || response.message || event.data.answer;
+          } else if (response.message) {
+            message.text = response.message;
+          } else if (response.response) {
+            message.text = response.response;
+          }
+        } catch (e) {
+          console.debug("Response is not JSON, using as-is:", event.data.answer);
+        }
+
+        console.debug("Adding message to UI:", message);
+        this._messages = [...this._messages, message];
+      } else {
+        this._error = event.data.error || 'An error occurred';
+        this._messages = [
+          ...this._messages,
+          { type: 'assistant', text: `Error: ${this._error}` }
+        ];
+      }
+    } catch (error) {
+      console.error("Error in _handleResponse:", error);
+      this._clearLoadingState();
+      this._error = 'An error occurred while processing the response';
+      this._messages = [...this._messages, {
+        type: 'assistant',
+        text: 'Sorry, an error occurred while processing the response. Please try again.'
+      }];
+      this.requestUpdate();
+    }
+  }
+
+  async _approveAutomation(automation) {
+    if (this._isLoading) return;
+    this._isLoading = true;
+    try {
+      const result = await this.hass.callService('glm_agent_ha', 'create_automation', {
+        automation: automation
+      });
+
+      console.debug("Automation creation result:", result);
+
+      if (result && result.message) {
+        this._messages = [...this._messages, {
+          type: 'assistant',
+          text: result.message
+        }];
+      } else {
+        this._messages = [...this._messages, {
+          type: 'assistant',
+          text: `Automation "${automation.alias}" has been created successfully!`
+        }];
+      }
+    } catch (error) {
+      console.error("Error creating automation:", error);
+      this._error = error.message || 'An error occurred while creating the automation';
+      this._messages = [...this._messages, {
+        type: 'assistant',
+        text: `Error: ${this._error}`
+      }];
+    } finally {
+      this._clearLoadingState();
+    }
+  }
+
+  _rejectAutomation() {
+    this._messages = [...this._messages, {
+      type: 'assistant',
+      text: 'Automation creation cancelled. Would you like to try something else?'
+    }];
+  }
+
+  async _approveDashboard(dashboard) {
+    if (this._isLoading) return;
+    this._isLoading = true;
+    try {
+      const result = await this.hass.callService('glm_agent_ha', 'create_dashboard', {
+        dashboard_config: dashboard
+      });
+
+      console.debug("Dashboard creation result:", result);
+
+      if (result && result.message) {
+        this._messages = [...this._messages, {
+          type: 'assistant',
+          text: result.message
+        }];
+      } else {
+        this._messages = [...this._messages, {
+          type: 'assistant',
+          text: `Dashboard "${dashboard.title}" has been created successfully!`
+        }];
+      }
+    } catch (error) {
+      console.error("Error creating dashboard:", error);
+      this._error = error.message || 'An error occurred while creating the dashboard';
+      this._messages = [...this._messages, {
+        type: 'assistant',
+        text: `Error: ${this._error}`
+      }];
+    } finally {
+      this._clearLoadingState();
+    }
+  }
+
+  _rejectDashboard() {
+    this._messages = [...this._messages, {
+      type: 'assistant',
+      text: 'Dashboard creation cancelled. Would you like me to create a different dashboard?'
+    }];
+  }
+
+  shouldUpdate(changedProps) {
+    return changedProps.has('_messages') ||
+           changedProps.has('_isLoading') ||
+           changedProps.has('_error') ||
+           changedProps.has('_promptHistory') ||
+           changedProps.has('_showPredefinedPrompts') ||
+           changedProps.has('_showPromptHistory') ||
+           changedProps.has('_availableProviders') ||
+           changedProps.has('_selectedProvider') ||
+           changedProps.has('_showProviderDropdown') ||
+           changedProps.has('_selectedModel') ||
+           changedProps.has('_userPlan') ||
+           changedProps.has('_showAdvancedDashboard') ||
+           changedProps.has('_uploadedFile') ||
+           changedProps.has('_activeCategory') ||
+           changedProps.has('_dragActive') ||
+           changedProps.has('_initializationComplete') ||
+           changedProps.has('_selectedPrompts');
+  }
+
+  _clearChat() {
+    this._messages = [];
+    this._clearLoadingState();
+    this._error = null;
+    this._pendingAutomation = null;
+    this._uploadedFile = null;
+  }
+
+  _getProviderInfo(providerId) {
+    return this._availableProviders.find(p => p.value === providerId);
+  }
+
+  _hasProviders() {
+    return this._availableProviders && this._availableProviders.length > 0;
+  }
+
+  disconnectedCallback() {
+    try {
+      super.disconnectedCallback();
+      console.debug("GLM Agent HA Modern Panel disconnected");
+
+      // Clear any timeouts
+      if (this._serviceCallTimeout) {
+        clearTimeout(this._serviceCallTimeout);
+        this._serviceCallTimeout = null;
+      }
+
+      // Remove event listeners
+      document.removeEventListener('click', this._handleDocumentClick);
+
+      // Reset state
+      this._eventSubscriptionSetup = false;
+      this.providersLoaded = false;
+
+      console.debug("GLM Agent HA Panel cleanup completed");
+    } catch (error) {
+      console.error("Error in disconnectedCallback:", error);
+    }
+  }
+
+  _handleDocumentClick = (e) => {
+    if (!this.shadowRoot.querySelector('.provider-selector')?.contains(e.target)) {
+      this._showProviderDropdown = false;
+    }
+  }
+}
+
+// Register the panel when dependencies are ready
+function registerPanel() {
+  if (window.GLM_LitElement && window.GLM_html && window.GLM_css && GLMAgentHaPanel) {
+    try {
+      customElements.define("glm_agent_ha-panel", GLMAgentHaPanel);
+      console.log("GLM Agent HA Modern Panel registered successfully");
+    } catch (error) {
+      console.error("Failed to register GLM Agent HA panel:", error);
+    }
+  } else {
+    console.warn("Dependencies not ready, retrying panel registration in 100ms...");
+    setTimeout(registerPanel, 100);
+  }
+}
+
+// Start panel registration
+registerPanel();

@@ -33,11 +33,11 @@ async def async_setup_conversation(hass: HomeAssistant, config: ConfigType) -> b
 
         # Try to use the new ConversationEntity approach first
         try:
-            conversation_entity = GLMAgentConversationEntity(hass, config_data, entry.entry_id)
+            conversation_entity = GLMAgentConversationEntity(hass, entry, None)
 
             # Register the conversation entity with Home Assistant
             if hasattr(hass.components, 'conversation'):
-                hass.components.conversation.async_set_agent(DOMAIN, conversation_entity)
+                hass.components.conversation.async_set_agent(entry, conversation_entity)
                 _LOGGER.info("GLM Agent HA conversation entity registered successfully")
                 return True
             else:
@@ -51,7 +51,7 @@ async def async_setup_conversation(hass: HomeAssistant, config: ConfigType) -> b
 
         # Register conversation agent using Home Assistant's conversation component
         if hasattr(hass.components, 'conversation'):
-            hass.components.conversation.async_set_agent(DOMAIN, agent)
+            hass.components.conversation.async_set_agent(entry, agent)
         else:
             # Fallback for older HA versions
             hass.data.setdefault("conversation_agents", {})

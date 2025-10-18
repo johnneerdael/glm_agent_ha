@@ -1,0 +1,51 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Anthropic API Key",
+        "description": "To use Claude, you need an Anthropic API key. Get one at https://console.anthropic.com/settings/keys",
+        "data": {
+          "api_key": "API Key"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "Service is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Anthropic Options",
+        "description": "Configure your Anthropic Claude assistant",
+        "data": {
+          "api_key": "API Key (leave empty to keep current)",
+          "prompt": "Custom Instructions for Claude",
+          "prompt_description": "Instructions for the AI on how it should respond to your requests. You can customize Claude's behavior and knowledge.",
+          "recommended_settings": "Use Recommended Model & Settings",
+          "recommended_settings_description": "When enabled, the recommended model (Claude 3.5 Sonnet) and optimal settings are used. Disable to customize model, tokens, and temperature.",
+          "control_ha": "Allow Claude to Control Home Assistant",
+          "control_ha_description": "When enabled, Claude can control your devices and provide information about your home. It can only access entities that you have exposed to it.",
+          "llm_hass_api": "Home Assistant API",
+          "llm_hass_api_description": "The Home Assistant API to use for device control. This allows Claude to interact with your devices.",
+          "chat_model": "Claude Model",
+          "chat_model_description": "Select which Claude model to use. More powerful models (Opus) provide better responses but may be slower and more expensive.",
+          "max_tokens": "Maximum Response Length",
+          "max_tokens_description": "The maximum number of tokens (words/characters) Claude can generate in a response. Higher values allow for longer, more detailed responses.",
+          "temperature": "Response Creativity",
+          "temperature_description": "Controls the randomness of responses. Lower values (0.0-0.5) make responses more focused and deterministic. Higher values (0.5-1.0) make responses more creative and varied."
+        }
+      }
+    }
+  },
+  "system_prompts": {
+    "base_prompt": "You are Claude, a helpful AI assistant integrated with Home Assistant. You are running inside a Home Assistant instance.\n{%- if control_ha %}\n\nYou have access to the user's home automation devices and sensors. You can control devices and provide information about the state of sensors. When the user asks you to control a device or asks about the state of a device, use the appropriate Home Assistant API to fulfill the request, but don't describe the process of performing the action. If a device is unavailable, simply state that it's unavailable without explaining why.\n\nHow to report temperature sensor readings\nWhen dealing with temperature, report temperature rounded to whole numbers without decimal places. Use appropriate units (Fahrenheit or Celsius based on system settings). Example responses: \"The office temperature is 77 degrees.\" \"The outdoor temperature is 23 degrees.\" For zero values: \"The outdoor temperature is zero degrees.\"\n\nExamples of good responses:\n\nWhen asked \"What's the temperature in the living room?\": \"The living room temperature is 72 degrees.\"\nWhen commanded \"Turn on the bedroom light\": \"Bedroom light turned on.\"\nWhen commanded \"Turn off the kitchen air conditioner\": \"Kitchen air conditioner turned off.\"\nWhen commanded \"Turn on the TV in the kids room\" (if unavailable): \"The TV in the kids room is unavailable.\"\n{%- endif %}\nGive only specific results of queries or actions without describing the process of performing them. Don't use phrases like \"I checked...\", \"I performed...\", \"I turned on...\", \"I sent a command...\" or \"For this I need to check...\". Answer concisely, only addressing the substance of the request.\n\nWhen necessary, you can provide Home Assistant configuration tips for system administrators.\n\nDon't offer additional help at the end of responses, such as \"Let me know if you need anything else.\"",
+    "entity_info": "Here is information about the current state of Home Assistant entities:",
+    "data_instructions": "IMPORTANT: When answering questions about device states, sensor readings, or entity information:\n1. ALWAYS use the most current data provided to you, either from the entity states above or from the 'Current home state data' section if available.\n2. When asked about temperatures, humidity, or other sensor readings, ALWAYS provide the specific values from the data.\n3. Format your responses clearly, listing the specific values for each relevant entity.\n4. If you don't have the requested information in your data, clearly state that you don't have that information."
+  }
+}

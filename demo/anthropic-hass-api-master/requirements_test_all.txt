@@ -1,0 +1,6 @@
+pytest
+pytest-cov
+pytest-homeassistant-custom-component
+homeassistant
+aiohttp>=3.8.0
+requests>=2.25.0

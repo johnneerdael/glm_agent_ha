@@ -382,6 +382,49 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+async def _register_devices(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Register both frontend and services devices in the device registry."""
+    try:
+        device_registry = dr.async_get(hass)
+
+        # Register frontend device
+        frontend_device_info = create_frontend_device_info(hass, entry)
+        frontend_device = device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers=frontend_device_info["identifiers"],
+            name=frontend_device_info["name"],
+            manufacturer=frontend_device_info["manufacturer"],
+            model=frontend_device_info["model"],
+            sw_version=frontend_device_info["sw_version"],
+            hw_version=frontend_device_info["hw_version"],
+            entry_type=frontend_device_info["entry_type"],
+            configuration_url=frontend_device_info["configuration_url"],
+        )
+        _LOGGER.info("Frontend device registered: %s", frontend_device.id)
+
+        # Register services device
+        services_device_info = create_services_device_info(hass, entry)
+        services_device = device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers=services_device_info["identifiers"],
+            name=services_device_info["name"],
+            manufacturer=services_device_info["manufacturer"],
+            model=services_device_info["model"],
+            sw_version=services_device_info["sw_version"],
+            hw_version=services_device_info["hw_version"],
+            entry_type=services_device_info["entry_type"],
+            configuration_url=services_device_info["configuration_url"],
+        )
+        _LOGGER.info("Services device registered: %s", services_device.id)
+
+        # Store device references for entities to use
+        hass.data[DOMAIN]["frontend_device_id"] = frontend_device.id
+        hass.data[DOMAIN]["services_device_id"] = services_device.id
+
+    except Exception as e:
+        _LOGGER.error("Error registering devices: %s", e)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up GLM Coding Plan Agent HA from a config entry."""
     setup_start_time = time.time()
@@ -474,6 +517,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Set up conversation and AI task platforms
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+        # Explicitly register devices in device registry
+        await _register_devices(hass, entry)
 
         # Log successful setup
         setup_duration_ms = (time.time() - setup_start_time) * 1000

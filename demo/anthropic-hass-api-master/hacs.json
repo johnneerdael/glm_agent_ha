@@ -1,0 +1,9 @@
+{
+  "name": "Anthropic-hass-api",
+  "render_readme": true,
+  "domain": "anthropic",
+  "documentation": "https://github.com/slawa19/anthropic-hass-api",
+  "issue_tracker": "https://github.com/slawa19/anthropic-hass-api/issues",
+  "homeassistant": "2023.8.0",
+  "iot_class": "cloud_polling"
+}

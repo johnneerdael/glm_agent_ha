@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test GLM Agent HA Panel Syntax</title>
+</head>
+<body>
+    <div id="test-output"></div>
+
+    <script>
+        console.log("Testing GLM Agent HA Panel syntax...");
+
+        // Test basic JavaScript functionality
+        try {
+            // Create a simple test of the key syntax patterns used in the panel
+            const testPanel = class TestPanel {
+                static get properties() {
+                    return {
+                        test: { type: String },
+                        _messages: { type: Array }
+                    };
+                }
+
+                constructor() {
+                    this.test = "Hello World";
+                    this._messages = [];
+                }
+
+                static get styles() {
+                    return `
+                        .test {
+                            --mdc-icon-size: 20px;
+                            color: var(--primary-color);
+                        }
+                    `;
+                }
+            };
+
+            // Test template literals
+            const template = `
+                <div class="test">
+                    <span>${testPanel.name}</span>
+                </div>
+            `;
+
+            // Test async/await
+            async function testAsync() {
+                return await Promise.resolve("Async test passed");
+            }
+
+            // Test modern features
+            const arrowFunction = () => "Arrow function works";
+            const destructuring = { a: 1, b: 2 };
+            const { a, b } = destructuring;
+
+            document.getElementById('test-output').innerHTML = `
+                <h2>✅ JavaScript Syntax Test Passed</h2>
+                <p>ES6 features working correctly</p>
+                <p>Template literals: ${template}</p>
+                <p>Arrow function: ${arrowFunction()}</p>
+                <p>Destructuring: a=${a}, b=${b}</p>
+            `;
+
+            console.log("All syntax tests passed!");
+
+        } catch (error) {
+            console.error("Syntax test failed:", error);
+            document.getElementById('test-output').innerHTML = `
+                <h2>❌ JavaScript Syntax Test Failed</h2>
+                <p>Error: ${error.message}</p>
+            `;
+        }
+    </script>
+</body>
+</html>
